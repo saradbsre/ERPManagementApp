@@ -1,0 +1,226 @@
+import axios from "axios";
+
+const API = axios.create({
+  baseURL: "http://localhost:5000/api",
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+API.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return config;
+});
+
+export const registerUser = (data) => {
+  return API.post("/auth/register", data);
+};
+
+export const loginUser = (data) => {
+  return API.post("/auth/login", data);
+};
+
+export const fetchUsers = () => {
+  return API.get("/users");
+};
+
+export const fetchRoles = () => {
+  return API.get("/roles");
+};
+
+
+export const confirmRequest = (id, status, email, activeUserEmail) => {
+  const endpoint = status
+    ? `/users/${id}/confirm`
+    : `/users/${id}/cancel`;
+
+  return API.post(endpoint, {
+    isCancel: !status,   // ✅ IMPORTANT FIX
+    email,
+    activeUserEmail
+  });
+};
+
+export const toggleUserStatus = (id, status, email, activeUserEmail) => {
+  const endpoint = status
+    ? `/users/${id}/activate`
+    : `/users/${id}/deactivate`;
+
+  return API.post(endpoint, { email, activeUserEmail });
+};
+
+
+
+export const updateUserRole = (id, data) => {
+  return API.post(`/users/${id}/role`, data);
+};
+
+export const updateUserPermissions = (id, data) => {
+  return API.post(`/users/${id}/permissions`, data);
+};
+
+export const createRole = (data) => {
+  return API.post("/roles", data);
+};
+
+export const updateRole = (role, data) => {
+  return API.put(`/roles/${role}`, data);
+};
+
+export const signupRequest = (data) => {
+    return API.get(`/signup-requests`, data);
+}
+
+export const upsertModule = (data) => {
+  return API.post("/modules", data);
+}
+
+export const upsertModuleColumn = (data) => {
+  return API.post("/columns", data);
+}
+
+export const fetchSections = () => {
+  return API.get("/sections");
+}
+
+export const getModuleData = (moduleId, activeUserEmail) => {
+  return API.get(`/module-data/${moduleId}`, {
+    params: { activeUserEmail }
+  });
+}
+
+export const createModuleRow = (moduleId, data, activeUserEmail) => {
+  return API.post(`/module-data/${moduleId}`, data, {
+    params: { activeUserEmail }
+  });
+}
+
+export const updateModuleRow = (moduleId, rowId, data, activeUserEmail) => {
+  return API.put(`/module-data/${moduleId}/${rowId}`, data, {
+    params: { activeUserEmail }
+  });
+}
+
+export const deleteModuleRow = (moduleId, rowId, activeUserEmail) => {
+  return API.delete(`/module-data/${moduleId}/${rowId}`, {
+    params: { activeUserEmail }
+  });
+}
+
+export const exportColumnNames = (moduleId) => {
+  return API.get(`/export-columns/${moduleId}`, {
+    responseType: "blob"
+  });
+};
+
+export const importTable = (moduleId, file, activeUserEmail) => {
+  const formData = new FormData();
+
+  formData.append("file", file);
+  formData.append("module_id", moduleId);
+  formData.append("userid", localStorage.getItem("username")); // better name than username
+
+  return API.post(`/import-table/${moduleId}`, formData, {
+  headers: {
+    "Content-Type": "multipart/form-data",
+  },
+  params: { activeUserEmail }
+});
+};
+
+export const fetchMasters = () => {
+  return API.get("/masters");
+};
+
+export const getMasterData = (masterName, activeUserEmail) => {
+  return API.get(`/masters/${masterName}`, {
+    params: { activeUserEmail }
+  });
+}
+
+export const dataTypes = () => {
+  return API.get("/data-types");
+}
+
+export const currencises = () => {
+  return API.get("/currencies");
+}
+
+export const billingCycle = () => {
+  return API.get("/billing-cycle");
+}
+
+export const getMasterValues = (master) => {
+  return API.get(`/master-data?master=${master}`);
+};
+
+export const exportPdf = (data) => {
+  return API.post("/pdf", data, {
+    responseType: "blob",
+  });
+};
+
+export const createMasterData = (masterName, data, activeUserEmail) => {
+  return API.post(`/masters/${masterName}`, data, {
+    params: { activeUserEmail }
+  });
+}
+
+export const updateMasterData = (masterName, id, data, activeUserEmail) => {
+  return API.put(`/masters/${masterName}/${id}`, data, {
+    params: { activeUserEmail }
+  });
+}
+
+export const deleteMasterData = (masterName, id, activeUserEmail) => {
+  return API.delete(`/masters/${masterName}/${id}`, {
+    data: { activeUserEmail }
+  });
+}
+
+export const getTopExpensiveAssets = () => {
+  return API.get("/top-expensive-assets");
+}
+
+export const getAlertData = () => {
+  return API.get("/alerts");
+}
+
+export const getRecentTransactions = () => {
+  return API.get("/recent-transactions");
+}
+
+export const getLogs = (params = {}) => {
+  return API.get("/logs", { params });
+};
+
+export const logOut = () => {
+  const token = localStorage.getItem("token");
+
+  return API.post(
+    "/auth/logout",
+    {},
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+};
+
+export const forgetPassword = (payload) => {
+  return API.post("/forgot-password", payload);
+};
+
+export const fetchForgotPasswordReqs = () => {
+  return API.get("/forgot-password-requests");
+}
+
+export const resetPassword = (data) => {
+  return API.post("/auth/reset-password", data);
+};
