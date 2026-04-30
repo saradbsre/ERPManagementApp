@@ -376,7 +376,7 @@ const getCurrentDateTime = () => {
             // store billing cycle
             if (masterName === "billing_cycle") {
                 sessionStorage.setItem("billing_cycle", value);
-                updated.billing_cycle = value;
+                updated.term = value;
             }
 
             return updated;
@@ -429,7 +429,7 @@ const getCurrentDateTime = () => {
         if (savedBilling) {
             setNewRow(prev => ({
                 ...prev,
-                billing_cycle: savedBilling
+                //billing_cycle: savedBilling
             }));
         }
     }, []);

@@ -288,13 +288,20 @@ const handleAddColumn = () => {
 
 const handleSaveSection = async () => {
   try {
-    if (!section.displayName.trim()) return alert("Section name required");
-    if (!section.description.trim()) return alert("Section description required");
+    if (!section.displayName.trim()) {
+      return alert("Section name required");
+    }
 
-    // 1. Upsert module (create or update)
+    if (!section.description.trim()) {
+      return alert("Section description required");
+    }
+
+    // ✅ 1. UPSERT MODULE
     const moduleRes = await upsertModule({
-      id: editData?.module_id, // use id if editing, undefined if creating
-      module_name: editData ? editData.module_name : formatName(section.displayName, true),
+      id: editData?.module_id,
+      module_name: editData
+        ? editData.module_name
+        : formatName(section.displayName, true),
       display_name: section.displayName,
       description: section.description,
       can_edit: section.canEdit,
@@ -302,43 +309,64 @@ const handleSaveSection = async () => {
       userid: activeUserEmail,
     });
 
-    // 2. Get the module id (from backend response or editData)
     const moduleId = moduleRes?.data?.id || editData?.module_id;
+
     if (!moduleId) {
       return alert("Module ID not returned from API");
     }
 
-    // 3. Get changed columns (for edit) or all columns (for create)
+    // ✅ 2. GET COLUMNS
     const changedColumns = editData ? getChangedColumns() : columns;
 
-    // 4. Upsert columns
-  for (const col of changedColumns) {
-  //console.log("columns from editData:", editData.columns);
+    // ✅ 3. REMOVE DUPLICATES (VERY IMPORTANT)
+    const uniqueCols = [];
+    const seen = new Set();
 
-  const existingColumn = editData?.columns?.find(
-    (c) => c.column_id === col.id
-  );
+    for (const col of changedColumns) {
+      const name = formatName(col.displayName).toLowerCase();
 
-  await upsertModuleColumn({
-    id: col.id,
-    module_id: moduleId,
-    column_name: existingColumn
-      ? existingColumn.column_name
-      : formatName(col.displayName),
-    display_name: col.displayName,
-    description: col.description,
-    data_type: col.type,
-    length: col.length ? Number(col.length) : null,
-    can_edit: col.canEdit,
-    is_active: col.isActive,
-    userid: activeUserEmail,
-    master: col.noMaster ? null : col.masterName
-  });
-}
+      if (!seen.has(name)) {
+        seen.add(name);
+        uniqueCols.push(col);
+      }
+    }
 
-    alert(editData ? "Updated successfully ✅" : "Section & Columns saved successfully ✅");
+    // ✅ 4. PREPARE BULK PAYLOAD
+    const payload = uniqueCols.map(col => {
+      const existingColumn = editData?.columns?.find(
+        (c) => c.column_id === col.id
+      );
 
-    // Optionally reset form if creating new
+      return {
+        id: col.id || null,
+        module_id: moduleId,
+        column_name: existingColumn
+          ? existingColumn.column_name
+          : formatName(col.displayName),
+        display_name: col.displayName,
+        description: col.description,
+        data_type: col.type,
+        length: col.length ? Number(col.length) : null,
+        can_edit: col.canEdit,
+        is_active: col.isActive,
+        userid: activeUserEmail,
+        master: col.noMaster ? null : col.masterName
+      };
+    });
+
+    // ✅ 5. CALL BULK API (ONLY ONCE)
+    await upsertModuleColumn({
+      columns: payload,
+      userid: activeUserEmail
+    });
+
+    alert(
+      editData
+        ? "Updated successfully ✅"
+        : "Section & Columns saved successfully ✅"
+    );
+
+    // ✅ 6. RESET (ONLY FOR CREATE)
     if (!editData) {
       setSection({
         name: "",
