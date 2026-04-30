@@ -59,7 +59,7 @@ export default function Approvals() {
         // ✅ DIRECT APPROVAL (NO MODAL)
         await confirmRequest(
           user.id,
-          false,
+          true,
           user.email,
           activeUserEmail
         );
@@ -82,12 +82,7 @@ export default function Approvals() {
   const handleToggleStatus = async (user, action) => {
     try {
       if (requestType === "signup") {
-        await confirmRequest(
-          user.id,
-          action === "cancel",
-          user.email,
-          activeUserEmail
-        );
+       await confirmRequest(user.id, false, user.email, activeUserEmail);
       } else {
         await fetch("/api/forgot-password/confirm", {
           method: "POST",
@@ -188,17 +183,23 @@ export default function Approvals() {
                 </td>
 
                 <td className="p-4">
-                  <span
-                    className={`px-3 py-1 text-xs rounded-full font-semibold
-                    ${
-                      user.confirm
-                        ? "bg-green-50 text-green-600"
-                        : "bg-yellow-50 text-yellow-600"
-                    }`}
-                  >
-                    {user.confirm ? "Approved" : "Pending"}
-                  </span>
-                </td>
+  <span
+    className={`px-3 py-1 text-xs rounded-full font-semibold
+      ${
+        user.is_rejected
+          ? "bg-red-50 text-red-600"
+          : user.confirm
+            ? "bg-green-50 text-green-600"
+            : "bg-yellow-50 text-yellow-600"
+      }`}
+  >
+    {user.is_rejected
+      ? "Rejected"
+      : user.confirm
+        ? "Approved"
+        : "Pending"}
+  </span>
+</td>
 
                 <td className="p-4 text-right">
                   <div className="flex justify-end gap-2">

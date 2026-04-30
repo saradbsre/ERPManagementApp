@@ -34,17 +34,19 @@ export const fetchRoles = () => {
 };
 
 
-export const confirmRequest = (id, status, email, activeUserEmail) => {
-  const endpoint = status
+export const confirmRequest = (id, isCancel, email, activeUserEmail) => {
+  const endpoint = isCancel
     ? `/users/${id}/confirm`
     : `/users/${id}/cancel`;
+    console.log("API Call:", endpoint, { email, activeUserEmail });
 
   return API.post(endpoint, {
-    isCancel: !status,   // ✅ IMPORTANT FIX
+    isCancel,
     email,
     activeUserEmail
   });
 };
+
 
 export const toggleUserStatus = (id, status, email, activeUserEmail) => {
   const endpoint = status

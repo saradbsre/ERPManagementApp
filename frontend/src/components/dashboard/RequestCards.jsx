@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { signupRequest } from "../../api/api";
+import { signupRequest, fetchForgotPasswordReqs } from "../../api/api";
 
 export default function SignupRequestsCard() {
   const [requests, setRequests] = useState([]);
@@ -11,7 +11,8 @@ export default function SignupRequestsCard() {
     const fetchData = async () => {
       try {
         const result = await signupRequest();
-        setRequests(result?.data || result || []);
+        const forgotPasswordReqs = await fetchForgotPasswordReqs();
+        setRequests([...result?.data || result || [], ...forgotPasswordReqs?.data || forgotPasswordReqs || []]);
       } catch (err) {
         console.error(err);
         setRequests([]);

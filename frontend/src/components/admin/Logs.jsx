@@ -50,6 +50,7 @@ const getStatusColor = (status) => {
   return "#6B7280";
 };
 
+
 export default function Logs() {
   const [logs, setLogs] = useState([]);
 
@@ -87,6 +88,23 @@ export default function Logs() {
     fetchLogs();
   }, []);
 
+ const formatDateTime = (dateStr) => {
+  if (!dateStr) return "";
+
+  const date = new Date(dateStr);
+
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+
+  let hours = date.getUTCHours();
+  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+
+  return `${year}-${month}-${day} ${hours}:${minutes} ${ampm}`;
+};
   /* APPLY DATE RANGE */
   const handleDateChange = (range) => {
     setFilters(range);
@@ -165,7 +183,7 @@ export default function Logs() {
               </span>
             </div>
 
-            <div>{new Date(log.sysdate).toLocaleString()}</div>
+            <div>{formatDateTime(log.sysdate)}</div>
             <div>{log.module_name}</div>
 
             <div>

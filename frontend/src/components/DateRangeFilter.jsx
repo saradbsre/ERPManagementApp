@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const PRESETS = [
   { label: "Today", value: "today" },
@@ -17,23 +17,41 @@ export default function ModernDateTimeFilter({ onApply }) {
   const [startTime, setStartTime] = useState("00:00");
   const [endTime, setEndTime] = useState("23:59");
 
+  // ✅ FIX: initialize properly
+  useEffect(() => {
+    const r = getRange("today");
+    setStartDate(r.start);
+    setEndDate(r.end);
+  }, []);
+
   const getRange = (val) => {
-    const end = new Date();
-    const start = new Date();
+    const today = new Date();
+
+    // normalize time
+    const start = new Date(today);
+    const end = new Date(today);
 
     if (val === "today") {
-      start.setDate(end.getDate());
+      // same day
     } else if (val === "yesterday") {
-      start.setDate(end.getDate() - 1);
-      end.setDate(end.getDate() - 1);
+      start.setDate(today.getDate() - 1);
+      end.setDate(today.getDate() - 1);
     } else {
-      start.setDate(end.getDate() - Number(val));
+      start.setDate(today.getDate() - Number(val));
     }
 
     return {
-      start: start.toISOString().split("T")[0],
-      end: end.toISOString().split("T")[0],
+      start: formatDate(start),
+      end: formatDate(end),
     };
+  };
+
+  // ✅ FIX: always return YYYY-MM-DD correctly
+  const formatDate = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
   };
 
   const selectPreset = (val) => {
@@ -51,12 +69,23 @@ export default function ModernDateTimeFilter({ onApply }) {
     setOpen(false);
   };
 
+  // display format
+  const formatDisplayDate = (dateStr) => {
+    if (!dateStr) return "";
+    const [y, m, d] = dateStr.split("-");
+    return `${d}-${m}-${y}`;
+  };
+
   return (
     <div style={{ position: "relative", display: "inline-block" }}>
 
       {/* TRIGGER */}
       <div style={trigger} onClick={() => setOpen(!open)}>
-        <span>📅 Date Range</span>
+        <span>
+          📅 {startDate && endDate
+            ? `${formatDisplayDate(startDate)} → ${formatDisplayDate(endDate)}`
+            : "Date Range"}
+        </span>
         <span style={{ opacity: 0.6 }}>▾</span>
       </div>
 
@@ -64,7 +93,7 @@ export default function ModernDateTimeFilter({ onApply }) {
       {open && (
         <div style={panel}>
 
-          {/* PRESET CHIPS */}
+          {/* PRESETS */}
           <div style={chipRow}>
             {PRESETS.map((p) => (
               <div
@@ -81,7 +110,7 @@ export default function ModernDateTimeFilter({ onApply }) {
             ))}
           </div>
 
-          {/* DATE FIELDS */}
+          {/* DATE + TIME */}
           <div style={grid}>
             <div>
               <label style={label}>Start</label>
@@ -116,19 +145,18 @@ export default function ModernDateTimeFilter({ onApply }) {
             </div>
           </div>
 
-          {/* ACTION */}
+          {/* APPLY */}
           <button onClick={apply} style={btn}>
             Apply Filter
           </button>
 
         </div>
       )}
-
     </div>
   );
 }
 
-/* ---------------- MODERN STYLES ---------------- */
+/* styles */
 
 const trigger = {
   display: "flex",
@@ -141,7 +169,6 @@ const trigger = {
   borderRadius: 10,
   cursor: "pointer",
   fontSize: 13,
-  boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
 };
 
 const panel = {
@@ -169,7 +196,6 @@ const chip = {
   borderRadius: 999,
   fontSize: 12,
   cursor: "pointer",
-  transition: "0.2s",
 };
 
 const grid = {
@@ -181,7 +207,6 @@ const grid = {
 const label = {
   fontSize: 11,
   color: "#6b7280",
-  display: "block",
   marginBottom: 4,
 };
 

@@ -5,6 +5,7 @@ import masterTableConfig from "../../utils/masterTableConfig"; // 👈 create th
 import { getAlignClass } from "../../utils/leftAlign";
 import { handleNumericInput, isNumericColumn } from "../../utils/numberValidation";
 import PermissionButton from "../PermissionButton";
+import { formatDateTime } from "../../utils/formatDateTime";
 
 const Modal = ({ title, children, onClose }) => (
   <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
@@ -44,7 +45,32 @@ export default function MasterTablePage() {
     const endIndex = startIndex + pageSize;
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email;
-    
+    const isDateColumn = (col) => {
+      const type = (col?.data_type || "").toLowerCase();
+
+      return (
+        type.includes("date") ||
+        type.includes("datetime") ||
+        type.includes("timestamp")
+      );
+    };
+    const formatForInput = (value, type) => {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (isNaN(date.getTime())) return "";
+
+  if (type === "datetime-local") {
+    return date.toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM
+  }
+
+  if (type === "date") {
+    return date.toISOString().split("T")[0]; // YYYY-MM-DD
+  }
+
+  return value;
+};
 
       const handleCreate = () => {
   setIsCreating(true);
@@ -297,141 +323,193 @@ useEffect(() => {
     <table className="min-w-max w-full text-sm">
       <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
   <tr>
-    <th className="px-4 py-3">S.No</th>
+    <th className="px-4 py-3 text-left">S.No</th>
                                     {columns.map(col => (
                                         <th key={col.key} className={`p-2 ${getAlignClass(col.key)}`}>
                                             {col.label}
                                         </th>
                                     ))}
-                                    <th className="px-4 py-3">Actions</th>
+                                    <th className="px-4 py-3 text-right">Actions</th>
                                 </tr>
                             </thead>
 
-                        <tbody className="divide-y">
+<tbody className="divide-y">
 
-  {/* ================= CREATE ROW ================= */}
-  {isCreating && (
-    <tr className="bg-blue-50">
+{/* ================= CREATE ROW ================= */}
+{isCreating && (
+  <tr className="bg-blue-50">
 
-      <td className="px-4 py-3">#</td>
+    <td className="px-4 py-3">#</td>
 
-      {columns.map(col => (
+    {columns.map(col => {
+      const isDate = isDateColumn(col);
+
+      const inputType =
+        col.data_type?.toLowerCase().includes("datetime")
+          ? "datetime-local"
+          : "date";
+
+      return (
         <td key={col.key} className={`px-4 py-3 ${getAlignClass(col.key)}`}>
-          <input
-            className={`border px-2 py-1 rounded w-full ${getAlignClass(col.key)}`}
-            value={newRow[col.key] || ""}
-            onChange={(e) => {
-            let value = e.target.value;
-            if (isNumericColumn(col.key)) {
-                value = handleNumericInput(value);
-            }
 
-            setNewRow({
+          <input
+            type={isDate ? inputType : "text"}
+            className={`border px-2 py-1 rounded w-full ${getAlignClass(col.key)}`}
+            value={
+              isDate
+                ? formatForInput(newRow[col.key], inputType)
+                : (newRow[col.key] || "")
+            }
+            onChange={(e) => {
+              let value = e.target.value;
+
+              if (isNumericColumn(col.key)) {
+                value = handleNumericInput(value);
+              }
+
+              setNewRow({
                 ...newRow,
                 [col.key]: value
-            });
+              });
             }}
           />
-        </td>
-      ))}
 
-      <td className="px-4 py-3 flex gap-2">
-        <button onClick={handleSave} className="text-green-600">
-          Save
-        </button>
-        <button onClick={handleCancel} className="text-gray-500">
-          Cancel
-        </button>
+        </td>
+      );
+    })}
+
+    {/* ACTIONS */}
+    <td className="px-4 py-3 flex gap-2 justify-end">
+      <button
+        onClick={handleSave}
+        className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
+        hover:bg-blue-100 hover:border-blue-500 transition"
+      >
+        Save
+      </button>
+
+      <button
+        onClick={handleCancel}
+        className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
+        hover:bg-red-100 hover:border-red-500 transition"
+      >
+        Cancel
+      </button>
+    </td>
+
+  </tr>
+)}
+
+{/* ================= DATA ROWS ================= */}
+{paginatedRows.map((row, i) => {
+  const rowKey = row.id ?? i;
+
+  return (
+    <tr key={rowKey} className="border-b hover:bg-gray-50">
+
+      <td className="px-4 py-3">
+        {(page - 1) * pageSize + i + 1}
       </td>
 
-    </tr>
-  )}
+      {columns.map(col => {
+        const isDate = isDateColumn(col);
 
-  {/* ================= DATA ROWS ================= */}
-  {paginatedRows.map((row, i) => {
-    const rowKey = row.id ?? i;   // ✅ SAFE UNIQUE KEY
+        const inputType =
+          col.data_type?.toLowerCase().includes("datetime")
+            ? "datetime-local"
+            : "date";
 
-    return (
-      <tr key={rowKey} className="border-b hover:bg-gray-50">
-
-        {/* S.NO */}
-        <td className="px-4 py-3">
-          {(page - 1) * pageSize + i + 1}
-        </td>
-
-        {columns.map(col => (
+        return (
           <td key={col.key} className={`px-4 py-3 ${getAlignClass(col.key)}`}>
+
             {/* ================= EDIT MODE ================= */}
             {editRowId === rowKey ? (
               <input
+                type={isDate ? inputType : "text"}
                 className={`border px-2 py-1 rounded w-full ${getAlignClass(col.key)}`}
-                value={editRow[col.key] || ""}
-                onChange={(e) => {
-                let value = e.target.value;
-
-                if (isNumericColumn(col.key)) {
-                    value = handleNumericInput(value);
+                value={
+                  isDate
+                    ? formatForInput(editRow[col.key], inputType)
+                    : (editRow[col.key] || "")
                 }
+                onChange={(e) => {
+                  let value = e.target.value;
 
-                setEditRow({
+                  if (isNumericColumn(col.key)) {
+                    value = handleNumericInput(value);
+                  }
+
+                  setEditRow({
                     ...editRow,
                     [col.key]: value
-                });
+                  });
                 }}
               />
             ) : (
-              row[col.key] ?? "-"
+              /* ================= VIEW MODE ================= */
+              isDate
+                ? formatDateTime(row[col.key])
+                : (row[col.key] ?? "-")
             )}
 
           </td>
-        ))}
+        );
+      })}
 
-        {/* ================= ACTIONS ================= */}
-        <td className="px-4 py-3 flex gap-2">
+      {/* ================= ACTIONS ================= */}
+      <td className="px-4 py-3 flex justify-end gap-2">
 
-          {editRowId === rowKey ? (
-            <>
-              <button
-                onClick={handleSaveEdit}
-                className="text-green-600"
-              >
-                Save
-              </button>
+        {editRowId === rowKey ? (
+          <>
+            <button
+              onClick={handleSaveEdit}
+              className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
+              hover:bg-blue-100 hover:border-blue-500 transition"
+            >
+              Save
+            </button>
 
-              <button
-                onClick={handleCancelEdit}
-                className="text-gray-500"
-              >
-                Cancel
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => {
-                  setEditRowId(rowKey);   // ✅ FIXED
-                  setEditRow(row);
-                  setOriginalRow(row);
-                }}
-                className="text-blue-600"
-              >
-                Edit
-              </button>
+            <button
+              onClick={handleCancelEdit}
+              className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
+              hover:bg-red-100 hover:border-red-500 transition"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <PermissionButton
+              user={activeUser}
+              permission="modify"
+              onClick={() => {
+                setEditRowId(rowKey);
+                setEditRow(row);
+                setOriginalRow(row);
+              }}
+              className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
+              hover:bg-blue-100 hover:border-blue-500 transition"
+            >
+              Edit
+            </PermissionButton>
 
-              <button
-                onClick={() => handleDelete(row)}
-                className="text-red-600"
-              >
-                Delete
-              </button>
-            </>
-          )}
+            <PermissionButton
+              user={activeUser}
+              permission="delete"
+              onClick={() => handleDelete(row)}
+              className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
+              hover:bg-red-100 hover:border-red-500 transition"
+            >
+              Delete
+            </PermissionButton>
+          </>
+        )}
 
-        </td>
+      </td>
 
-      </tr>
-    );
-  })}
+    </tr>
+  );
+})}
 
 </tbody>
 

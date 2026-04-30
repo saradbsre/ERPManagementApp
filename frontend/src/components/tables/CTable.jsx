@@ -14,6 +14,7 @@ import { getAlignClass } from "../../utils/leftAlign";
 import { isNumericColumn, handleNumericInput } from "../../utils/numberValidation";
 import { isAmountField, isTotalField, hasAnyAmountValue } from "../../utils/costHelpers";
 import PermissionButton from "../PermissionButton";
+import { formatDateTime } from "../../utils/formatDateTime";
 
 const Modal = ({ title, children, onClose }) => (
     <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
@@ -67,6 +68,42 @@ export default function DynamicTablePage() {
     const [printLogo, setPrintLogo] = useState(null);
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email;
+    const isDateType = (type) => {
+        if (!type) return false;
+
+        const t = type.toLowerCase();
+
+        return (
+            t.includes("date") ||   // date, datetime, smalldatetime, datetime2
+            t.includes("time")
+        );
+    };
+    const formatForInput = (value, type) => {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (isNaN(date.getTime())) return "";
+
+  if (type === "datetime-local") {
+    return date.toISOString().slice(0, 16);
+  }
+
+  if (type === "date") {
+    return date.toISOString().split("T")[0];
+  }
+
+  return value;
+};
+
+const isSystemDateColumn = (colName) => {
+  return ["created_at", "updated_at", "sysdate"].includes(colName);
+};
+
+const getCurrentDateTime = () => {
+  const now = new Date();
+  return now.toISOString().slice(0, 16); // for datetime-local
+};
  
     const masterList = [
         ...new Set(columns.map(c => c.master).filter(Boolean))
@@ -892,7 +929,7 @@ export default function DynamicTablePage() {
                     <table className="min-w-max w-full text-sm">
                         <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
                             <tr>
-                                <th className="px-4 py-3 border-b">S.No</th> {/* ✅ ADD THIS */}
+                                <th className="px-4 py-3 border-b text-left">S.No</th> {/* ✅ ADD THIS */}
 
                                 {visibleColumns.map(col => (
                                     <th
@@ -904,233 +941,287 @@ export default function DynamicTablePage() {
                                     </th>
                                 ))}
 
-                                <th className="px-4 py-3 border-b">Actions</th>
+                                <th className="px-4 py-3 border-b text-right">Actions</th>
                             </tr>
                         </thead>
 
                         {/* TABLE BODY */}
-                        <tbody className="divide-y">
+                      <tbody className="divide-y">
 
-                            {/* ================= CREATE ROW ================= */}
-                            {isCreating && (
-                                <tr className="bg-blue-50">
-                                    <td className="px-4 py-3 whitespace-nowrap"></td> {/* ✅ ADD THIS */}
+{/* ================= CREATE ROW ================= */}
+{isCreating && (
+  <tr className="bg-blue-50">
+    <td className="px-4 py-3 whitespace-nowrap"></td>
 
-                                    {visibleColumns.map((col) => {
-                                        const isMaster = !!col.master;
+    {visibleColumns.map((col) => {
+      const isMaster = !!col.master;
 
-                                        return (
-                                            <td key={col.column_id} className={`px-4 py-2 ${getAlignClass(col.display_name)} whitespace-nowrap`}>
-                                                <div className="relative">
-                                                     {/* {console.log("Disable condition for", col.column_name, ":", isTotalField(col.column_name), !isAmountField(col.column_name) && disableOthers)} */}
-                                                    <input
-                                                        type="text"
-                                                        className="border px-2 py-1 rounded w-full"
-                                                        value={newRow[col.column_name] ?? ""}
-                                                        disabled={
-                                                            isTotalField(col.column_name) ||
-                                                            (!isAmountField(col.column_name) && disableOthers)
-                                                           
-                                                        }
-                                                        
-                                                        onChange={(e) => {
-                                                            let value = e.target.value;
+      const isDate =
+        col.data_type &&
+        col.data_type.toLowerCase().includes("date");
 
-                                                            if (isNumericColumn(col.column_name)) {
-                                                                value = handleNumericInput(value);
-                                                            }
+      const inputType =
+        isDate
+          ? col.data_type?.toLowerCase().includes("datetime")
+            ? "datetime-local"
+            : "date"
+          : "text";
 
-                                                            handleNewRowChange(
-                                                                col.column_name,
-                                                                value,
-                                                                col.master
-                                                            );
-                                                        }}
-                                                        onFocus={() =>
-                                                            setActiveDropdown(`create-${col.column_name}`)
-                                                        }
-                                                        onBlur={() =>
-                                                            setTimeout(() => setActiveDropdown(null), 150)
-                                                        }
-                                                    />
+      return (
+        <td
+          key={col.column_id}
+          className={`px-4 py-2 ${getAlignClass(col.display_name)} whitespace-nowrap`}
+        >
+          <div className="relative">
 
-                                                    {/* CREATE DROPDOWN */}
-                                                    {isMaster &&
-                                                        activeDropdown === `create-${col.column_name}` && (
-                                                            <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
+            <input
+              type={inputType}
+              className="border px-2 py-1 rounded w-full"
+              value={
+                newRow[col.column_name]
+                  ? isDate
+                    ? formatForInput(newRow[col.column_name], inputType)
+                    : newRow[col.column_name]
+                  : ""
+              }
+              disabled={
+                isTotalField(col.column_name) ||
+                (!isAmountField(col.column_name) && disableOthers)
+              }
+              onChange={(e) => {
+                let value = e.target.value;
 
-                                                                {(masterDataMap[col.master] || [])
-                                                                    .filter(val =>
-                                                                        val.toLowerCase().includes(
-                                                                            (newRow[col.column_name] || "").toLowerCase()
-                                                                        )
-                                                                    )
-                                                                    .slice(0, 20)
-                                                                    .map((val, i) => (
-                                                                        <div
-                                                                            key={i}
-                                                                            className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
-                                                                            onMouseDown={() =>
-                                                                                handleNewRowChange(
-                                                                                    col.column_name,
-                                                                                    val,
-                                                                                    col.master
-                                                                                )
-                                                                            }
-                                                                        >
-                                                                            {val}
-                                                                        </div>
-                                                                    ))}
+                if (isNumericColumn(col.column_name)) {
+                  value = handleNumericInput(value);
+                }
 
-                                                            </div>
-                                                        )}
+                handleNewRowChange(
+                  col.column_name,
+                  value,
+                  col.master
+                );
+              }}
+              onFocus={() =>
+                setActiveDropdown(`create-${col.column_name}`)
+              }
+              onBlur={() =>
+                setTimeout(() => setActiveDropdown(null), 150)
+              }
+            />
 
-                                                </div>
-                                            </td>
-                                        );
-                                    })}
+            {/* CREATE DROPDOWN */}
+            {isMaster &&
+              activeDropdown === `create-${col.column_name}` && (
+                <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
 
-                                    {/* CREATE ACTIONS */}
-                                    <td className="px-4 py-3 whitespace-nowrap flex gap-2">
-                                        <button onClick={handleSave} className="text-green-600">
-                                            Save
-                                        </button>
+                  {(masterDataMap[col.master] || [])
+                    .filter(val =>
+                      val.toLowerCase().includes(
+                        (newRow[col.column_name] || "").toLowerCase()
+                      )
+                    )
+                    .slice(0, 20)
+                    .map((val, i) => (
+                      <div
+                        key={i}
+                        className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
+                        onMouseDown={() =>
+                          handleNewRowChange(
+                            col.column_name,
+                            val,
+                            col.master
+                          )
+                        }
+                      >
+                        {val}
+                      </div>
+                    ))}
 
-                                        <button onClick={handleCancel} className="text-gray-500">
-                                            Cancel
-                                        </button>
-                                    </td>
-                                </tr>
-                            )}
+                </div>
+              )}
 
-                            {/* ================= DATA ROWS ================= */}
-                            {paginatedRows.map((row, i) => (
-                                <tr key={i} className="hover:bg-gray-50">
+          </div>
+        </td>
+      );
+    })}
 
-                                    <td className="px-4 py-3 whitespace-nowrap">{(page - 1) * pageSize + i + 1}</td>
+    {/* ACTIONS */}
+    <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
+      <button
+        onClick={handleSave}
+        className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
+        hover:bg-blue-100 hover:border-blue-500 transition"
+      >
+        Save
+      </button>
 
+      <button
+        onClick={handleCancel}
+        className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
+        hover:bg-red-100 hover:border-red-500 transition"
+      >
+        Cancel
+      </button>
+    </td>
+  </tr>
+)}
 
-                                    {visibleColumns.map((col) => {
-                                        const isMaster = !!col.master;
-                                        const editKey = `edit-${row.id}-${col.column_name}`;
+{/* ================= DATA ROWS ================= */}
+{paginatedRows.map((row, i) => (
+  <tr key={row.id ?? i} className="hover:bg-gray-50">
 
-                                        return (
-                                            <td key={col.column_id} className={`px-4 py-3 whitespace-nowrap ${getAlignClass(col.display_name)}`}>
+    <td className="px-4 py-3 whitespace-nowrap">
+      {(page - 1) * pageSize + i + 1}
+    </td>
 
-                                                {/* ================= EDIT MODE ================= */}
-                                                {editRowId === row.id ? (
-                                                    <div className="relative">
+    {visibleColumns.map((col) => {
+      const isMaster = !!col.master;
+      const editKey = `edit-${row.id}-${col.column_name}`;
 
-                                                        <input
-                                                            className="border px-2 py-1 rounded w-full"
-                                                            value={editRow[col.column_name] || ""}
-                                                            onChange={(e) => {
-                                                                let value = e.target.value;
+      const isDate =
+        col.data_type &&
+        col.data_type.toLowerCase().includes("date");
 
-                                                                if (isNumericColumn(col.column_name)) {
-                                                                    value = handleNumericInput(value);
-                                                                }
+      const inputType =
+        isDate
+          ? col.data_type?.toLowerCase().includes("datetime")
+            ? "datetime-local"
+            : "date"
+          : "text";
 
-                                                                setEditRow({
-                                                                    ...editRow,
-                                                                    [col.column_name]: value,
-                                                                });
-                                                            }}
-                                                            onFocus={() => setActiveDropdown(editKey)}
-                                                            onBlur={() =>
-                                                                setTimeout(() => setActiveDropdown(null), 150)
-                                                            }
-                                                        />
+      return (
+        <td
+          key={col.column_id}
+          className={`px-4 py-3 whitespace-nowrap ${getAlignClass(col.display_name)}`}
+        >
 
-                                                        {/* EDIT DROPDOWN */}
-                                                        {isMaster && activeDropdown === editKey && (
-                                                            <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
+          {/* ================= EDIT MODE ================= */}
+          {editRowId === row.id ? (
+            <div className="relative">
 
-                                                                {(masterDataMap[col.master] || [])
-                                                                    .filter(val =>
-                                                                        val.toLowerCase().includes(
-                                                                            (editRow[col.column_name] || "").toLowerCase()
-                                                                        )
-                                                                    )
-                                                                    .slice(0, 20)
-                                                                    .map((val, i) => (
-                                                                        <div
-                                                                            key={i}
-                                                                            className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
-                                                                            onMouseDown={() =>
-                                                                                setEditRow({
-                                                                                    ...editRow,
-                                                                                    [col.column_name]: val,
-                                                                                })
-                                                                            }
-                                                                        >
-                                                                            {val}
-                                                                        </div>
-                                                                    ))}
+              <input
+                type={inputType}
+                className="border px-2 py-1 rounded w-full"
+                value={
+                  editRow[col.column_name]
+                    ? isDate
+                      ? formatForInput(editRow[col.column_name], inputType)
+                      : editRow[col.column_name]
+                    : ""
+                }
+                onChange={(e) => {
+                  let value = e.target.value;
 
-                                                            </div>
-                                                        )}
+                  if (isNumericColumn(col.column_name)) {
+                    value = handleNumericInput(value);
+                  }
 
-                                                    </div>
+                  setEditRow({
+                    ...editRow,
+                    [col.column_name]: value,
+                  });
+                }}
+                onFocus={() => setActiveDropdown(editKey)}
+                onBlur={() =>
+                  setTimeout(() => setActiveDropdown(null), 150)
+                }
+              />
 
-                                                ) : (
-                                                    row?.[col.column_name] ?? "-"
-                                                )}
+              {/* EDIT DROPDOWN */}
+              {isMaster && activeDropdown === editKey && (
+                <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
 
-                                            </td>
-                                        );
-                                    })}
+                  {(masterDataMap[col.master] || [])
+                    .filter(val =>
+                      val.toLowerCase().includes(
+                        (editRow[col.column_name] || "").toLowerCase()
+                      )
+                    )
+                    .slice(0, 20)
+                    .map((val, i) => (
+                      <div
+                        key={i}
+                        className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
+                        onMouseDown={() =>
+                          setEditRow({
+                            ...editRow,
+                            [col.column_name]: val,
+                          })
+                        }
+                      >
+                        {val}
+                      </div>
+                    ))}
 
-                                    {/* ================= ACTION ICONS ================= */}
-                                    <td className="px-4 py-3 whitespace-nowrap flex gap-2">
+                </div>
+              )}
 
-                                        {editRowId === row.id ? (
-                                            <>
-                                                <button
-                                                    onClick={handleSaveEdit}
-                                                    className="p-2 text-green-600 hover:bg-green-50 rounded"
-                                                    title="Save"
-                                                >
-                                                    <FiSave size={16} />
-                                                </button>
+            </div>
+          ) : (
+            /* ================= VIEW MODE ================= */
+            isDate
+              ? formatDateTime(row?.[col.column_name])
+              : (row?.[col.column_name] ?? "-")
+          )}
 
-                                                <button
-                                                    onClick={handleCancelEdit}
-                                                    className="p-2 text-gray-500 hover:bg-gray-100 rounded"
-                                                    title="Cancel"
-                                                >
-                                                    <MdOutlineCancel size={16} />
-                                                </button>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <PermissionButton
-                                                    user={activeUser}
-                                                    permission="modify"
-                                                    onClick={() => handleEdit(row)}
-                                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded"
-                                                    title="Edit"
-                                                >
-                                                    <FiEdit3 size={16} />
-                                                </PermissionButton>
+        </td>
+      );
+    })}
 
-                                                <PermissionButton
-                                                    user={activeUser}
-                                                    permission="delete"
-                                                    onClick={() => handleDelete(row)}
-                                                    className="p-2 text-red-600 hover:bg-red-50 rounded"
-                                                    title="Delete"
-                                                >
-                                                    <MdDeleteOutline size={16} />
-                                                </PermissionButton>
-                                            </>
-                                        )}
+    {/* ACTIONS */}
+    <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
 
-                                    </td>
+      {editRowId === row.id ? (
+        <>
+          <button
+            onClick={handleSaveEdit}
+            className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
+            hover:bg-blue-100 hover:border-blue-500 transition"
+          >
+            Save
+          </button>
 
-                                </tr>
-                            ))}
-                        </tbody>
+          <button
+            onClick={handleCancelEdit}
+            className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
+            hover:bg-red-100 hover:border-red-500 transition"
+          >
+            Cancel
+          </button>
+        </>
+      ) : (
+        <>
+          <PermissionButton
+            user={activeUser}
+            permission="modify"
+            onClick={() => {
+              setEditRowId(row.id);
+              setEditRow(row);
+              setOriginalRow(row);
+            }}
+            className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
+            hover:bg-blue-100 hover:border-blue-500 transition"
+          >
+            Edit
+          </PermissionButton>
+
+          <PermissionButton
+            user={activeUser}
+            permission="delete"
+            onClick={() => handleDelete(row)}
+            className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
+            hover:bg-red-100 hover:border-red-500 transition"
+          >
+            Delete
+          </PermissionButton>
+        </>
+      )}
+
+    </td>
+
+  </tr>
+))}
+</tbody>
 
                     </table>
                     {showImportModal && (
