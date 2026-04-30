@@ -15,6 +15,7 @@ import { isNumericColumn, handleNumericInput } from "../../utils/numberValidatio
 import { isAmountField, isTotalField, hasAnyAmountValue } from "../../utils/costHelpers";
 import PermissionButton from "../PermissionButton";
 import { formatDateTime } from "../../utils/formatDateTime";
+import { formatDate } from "../../utils/formatDate";
 
 const Modal = ({ title, children, onClose }) => (
     <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
@@ -78,23 +79,7 @@ export default function DynamicTablePage() {
             t.includes("time")
         );
     };
-    const formatForInput = (value, type) => {
-  if (!value) return "";
-
-  const date = new Date(value);
-
-  if (isNaN(date.getTime())) return "";
-
-  if (type === "datetime-local") {
-    return date.toISOString().slice(0, 16);
-  }
-
-  if (type === "date") {
-    return date.toISOString().split("T")[0];
-  }
-
-  return value;
-};
+   
 
 const isSystemDateColumn = (colName) => {
   return ["created_at", "updated_at", "sysdate"].includes(colName);
@@ -104,7 +89,10 @@ const getCurrentDateTime = () => {
   const now = new Date();
   return now.toISOString().slice(0, 16); // for datetime-local
 };
- 
+ const formatForInput = (value) => {
+  if (!value) return "";
+  return value.split("T")[0]; // removes time safely
+};
     const masterList = [
         ...new Set(columns.map(c => c.master).filter(Boolean))
     ];
@@ -957,15 +945,7 @@ const getCurrentDateTime = () => {
       const isMaster = !!col.master;
 
       const isDate =
-        col.data_type &&
-        col.data_type.toLowerCase().includes("date");
-
-      const inputType =
-        isDate
-          ? col.data_type?.toLowerCase().includes("datetime")
-            ? "datetime-local"
-            : "date"
-          : "text";
+        col.data_type?.toLowerCase().includes("date");
 
       return (
         <td
@@ -975,14 +955,12 @@ const getCurrentDateTime = () => {
           <div className="relative">
 
             <input
-              type={inputType}
+              type={isDate ? "date" : "text"}   // ✅ ONLY DATE (NO TIME)
               className="border px-2 py-1 rounded w-full"
               value={
-                newRow[col.column_name]
-                  ? isDate
-                    ? formatForInput(newRow[col.column_name], inputType)
-                    : newRow[col.column_name]
-                  : ""
+                isDate
+                  ? formatForInput(newRow[col.column_name])
+                  : (newRow[col.column_name] || "")
               }
               disabled={
                 isTotalField(col.column_name) ||
@@ -1079,15 +1057,7 @@ const getCurrentDateTime = () => {
       const editKey = `edit-${row.id}-${col.column_name}`;
 
       const isDate =
-        col.data_type &&
-        col.data_type.toLowerCase().includes("date");
-
-      const inputType =
-        isDate
-          ? col.data_type?.toLowerCase().includes("datetime")
-            ? "datetime-local"
-            : "date"
-          : "text";
+        col.data_type?.toLowerCase().includes("date");
 
       return (
         <td
@@ -1100,14 +1070,12 @@ const getCurrentDateTime = () => {
             <div className="relative">
 
               <input
-                type={inputType}
+                type={isDate ? "date" : "text"}   // ✅ ONLY DATE
                 className="border px-2 py-1 rounded w-full"
                 value={
-                  editRow[col.column_name]
-                    ? isDate
-                      ? formatForInput(editRow[col.column_name], inputType)
-                      : editRow[col.column_name]
-                    : ""
+                  isDate
+                    ? formatForInput(editRow[col.column_name])
+                    : (editRow[col.column_name] || "")
                 }
                 onChange={(e) => {
                   let value = e.target.value;
@@ -1160,7 +1128,7 @@ const getCurrentDateTime = () => {
           ) : (
             /* ================= VIEW MODE ================= */
             isDate
-              ? formatDateTime(row?.[col.column_name])
+              ? formatDate(row?.[col.column_name])
               : (row?.[col.column_name] ?? "-")
           )}
 

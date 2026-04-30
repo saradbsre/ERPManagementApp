@@ -6,6 +6,9 @@ import { getAlignClass } from "../../utils/leftAlign";
 import { handleNumericInput, isNumericColumn } from "../../utils/numberValidation";
 import PermissionButton from "../PermissionButton";
 import { formatDateTime } from "../../utils/formatDateTime";
+import { formatDate } from "../../utils/formatDate";
+import ValidatePopups from "../Validatepopups";
+
 
 const Modal = ({ title, children, onClose }) => (
   <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
@@ -45,6 +48,9 @@ export default function MasterTablePage() {
     const endIndex = startIndex + pageSize;
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email;
+    const [showValidatePopup, setShowValidatePopup] = useState(false);
+    const [validationMessage, setValidationMessage] = useState("");
+    const [validationType, setValidationType] = useState("success"); // success, error, warning
     const isDateColumn = (col) => {
       const type = (col?.data_type || "").toLowerCase();
 
@@ -95,7 +101,7 @@ export default function MasterTablePage() {
       ...row,
       id: row.id || index + 1   // fallback id
     }));
-
+    
     setRows(withIds);
   } catch (err) {
     console.error(err);
@@ -127,13 +133,18 @@ const handleSave = async () => {
     //console.log("CLEANED ROW:", cleanedRow);
 
     await createMasterData(masterName, cleanedRow, activeUserEmail);
-
+    setValidationMessage("Record created successfully!");
+    setValidationType("success");
+    setShowValidatePopup(true);
     setIsCreating(false);
     setNewRow({});
 
     loadMasterData();
   } catch (err) {
     console.error("CREATE ERROR:", err);
+    setValidationMessage("Error creating record!");
+    setValidationType("error");
+    setShowValidatePopup(true);
   }
 };
 
@@ -145,10 +156,16 @@ const handleCancel = () => {
 const handleDelete = async (row) => {
     try{
         await deleteMasterData(masterName, row.id, activeUserEmail);
+        setValidationMessage("Record deleted successfully!");
+        setValidationType("success");
+        setShowValidatePopup(true);
         loadMasterData();
     }
     catch(err){
         console.error("DELETE ERROR:", err);
+        setValidationMessage("Error deleting record!");
+        setValidationType("error");
+        setShowValidatePopup(true); 
     }
 };
 
@@ -168,6 +185,9 @@ const handleSaveEdit = async () => {
     }
 
     await updateMasterData(masterName, editRowId, changedData, activeUserEmail);
+    setValidationMessage("Record updated successfully!");
+    setValidationType("success");
+    setShowValidatePopup(true);
 
     setEditRowId(null);
     setEditRow({});
@@ -175,6 +195,9 @@ const handleSaveEdit = async () => {
 
     loadMasterData();
   } catch (err) {
+    setValidationMessage("Error updating record!");
+    setValidationType("error");
+    setShowValidatePopup(true);
     console.error("UPDATE ERROR:", err);
   }
 };
@@ -344,11 +367,7 @@ useEffect(() => {
     {columns.map(col => {
       const isDate = isDateColumn(col);
 
-      const inputType =
-        col.data_type?.toLowerCase().includes("datetime")
-          ? "datetime-local"
-          : "date";
-
+      const inputType = "date";
       return (
         <td key={col.key} className={`px-4 py-3 ${getAlignClass(col.key)}`}>
 
@@ -414,10 +433,7 @@ useEffect(() => {
       {columns.map(col => {
         const isDate = isDateColumn(col);
 
-        const inputType =
-          col.data_type?.toLowerCase().includes("datetime")
-            ? "datetime-local"
-            : "date";
+       const inputType = "date";
 
         return (
           <td key={col.key} className={`px-4 py-3 ${getAlignClass(col.key)}`}>
@@ -448,7 +464,7 @@ useEffect(() => {
             ) : (
               /* ================= VIEW MODE ================= */
               isDate
-                ? formatDateTime(row[col.key])
+                ? formatDate(row[col.key])
                 : (row[col.key] ?? "-")
             )}
 

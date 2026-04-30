@@ -13,11 +13,14 @@ export default function Sidebar() {
 
   const [sections, setSections] = useState([]);
   const [openMain, setOpenMain] = useState(null);
-  const [openChild, setOpenChild] = useState(null);
   const [masters, setMasters] = useState([]);
+
+  const User = JSON.parse(localStorage.getItem("user"));
+  const role = (User?.role || "user").toLowerCase().trim();
 
   useEffect(() => {
     loadSections();
+    loadMasters();
   }, []);
 
   const loadSections = async () => {
@@ -32,54 +35,58 @@ export default function Sidebar() {
   const loadMasters = async () => {
     try {
       const res = await fetchMasters();
-        setMasters(res.data || []);
+      setMasters(res.data || []);
     } catch (err) {
       console.error(err);
     }
   };
 
-    useEffect(() => {
-    loadMasters();
-  }, []);
-
-
   const isActive = (path) => location.pathname === path;
 
+  // ✅ ROLE FILTER LOGIC
+  const showAdmin = role !== "user" && role !== "asst admin";
+  const showMasters = role !== "user";
+
   const menuItems = [
-  {
-    name: "Dashboard",
-    icon: <LayoutDashboard size={18} />,
-    path: "/dashboard",
-  },
-  {
-    name: "Admin",
-    icon: <Settings size={18} />,
-    path: "/admin",
-  },
-  {
-    name: "Masters",
-    icon: <BookOpen size={18} />,
-    children: masters.map((master) => ({
-      key: `${master.master_name}`,
-      id: master.master_name,
-      name: master.display_name,
-      master: master,
-      path: `/masters/${master.master_name}`,
-      state: { master }
-    })),
-  },
-  {
-    name: "Workspace",
-    icon: <FolderKanban size={18} />,
-    children: sections.map((sec) => ({
-      key: `${sec.module_id}_${sec.module_name}`,
-      id: sec.module_id,
-      name: sec.display_name,
-      module: sec,
-      path: `/workspace/${sec.module_id}`,
-    })),
-  },
-];
+    {
+      name: "Dashboard",
+      icon: <LayoutDashboard size={18} />,
+      path: "/dashboard",
+    },
+
+    // ✅ ADMIN ONLY FOR SUPER ADMIN (NOT asst admin, NOT user)
+    showAdmin && {
+      name: "Admin",
+      icon: <Settings size={18} />,
+      path: "/admin",
+    },
+
+    // ✅ MASTERS ONLY FOR ADMIN LEVEL (NOT user)
+    showMasters && {
+      name: "Masters",
+      icon: <BookOpen size={18} />,
+      children: masters.map((master) => ({
+        key: `${master.master_name}`,
+        id: master.master_name,
+        name: master.display_name,
+        master: master,
+        path: `/masters/${master.master_name}`,
+        state: { master }
+      })),
+    },
+
+    {
+      name: "Workspace",
+      icon: <FolderKanban size={18} />,
+      children: sections.map((sec) => ({
+        key: `${sec.module_id}_${sec.module_name}`,
+        id: sec.module_id,
+        name: sec.display_name,
+        module: sec,
+        path: `/workspace/${sec.module_id}`,
+      })),
+    },
+  ].filter(Boolean); // ✅ remove false entries
 
   return (
     <div className="h-screen w-64 bg-gray-100 text-gray-900 fixed top-0 left-0 p-5 overflow-y-auto">
@@ -117,23 +124,23 @@ export default function Sidebar() {
               </div>
             )}
 
-                {/* MASTER CHILDREN */}
-           {item.children && openMain === item.name && (
-  <div className="ml-4 mt-2 space-y-1">
-    {item.children.map((child) => (
-      <Link
-        key={child.key}
-        to={child.path}
-        state={child.master ? { master: child.master } : { module: child.module }}
-        className={`block px-3 py-2 rounded text-sm
-          ${isActive(child.path) ? "bg-gray-300" : "hover:bg-gray-200"}
-        `}
-      >
-        {child.name}
-      </Link>
-    ))}
-  </div>
-)}
+            {/* CHILDREN */}
+            {item.children && openMain === item.name && (
+              <div className="ml-4 mt-2 space-y-1">
+                {item.children.map((child) => (
+                  <Link
+                    key={child.key}
+                    to={child.path}
+                    state={child.master ? { master: child.master } : { module: child.module }}
+                    className={`block px-3 py-2 rounded text-sm
+                      ${isActive(child.path) ? "bg-gray-300" : "hover:bg-gray-200"}
+                    `}
+                  >
+                    {child.name}
+                  </Link>
+                ))}
+              </div>
+            )}
 
           </div>
         ))}
