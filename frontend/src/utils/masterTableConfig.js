@@ -20,7 +20,7 @@ const masterTableConfig = {
       { key: "provider_name", label: "Name", data_type: "string" },
       { key: "plan_name", label: "Plan", data_type: "string" },
       { key: "purchase_date", label: "Purchase Date", data_type: "datetime" },
-      { key: "renewal_date", label: "Renewal Date", data_type: "datetime" },
+      // { key: "renewal_date", label: "Renewal Date", data_type: "datetime" },
       { key: "billing_cycle", label: "Billing Cycle", data_type: "string" },
     ]
   },
@@ -47,10 +47,8 @@ const masterTableConfig = {
 
     columns: [
         { key: "method_name", label: "Payment Method", data_type: "string" },
-        { key: "provider", label: "Provider", data_type: "string" },
-        { key: "card_holder_name", label: "Card Holder Name", data_type: "string" },
-        { key: "card_number", label: "Card Number", data_type: "string" },
-        { key: "card_brand", label: "Card Brand", data_type: "string" },
+        // { key: "is_active", label: "Is Active", data_type: "boolean" },
+        { key: "sysdate", label: "Updated On", data_type: "datetime" },
         
     ]
   },
@@ -65,6 +63,28 @@ const masterTableConfig = {
       { key: "issue_date", label: "Issue Date", data_type: "datetime" },
       { key: "expiry_date", label: "Expiry Date", data_type: "datetime" },
       { key: "trn", label: "TRN", data_type: "string" }
+    ]
+  },
+   domains: {
+    displayName: "Domains Master",
+
+    columns: [
+      { key: "domain_name", label: "Name", data_type: "string" },
+      { key: "plan_name", label: "Plan", data_type: "string" },
+      { key: "purchase_date", label: "Purchase Date", data_type: "datetime" },
+      // { key: "renewal_date", label: "Renewal Date", data_type: "datetime" },
+      { key: "billing_cycle", label: "Billing Cycle", data_type: "string" },
+    ]
+  },
+   credit_card: {
+    displayName: "Credit Cards Master",
+    columns: [
+      { key: "card_holder_name", label: "Cardholder Name", data_type: "string" },
+      { key: "card_4number", label: "Card Number - Last 4 Digits", data_type: "string" },
+      { key: "card_brand", label: "Card Brand", data_type: "string" },
+      { key: "expiry_date", label: "Expiry Date", data_type: "datetime" },
+      // { key: "cvv", label: "CVV", data_type: "string" },
+      { key: "billing_address", label: "Billing Address", data_type: "string" }
     ]
   }
 };

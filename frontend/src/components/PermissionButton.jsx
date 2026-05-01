@@ -8,7 +8,7 @@ export default function PermissionButton({
   className = ""
 }) {
   if (!hasPermission(user, permission)) return null;
-  console.log("Rendering PermissionButton for permission:", permission); // Debug log
+ // console.log("Rendering PermissionButton for permission:", permission); // Debug log
 
   return (
     <button

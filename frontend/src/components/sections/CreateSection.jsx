@@ -12,6 +12,8 @@ export default function CreateSection({ onClose, editData }) {
   const [isDateColumn, setIsDateColumn] = useState(false);
   const activeUser = JSON.parse(localStorage.getItem("user"));
   const activeUserEmail = activeUser?.email;
+  const baseCurrency = currencies.find(c => c.is_base_currency === true)?.currency_code;
+  console.log("Base currency:", baseCurrency);
   const [section, setSection] = useState({
     name: "",
     displayName: "",
@@ -197,64 +199,71 @@ const handleAddColumn = () => {
     setEditIndex(null);
   }
 
-  // ================= CURRENCY LOGIC =================
-  else if (column.masterName === "currency") {
+  // ================= AMOUNT LOGIC =================
+// ================= AMOUNT LOGIC =================
+else if (column.masterName === "amount") {
 
-    const selectedCurrencies = column.currency || [];
-    const selectedBilling = column.billingCycle || [];
+  const base = normalizeKey(column.displayName);
 
-    if (!selectedCurrencies.length) {
-      return alert("Please select at least one currency");
-    }
+  const newCols = [];
 
-    // -------- 1️⃣ AMOUNT COLUMNS --------
-    const newCurrencyCols = selectedCurrencies
-      .map(currencyCode => {
+  // get base currency from DB
+  const baseCur = currencies.find(c => c.is_base_currency === true);
 
-        const key = normalizeKey(currencyCode); // ✅ normalize
-        const colName = `amount_${key}`;
+  const baseCurCode = baseCur?.currency_code?.toLowerCase();
 
-        const exists = columns.some(
-          c => c.name.toLowerCase() === colName.toLowerCase()
-        );
+  // ================= 1. DISPLAY VALUE COLUMN =================
+  const displayCol = `${base}`;
 
-        if (exists) return null;
-
-        return {
-          ...column,
-          name: colName,
-          displayName: `Amount (${currencyCode})`,
-          masterName: "currency"
-        };
-      })
-      .filter(Boolean);
-
-
-    // -------- 2️⃣ TOTAL COLUMNS --------
-    const extraCols = [];
-
-    selectedBilling.forEach(billing => {
-
-      const key = normalizeKey(billing); // ✅ IMPORTANT FIX
-      const colName = `total_cost_${key}_aed`;
-
-      const exists = columns.some(c => c.name === colName);
-
-      if (!exists) {
-        extraCols.push({
-          ...column,
-          name: colName,
-          displayName: `Total Cost ${billing} (AED)`,
-          masterName: null
-        });
-      }
+  if (!columns.some(c => c.name === displayCol)) {
+    newCols.push({
+      ...column,
+      name: displayCol,
+      displayName: column.displayName,
+      masterName: ""
     });
-
-
-    // -------- 3️⃣ SAVE --------
-    setColumns(prev => [...prev, ...newCurrencyCols, ...extraCols]);
   }
 
+  // ================= 2. CURRENCY COLUMN =================
+  const currencyCol = `currency`;
+
+  if (!columns.some(c => c.name === currencyCol)) {
+    newCols.push({
+      ...column,
+      name: currencyCol,
+      displayName: `Currency`,
+      masterName: "currency",
+      defaultValue: baseCurCode // 🔥 base currency auto assign
+    });
+  }
+
+  // ================= 3. FCAMT COLUMN =================
+  const fcamtCol = `fcamt`;
+
+  if (!columns.some(c => c.name === fcamtCol)) {
+    newCols.push({
+      ...column,
+      name: fcamtCol,
+      displayName: `FC Amount`,
+      masterName: ""
+    });
+  }
+
+  // ================= 4. TOTAL COLUMN =================
+  const totalCol = `total_${base}_${baseCurCode}`;
+
+  if (!columns.some(c => c.name === totalCol)) {
+    newCols.push({
+      ...column,
+      name: totalCol,
+      displayName: `Total ${column.displayName} (${baseCurCode?.toUpperCase()})`,
+      masterName: "",
+      isBaseCurrencyTotal: true // 🔥 flag for future logic
+    });
+  }
+
+  setColumns(prev => [...prev, ...newCols]);
+}
   // ================= NORMAL COLUMN =================
   else {
     const generatedName = formatName(column.displayName);
@@ -385,7 +394,24 @@ const handleSaveSection = async () => {
 };
 
 useEffect(() => {
-  fetchMasters().then(res => setMasters(res.data || []));
+  fetchMasters().then(res => {
+    const apiMasters = res.data || [];
+
+    const defaultMaster = {
+      id: "default_amount",
+      master_name: "amount",
+      display_name: "Amount",
+    };
+
+    // avoid duplicate if API already has it
+    const exists = apiMasters.some(
+      m => m.master_name === "amount"
+    );
+
+    setMasters(
+      exists ? apiMasters : [defaultMaster, ...apiMasters]
+    );
+  });
 }, []);
 const selectedMaster = masters.find(m => m.master_name === column.masterName);
 //console.log("selected master:", selectedMaster);
@@ -533,7 +559,8 @@ const selectedMaster = masters.find(m => m.master_name === column.masterName);
 
   if (!selectedMaster) return;
 
-  // find datatype config
+  const isAmount = selectedMaster.master_name === "amount";
+
   const selectedType = dataTypesList.find(
     (d) => d.type_key === selectedMaster.data_type
   );
@@ -542,15 +569,17 @@ const selectedMaster = masters.find(m => m.master_name === column.masterName);
     ...column,
     masterName: selectedMaster.master_name,
 
-    // 🔥 auto fill
+    // auto fill display
     displayName: selectedMaster.display_name,
-    //description: selectedMaster.description || "",
-    type: selectedMaster.data_type,
 
-    // 🔥 set default length if applicable
-    length: selectedType?.has_length
-      ? selectedType.default_length || ""
-      : ""
+    // 🔥 FORCE DECIMAL FOR AMOUNT
+    type: isAmount
+      ? "decimal"
+      : selectedMaster.data_type,
+
+    length: isAmount
+      ? "" // optional: or default decimal precision like 18
+      : (selectedType?.has_length ? selectedType.default_length || "" : "")
   });
 }}
   >
@@ -587,13 +616,12 @@ const selectedMaster = masters.find(m => m.master_name === column.masterName);
     ))}
   </div>
 )}
-{ selectedMaster?.master_name === "currency" && (
+{/* { selectedMaster?.master_name === "currency" && (
  <div className="grid grid-cols-2 gap-3">
 
-  {/* CURRENCY DROPDOWN */}
 <div className="relative">
 
-  {/* INPUT BOX */}
+
   <div
     className="input cursor-pointer"
     onClick={() =>
@@ -605,7 +633,7 @@ const selectedMaster = masters.find(m => m.master_name === column.masterName);
       : "Select Currency"}
   </div>
 
-  {/* DROPDOWN */}
+ 
   {openDropdown === "currency" && (
     <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
 
@@ -693,7 +721,7 @@ const selectedMaster = masters.find(m => m.master_name === column.masterName);
 </div>
 
 </div>
-) }
+) } */}
 
           <textarea
             placeholder="Column Description"

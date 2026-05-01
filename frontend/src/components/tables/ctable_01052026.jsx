@@ -1,6 +1,12 @@
+// new row with add empty row at top and edit in place
+
 import { useEffect, useState, useRef, act } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf } from "../../api/api";
+import { FiEdit3 } from "react-icons/fi";
+import { MdDeleteOutline } from "react-icons/md";
+import { FiSave } from "react-icons/fi";
+import { MdOutlineCancel } from "react-icons/md";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -12,7 +18,6 @@ import { isAmountField, isTotalField, hasAnyAmountValue } from "../../utils/cost
 import PermissionButton from "../PermissionButton";
 import { formatDateTime } from "../../utils/formatDateTime";
 import { formatDate } from "../../utils/formatDate";
-import { Currency } from "lucide-react";
 
 const Modal = ({ title, children, onClose }) => (
     <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
@@ -68,70 +73,34 @@ export default function DynamicTablePage() {
     const activeUserEmail = activeUser?.email;
   const [createAmount, setCreateAmount] = useState("");
 const [createCurrency, setCreateCurrency] = useState("");
-const [showCreateModal, setShowCreateModal] = useState(false);
-//const [newRow, setNewRow] = useState({});
-const formatCard = (value, columnName) => {
-  if (!value) return "-";
+    const isDateType = (type) => {
+        if (!type) return false;
 
-  const name = (columnName || "").toLowerCase();
+        const t = type.toLowerCase();
 
-  const isCard =
-    name.includes("card") ||
-    name.includes("credit_card") ||
-    name.includes("card_number") ||
-    name.includes("cardno") ||
-    name.includes("card_no");
+        return (
+            t.includes("date") ||   // date, datetime, smalldatetime, datetime2
+            t.includes("time")
+        );
+    };
 
-  if (!isCard) return value;
-
-  const digits = value.toString().replace(/\D/g, ""); // remove spaces/dashes
-
-  if (digits.length < 4) return "****";
-
-  const last4 = digits.slice(-4);
-
-  return `**** **** **** ${last4}`;
-};
-
-const isCreditCardColumn = (colName = "") => {
-  const name = colName.toLowerCase();
-  const result =  (
-    name.includes("card") ||
-    name.includes("credit_card") ||
-    name.includes("card_number") ||
-    name.includes("card_no")
+   const isAmountColumn = (col) => {
+  return (
+    col.data_type?.toLowerCase().includes("decimal") ||
+    col.data_type?.toLowerCase().includes("float") ||
+    col.column_name.toLowerCase().includes("amount")
   );
-  console.log(`Checking if "${colName}" is a credit card column:`, result);
-  return result;
+};
+   
+
+const isSystemDateColumn = (colName) => {
+  return ["created_at", "updated_at", "sysdate"].includes(colName);
 };
 
-console.log("Rendering CTable with columns:", columns);
-
-const applyTermMultiplier = (value, term) => {
-  if (!value) return 0;
-
-  if (term === "Yearly") return Number(value) * 12;
-  return Number(value); // Monthly or default
+const getCurrentDateTime = () => {
+  const now = new Date();
+  return now.toISOString().slice(0, 16); // for datetime-local
 };
-
-useEffect(() => {
-  if (!newRow.amount || !newRow.currency) return;
-
-  const calc = calculateCost(
-    newRow.amount,
-    newRow.currency,
-    newRow.term
-  );
-
-  if (!calc) return;
-
-  setNewRow(prev => ({
-    ...prev,
-    total_amount_aed: calc.toFixed(2)
-  }));
-
-}, [newRow.amount, newRow.currency, newRow.term]);
-
  const formatForInput = (value) => {
   if (!value) return "";
   return value.split("T")[0]; // removes time safely
@@ -193,7 +162,7 @@ useEffect(() => {
                 //   key.includes("amount") ||
                 //   key.includes("amt") ||
                 //   key.includes("price") ||
-                key.includes("total")
+                key.includes("total_cost_yearly")
             ) {
                 totals[col.column_name] = finalRows.reduce((sum, row) => {
                     const val = parseFloat(
@@ -211,11 +180,9 @@ useEffect(() => {
         // ================= HTML =================
         return `
   <div style="text-align:center; margin-bottom:10px;">
-   ${company ? `
-  <h1 style="font-size:24px; margin-bottom:5px;">
-    ${company}
-  </h1>
-` : ``}
+    <h1 style="font-size:24px; margin-bottom:5px;">
+        ${company}
+    </h1>
 
     <h2 style="text-align:center; margin-bottom:10px;">
       ${module?.display_name}
@@ -237,7 +204,7 @@ useEffect(() => {
             <td class="text-center">${index + 1}</td>
 
             ${cols.map((col, i) => {
-            const value = formatCard(row[col.column_name], col.column_name) ?? "-";
+            const value = row[col.column_name] ?? "-";
 
             // 1️⃣ First column → LEFT
             if (i === 0) {
@@ -293,107 +260,32 @@ useEffect(() => {
     </table>
   `;
     };
-    
 
-const transformColumns = (mod, dataRows = []) => {
-
-  let cols = mod?.columns || [];
-
-  console.log("🔥 Columns:", cols);
-  console.log("🔥 Data rows:", dataRows);
-
-  // ================= 1. EXTRACT CURRENCIES (FIXED) =================
-  const currencies = new Set();
-
-  dataRows.forEach(row => {
-    if (row.currency) {
-      currencies.add(row.currency.trim().toUpperCase());
-    }
-  });
-
-  const currencyList = Array.from(currencies);
-
-  console.log("🔥 Final Currency List:", currencyList);
-
-  // ================= 2. CLEAN COLUMNS FIRST =================
-  cols = cols.filter(col => {
-    const name = col.column_name?.toLowerCase();
-
-    // ❌ remove ONLY fc columns (DO NOT remove currency logic here)
-    return !(
-      name.includes("fc_") ||
-      name.startsWith("fc_") ||
-      name.includes("fcamount") ||
-      name.includes("fc_amount") ||
-        name.includes("currency") 
-    );
-  });
-
-  // ================= 3. BUILD COLUMNS =================
-  const finalCols = [];
-
-  cols.forEach(col => {
-
-    const name = col.column_name.toLowerCase();
-
-    // ================= AMOUNT DETECTION (FIXED) =================
-    const isAmount =
-      (
-        col.data_type?.toLowerCase() === "decimal" ||
-        col.data_type?.toLowerCase() === "float" ||
-        col.data_type?.toLowerCase() === "numeric" ||
-        name.includes("amount")
-      ) &&
-      !name.includes("total");
-
-    // ================= EXPAND AMOUNT =================
-    if (isAmount && currencyList.length > 0) {
-
-      currencyList.forEach(cur => {
-        finalCols.push({
-          ...col,
-          column_name: `${col.column_name}_${cur.toLowerCase()}`,
-          display_name: `${col.display_name} (${cur})`,
-        });
-      });
-
-      return;
-    }
-
-    // ================= NORMAL COLUMN =================
-    finalCols.push(col);
-  });
-
-  // ================= 4. SET STATE =================
-  const result = finalCols.filter(c => c.is_active !== false);
-
-  setColumns(result);
-
-  console.log("🔥 Final Transformed Columns:", result);
-};
 
     // ================= LOAD MODULE =================
-   const loadModule = async () => {
-  try {
-    const res = await fetchSections();
-    const mod = res.data.find(m => m.module_id == id);
+    const loadModule = async () => {
+        try {
+            if (location.state?.module) {
+                const mod = location.state.module;
+                setModule(mod);
+                setColumns(mod?.columns?.filter(c => c.is_active) || []);
+                // console.log("Module loaded from location state:", mod);
+                // console.log("Active columns:", mod?.columns?.filter(c => c.is_active) || []);
+                //console.log(columns);
+                return;
+            }
 
-    if (mod) {
-      setModule(mod);
+            const res = await fetchSections();
+            const mod = res.data.find(m => m.module_id == id);
 
-      const dataRes = await getModuleData(id, activeUserEmail);
-
-      const rowsData = dataRes.data || [];
-      setRows(rowsData);
-
-      transformColumns(mod, rowsData); // ✅ PASS ROWS HERE
-      console.log("Module loaded:", rowsData);
-    }
-
-  } catch (err) {
-    console.error(err);
-  }
-};
+            if (mod) {
+                setModule(mod);
+                setColumns(mod?.columns?.filter(c => c.is_active) || []);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
     // ================= LOAD DATA =================
     const loadData = async () => {
@@ -401,7 +293,6 @@ const transformColumns = (mod, dataRows = []) => {
         try {
             const res = await getModuleData(id,activeUserEmail);
             setRows(res.data || []);
-            console.log("Data loaded:", res.data || []);
         } catch (err) {
             setRows([]);
         } finally {
@@ -466,18 +357,26 @@ const transformColumns = (mod, dataRows = []) => {
 
         return Number(currency?.exchange_rate ?? 1);
     };
-const calculateCost = (amount, currencyCode, term) => {
-  if (!amount || !currencyCode) return null;
+    const calculateCost = (amount, currencyCode, billingCycle) => {
+        if (!amount || !currencyCode) return null;
 
-  const rate = getExchangeRate(currencyCode);
-  if (!rate || isNaN(rate)) return null;
+        const rate = getExchangeRate(currencyCode);
+        const amountInAED = Number(amount) * rate;
 
-  const adjustedAmount = applyTermMultiplier(amount, term);
+        let monthly = null;
+        let yearly = null;
 
-  const monthly = Number(adjustedAmount) * Number(rate);
+        if (billingCycle === "Monthly") {
+            monthly = amountInAED;
+            yearly = amountInAED * 12;
+        }
+        else if (billingCycle === "Yearly") {
+            yearly = amountInAED;
+            monthly = null; // or yearly / 12 if you still want it
+        }
 
-  return monthly;
-};
+        return { monthly, yearly };
+    };
 
     const handleNewRowChange = (key, value, masterName) => {
         setNewRow(prev => {
@@ -520,12 +419,15 @@ const calculateCost = (amount, currencyCode, term) => {
 
         if (!amount || !currency || !billing) return;
 
-        const calc = calculateCost(amount, currency);
+        const calc = calculateCost(amount, currency, billing);
 
-       setNewRow(prev => ({
-  ...prev,
-  total_cost_aed: calc ? calc.toFixed(2) : ""
-}));
+        if (calc) {
+            setNewRow(prev => ({
+                ...prev,
+                total_cost_monthly_aed: calc.monthly !== null ? calc.monthly.toFixed(2) : "",
+                total_cost_yearly_aed: calc.yearly !== null ? calc.yearly.toFixed(2) : ""
+            }));
+        }
     }, [
         newRow.amount_aed,
         newRow.amount_usd,
@@ -544,36 +446,18 @@ const calculateCost = (amount, currencyCode, term) => {
         }
     }, []);
 
-   const handleSave = async () => {
-    try {
-        // Clone the newRow to avoid mutating state directly
-        const payload = { ...newRow };
+    const handleSave = async () => {
+        try {
+            await createModuleRow(id, newRow, activeUserEmail);
 
-        // Set fcamt and currency from the form values
-        if (payload.amount && payload.currency) {
-            payload.fc_amount = payload.total_amount_aed;
-            payload.currency = payload.currency;
+            setIsCreating(false);
+            setNewRow({});
+
+            loadData(); // refresh table
+        } catch (err) {
+            console.error(err);
         }
-
-        // Remove all amount_xxx fields (like amount_usd, amount_aed, etc.)
-        Object.keys(payload).forEach(key => {
-            if (key.startsWith("amount_")) {
-                delete payload[key];
-            }
-        });
-
-        // Optionally remove the original 'amount' field if not needed
-        // delete payload.amount;
-
-        await createModuleRow(id, payload, activeUserEmail);
-
-        setIsCreating(false);
-        setNewRow({});
-        loadData(); // refresh table
-    } catch (err) {
-        console.error(err);
-    }
-};
+    };
 
     const handleCancel = () => {
         setIsCreating(false);
@@ -689,7 +573,7 @@ const calculateCost = (amount, currencyCode, term) => {
 
         openPrintWindow({
             content: generateTableHTML(cols),
-            userName: activeUser?.email || "User",
+            userName: localStorage.getItem("username")
         });
 
         setShowPrintModal(false);
@@ -741,22 +625,13 @@ const calculateCost = (amount, currencyCode, term) => {
         )
     );
 
-    const normalizedRows = finalRows.map(row => {
-  const currency = (row.currency || "").toLowerCase();
-
-  return {
-    ...row,
-    [`amount_${currency}`]: row.amount
-  };
-});
-
     // console.log("ROWS:", rows.length);
     // console.log("FILTERED:", filtered.length);
     // console.log("FINAL:", finalRows.length);
 
     // ================= PAGINATION =================
-    const totalPages = Math.ceil(normalizedRows.length / pageSize);
-    const paginatedRows = normalizedRows.slice(
+    const totalPages = Math.ceil(finalRows.length / pageSize);
+    const paginatedRows = finalRows.slice(
         (page - 1) * pageSize,
         page * pageSize
     );
@@ -766,7 +641,7 @@ const calculateCost = (amount, currencyCode, term) => {
 
         try {
             const res = await exportPdf({
-                rows: normalizedRows,
+                rows: finalRows,
                 columns: cols,
                 userName: localStorage.getItem("username"),
                 moduleName: module?.display_name,
@@ -808,19 +683,11 @@ const calculateCost = (amount, currencyCode, term) => {
                 <div className="flex items-center gap-2">
 
   {/* NEW */}
-  
+  {console.log("Active User in CTable:", activeUser)}
   <PermissionButton
     user={activeUser}
     permission="add"
-     onClick={() => {
-    const empty = {};
-    visibleColumns.forEach(col => {
-      empty[col.column_name] = "";
-    });
-
-    setNewRow(empty);
-    setShowCreateModal(true);
-  }}
+    onClick={handleCreate}
     className="px-3 py-1.5 text-sm rounded-md bg-green-600 text-white 
                hover:bg-green-700 hover:shadow-md transition"
   >
@@ -828,7 +695,7 @@ const calculateCost = (amount, currencyCode, term) => {
   </PermissionButton>
 
   {/* IMPORT */}
-  {/* <PermissionButton
+  <PermissionButton
     user={activeUser}
     permission="add"
     onClick={() => setShowImportModal(true)}
@@ -836,7 +703,7 @@ const calculateCost = (amount, currencyCode, term) => {
                hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
   >
     Import
-  </PermissionButton> */}
+  </PermissionButton>
 
   {/* PRINT */}
   <PermissionButton
@@ -1117,13 +984,13 @@ const calculateCost = (amount, currencyCode, term) => {
                 <input
                   type="text"
                   className="border px-2 py-1 rounded w-1/2"
-                  value={newRow.amount || ""}
+                  value={newRow._amount || ""}
                   onChange={(e) => {
                     let value = handleNumericInput(e.target.value);
 
                     setNewRow(prev => ({
                       ...prev,
-                      amount: value
+                      _amount: value
                     }));
                   }}
                 />
@@ -1131,11 +998,11 @@ const calculateCost = (amount, currencyCode, term) => {
                 {/* CURRENCY DROPDOWN */}
                 <select
                   className="border px-2 py-1 rounded w-1/2"
-                  value={newRow.currency || ""}
+                  value={newRow._currency || ""}
                   onChange={(e) => {
                     setNewRow(prev => ({
                       ...prev,
-                      currency: e.target.value
+                      _currency: e.target.value
                     }));
                   }}
                 >
@@ -1171,7 +1038,7 @@ const calculateCost = (amount, currencyCode, term) => {
                 value={
                   isDate
                     ? formatForInput(newRow[col.column_name])
-                    : (formatCard(newRow[col.column_name], col.column_name) || "")
+                    : (newRow[col.column_name] || "")
                 }
                 disabled={
                   isTotalField(col.column_name) ||
@@ -1270,122 +1137,88 @@ const calculateCost = (amount, currencyCode, term) => {
     </td>
 
     {visibleColumns.map((col) => {
-  const isMaster = !!col.master;
-  const editKey = `edit-${row.id}-${col.column_name}`;
+      const isMaster = !!col.master;
+      const editKey = `edit-${row.id}-${col.column_name}`;
 
-  const isDate =
-    col.data_type?.toLowerCase().includes("date");
+      const isDate =
+        col.data_type?.toLowerCase().includes("date");
 
-  const isAmount =
-    col.data_type?.toLowerCase().includes("decimal") ||
-    col.data_type?.toLowerCase().includes("float") ||
-    col.column_name.toLowerCase().includes("amount");
+      return (
+        <td
+          key={col.column_id}
+          className={`px-4 py-3 whitespace-nowrap ${getAlignClass(col.display_name)}`}
+        >
 
-  // extract currency from column name: "Amount (USD)"
-  const match = col.display_name?.match(/\(([^)]+)\)/);
-  const columnCurrency = match?.[1]; // USD, AED
+          {/* ================= EDIT MODE ================= */}
+          {editRowId === row.id ? (
+            <div className="relative">
 
-  const rowCurrency = row.currency; // from DB
+              <input
+                type={isDate ? "date" : "text"}   // ✅ ONLY DATE
+                className="border px-2 py-1 rounded w-full"
+                value={
+                  isDate
+                    ? formatForInput(editRow[col.column_name])
+                    : (editRow[col.column_name] || "")
+                }
+                onChange={(e) => {
+                  let value = e.target.value;
 
-  return (
-    <td
-      key={col.column_id}
-      className={`px-4 py-3 whitespace-nowrap ${getAlignClass(col.display_name)}`}
-    >
+                  if (isNumericColumn(col.column_name)) {
+                    value = handleNumericInput(value);
+                  }
 
-      {/* ================= EDIT MODE ================= */}
-      {editRowId === row.id ? (
-        <div className="relative">
+                  setEditRow({
+                    ...editRow,
+                    [col.column_name]: value,
+                  });
+                }}
+                onFocus={() => setActiveDropdown(editKey)}
+                onBlur={() =>
+                  setTimeout(() => setActiveDropdown(null), 150)
+                }
+              />
 
-          <input
-            type={isDate ? "date" : "text"}
-            className="border px-2 py-1 rounded w-full"
-            value={
-              isDate
-                ? formatForInput(editRow[col.column_name])
-                : (formatCard(editRow[col.column_name], col.column_name) || "")
-            }
-            onChange={(e) => {
-              let value = e.target.value;
+              {/* EDIT DROPDOWN */}
+              {isMaster && activeDropdown === editKey && (
+                <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
 
-              if (isNumericColumn(col.column_name)) {
-                value = handleNumericInput(value);
-              }
+                  {(masterDataMap[col.master] || [])
+                    .filter(val =>
+                      val.toLowerCase().includes(
+                        (editRow[col.column_name] || "").toLowerCase()
+                      )
+                    )
+                    .slice(0, 20)
+                    .map((val, i) => (
+                      <div
+                        key={i}
+                        className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
+                        onMouseDown={() =>
+                          setEditRow({
+                            ...editRow,
+                            [col.column_name]: val,
+                          })
+                        }
+                      >
+                        {val}
+                      </div>
+                    ))}
 
-              setEditRow({
-                ...editRow,
-                [col.column_name]: value,
-              });
-            }}
-            onFocus={() => setActiveDropdown(editKey)}
-            onBlur={() =>
-              setTimeout(() => setActiveDropdown(null), 150)
-            }
-          />
-
-          {/* EDIT DROPDOWN */}
-          {isMaster && activeDropdown === editKey && (
-            <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
-
-              {(masterDataMap[col.master] || [])
-                .filter(val =>
-                  val.toLowerCase().includes(
-                    (editRow[col.column_name] || "").toLowerCase()
-                  )
-                )
-                .slice(0, 20)
-                .map((val, i) => (
-                  <div
-                    key={i}
-                    className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
-                    onMouseDown={() =>
-                      setEditRow({
-                        ...editRow,
-                        [col.column_name]: val,
-                      })
-                    }
-                  >
-                    {val}
-                  </div>
-                ))}
+                </div>
+              )}
 
             </div>
+          ) : (
+            /* ================= VIEW MODE ================= */
+            isDate
+              ? formatDate(row?.[col.column_name])
+              : (row?.[col.column_name] ?? "-")
           )}
 
-        </div>
-      ) : (
-        /* ================= VIEW MODE ================= */
-      (() => {
-  const value = row?.[col.column_name];
-
-  const isDate =
-    col.data_type?.toLowerCase().includes("date");
-
-  const isAmount =
-    col.column_name.toLowerCase().includes("amount");
-
-  // ================= DATE =================
-  if (isDate) {
-    return formatDate(value);
-  }
-
-  // ================= TOTAL AMOUNT (IMPORTANT FIX) =================
-  if (col.column_name === "total_amount_aed") {
-    return value ? Number(value).toFixed(2) : "-";
-  }
-
-  // ================= AMOUNT =================
-  if (isAmount) {
-    return value ?? "-";
-  }
-
-  return value ?? "-";
-})()
-      )}
-
-    </td>
-  );
-})}
+        </td>
+      );
+    })}
 
     {/* ACTIONS */}
     <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
@@ -1741,214 +1574,6 @@ const calculateCost = (amount, currencyCode, term) => {
 
                         </div>
                     )}
-                   {showCreateModal && (
-  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-    <div className="bg-white w-[750px] max-h-[80vh] overflow-auto p-5 rounded-lg shadow-lg">
-
-      <h2 className="text-lg font-semibold mb-4">
-        Create Record
-      </h2>
-
-      <div className="grid grid-cols-2 gap-3">
-
-        {visibleColumns.map((col) => {
-
-          const isMaster = !!col.master;
-
-          const isDate = col.data_type?.toLowerCase().includes("date");
-
-          const isAmount =
-            col.column_name.toLowerCase().includes("amount") &&
-            col.column_name.toLowerCase() !== "total_amount_aed";
-
-          const isTotalAmount =
-            col.column_name.toLowerCase() === "total_amount_aed";
-
-          // ================= AMOUNT FIELD =================
-          if (isAmount) {
-            return (
-              <div key={col.column_id} className="col-span-2 flex gap-2">
-
-                {/* AMOUNT */}
-                <input
-  type="text"
-  placeholder="Amount"
-  className="border px-2 py-1 rounded w-1/2"
-  value={newRow.amount || ""}
- onChange={(e) => {
-  const value = handleNumericInput(e.target.value);
-
-  setNewRow(prev => {
-    const currency = prev.currency;
-
-    let total = prev.total_amount_aed;
-
-    if (value && currency) {
-  total = calculateCost(value, currency, prev.term);
-}
-
-    return {
-      ...prev,
-      amount: value,
-      total_amount_aed: total || ""
-    };
-  });
-}}
-/>
-
-                {/* CURRENCY */}
-              <select
-  className="border px-2 py-1 rounded w-1/2"
-  value={newRow.currency || ""}
-  onChange={(e) => {
-  const currency = e.target.value;
-
-  setNewRow(prev => {
-    let total = prev.total_amount_aed;
-
-    if (prev.amount && currency) {
-  total = calculateCost(prev.amount, currency, prev.term);
-}
-
-    return {
-      ...prev,
-      currency,
-      total_amount_aed: total || ""
-    };
-  });
-}}
->
-  <option value="">Select Currency</option>
-  {currencies.map(c => (
-    <option key={c.currency_code} value={c.currency_code}>
-      {c.currency_code}
-    </option>
-  ))}
-</select>
-
-              </div>
-            );
-          }
-
-          // ================= TOTAL AMOUNT =================
-          if (isTotalAmount) {
-            return (
-              <div key={col.column_id} className="col-span-2">
-
-                <label className="text-xs text-gray-500">
-                  {col.display_name}
-                </label>
-
-                <input
-                  type="text"
-                  className="border px-2 py-1 rounded w-full bg-gray-100"
-                  value={newRow.total_amount_aed || ""}
-                  readOnly
-                />
-
-              </div>
-            );
-          }
-
-          // ================= NORMAL FIELD =================
-          // ================= NORMAL FIELD =================
-return (
-  <div key={col.column_id} className="relative">
-
-    <label className="text-xs text-gray-500">
-      {col.display_name}
-    </label>
-
-    <input
-  type={isDate ? "date" : "text"}
-  className="border px-2 py-1 rounded w-full"
-  value={
-  isCreditCardColumn(col.column_name)
-    ? (formatCard(newRow[col.column_name] || "")).replace(/\D/g, "")
-    : (newRow[col.column_name] || "")
-}
-  onChange={(e) => {
-    let value = e.target.value;
-
-    if (isCreditCardColumn(col.column_name)) {
-      value = value.replace(/\D/g, ""); // only numbers
-    }
-
-    if (isNumericColumn(col.column_name)) {
-      value = handleNumericInput(value);
-    }
-
-    handleNewRowChange(col.column_name, value, col.master);
-  }}
-  onFocus={() =>
-    isMaster && setActiveDropdown(`create-${col.column_name}`)
-  }
-  onBlur={() =>
-    setTimeout(() => setActiveDropdown(null), 150)
-  }
-/>
-
-    {/* ✅ MASTER DROPDOWN FIXED */}
-    {isMaster &&
-      activeDropdown === `create-${col.column_name}` && (
-        <div className="absolute z-50 bg-white border w-full max-h-40 overflow-auto shadow rounded">
-
-          {(masterDataMap[col.master] || [])
-            .filter(val =>
-              val.toLowerCase().includes(
-                (newRow[col.column_name] || "").toLowerCase()
-              )
-            )
-            .map((val, i) => (
-              <div
-                key={i}
-                className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
-                onMouseDown={() =>
-                  handleNewRowChange(
-                    col.column_name,
-                    val,
-                    col.master
-                  )
-                }
-              >
-                {val}
-              </div>
-            ))}
-
-        </div>
-    )}
-
-  </div>
-);
-        })}
-
-      </div>
-
-      {/* ACTIONS */}
-      <div className="flex justify-end gap-2 mt-5">
-
-        <button
-          onClick={() => setShowCreateModal(false)}
-          className="px-4 py-2 border rounded"
-        >
-          Cancel
-        </button>
-
-        <button
-          onClick={() => {
-            handleSave();
-            setShowCreateModal(false);
-          }}
-          className="px-4 py-2 bg-blue-600 text-white rounded"
-        >
-          Save
-        </button>
-
-      </div>
-
-    </div>
-  </div>
-)}
 
                 </div>
             </div>

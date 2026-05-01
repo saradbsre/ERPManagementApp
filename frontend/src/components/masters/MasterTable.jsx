@@ -51,6 +51,20 @@ export default function MasterTablePage() {
     const [showValidatePopup, setShowValidatePopup] = useState(false);
     const [validationMessage, setValidationMessage] = useState("");
     const [validationType, setValidationType] = useState("success"); // success, error, warning
+
+    const formatCard = (value, columnName) => {
+  if (!value) return "";
+
+  const name = columnName.toLowerCase();
+
+  // check if it's a card field
+  if (name.includes("card_4number")) {
+    const last4 = value.toString().slice(-4);
+    return `**** **** **** ${last4}`;
+  }
+
+  return value;
+};
     const isDateColumn = (col) => {
       const type = (col?.data_type || "").toLowerCase();
 
@@ -377,7 +391,7 @@ useEffect(() => {
             value={
               isDate
                 ? formatForInput(newRow[col.key], inputType)
-                : (newRow[col.key] || "")
+                : (formatCard(newRow[col.key], col.key) || "")
             }
             onChange={(e) => {
               let value = e.target.value;
@@ -446,7 +460,7 @@ useEffect(() => {
                 value={
                   isDate
                     ? formatForInput(editRow[col.key], inputType)
-                    : (editRow[col.key] || "")
+                    : (formatCard(editRow[col.key], col.key) || "")
                 }
                 onChange={(e) => {
                   let value = e.target.value;
@@ -465,7 +479,7 @@ useEffect(() => {
               /* ================= VIEW MODE ================= */
               isDate
                 ? formatDate(row[col.key])
-                : (row[col.key] ?? "-")
+                : (formatCard(row[col.key], col.key) || "-")
             )}
 
           </td>
