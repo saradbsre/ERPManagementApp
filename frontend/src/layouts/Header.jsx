@@ -1,58 +1,98 @@
-import { FiLogOut } from "react-icons/fi";
+import { useState, useEffect } from "react";
+import { FiLogOut, FiUser } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "../components/UserContext";
 import { logOut } from "../api/api";
 
 export default function Header() {
-    const navigate = useNavigate();
-    const { setUser } = useUser();
+  const navigate = useNavigate();
+  const { user, setUser } = useUser();
+  const [open, setOpen] = useState(false);
 
-    const handleLogout = async () => {
+  const handleLogout = async () => {
     try {
-        await logOut(); // server-side session remove
+      await logOut();
 
-        // clear frontend session
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
+      localStorage.removeItem("user");
+      setUser(null);
 
-        setUser({});
-
-        // redirect to login
-        navigate("/");
-
+      window.dispatchEvent(new Event("storage"));
+      navigate("/");
     } catch (error) {
-        console.error("Logout failed:", error);
+      console.error("Logout failed:", error);
     }
-};
+  };
 
-    return (
-        <div className="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200 
-                        flex items-center justify-end px-6 ml-64 sticky top-0 z-50">
+//   useEffect(() => {
+//   const handler = () => setOpen(false);
+//   window.addEventListener("click", handler);
+//   return () => window.removeEventListener("click", handler);
+// }, []);
 
-            {/* Right actions */}
-            <div className="flex items-center gap-4">
+  const name = user?.email || "User";
+  const initial = name?.charAt(0)?.toUpperCase();
 
-                {/* Optional user chip */}
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100">
-                    <div className="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-semibold">
-                        U
-                    </div>
-                    <span className="text-sm text-gray-700">User</span>
-                </div>
+  return (
+    <div className="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-end px-6 sticky top-0 z-50">
 
-                {/* Logout button */}
-                <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl 
-                               bg-red-50 text-red-600 hover:bg-red-100 
-                               transition-all duration-200 text-sm font-medium"
-                >
-                    <FiLogOut size={16} />
-                    Logout
-                </button>
+      {/* PROFILE DROPDOWN */}
+      <div className="relative">
 
+        {/* Avatar Button */}
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition"
+        >
+          <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold">
+            {initial}
+          </div>
+
+          <span className="text-sm text-gray-700 hidden sm:block">
+            {name}
+          </span>
+        </button>
+
+        {/* DROPDOWN */}
+        {open && (
+          <div className="absolute right-0 mt-2 w-56 bg-white border rounded-xl shadow-lg overflow-hidden">
+
+            {/* User Info */}
+            <div className="p-4 border-b bg-gray-50">
+              <p className="text-sm font-semibold text-gray-800">
+                {name}
+              </p>
+              <p className="text-xs text-gray-500">
+                {user?.role || "User"}
+              </p>
             </div>
 
-        </div>
-    );
+            {/* Menu Items */}
+            <div className="py-2">
+
+              <button
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100"
+                onClick={() => {
+                  setOpen(false);
+                  navigate("/profile");
+                }}
+              >
+                <FiUser />
+                Profile
+              </button>
+
+              <button
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                onClick={handleLogout}
+              >
+                <FiLogOut />
+                Logout
+              </button>
+
+            </div>
+          </div>
+        )}
+      </div>
+
+    </div>
+  );
 }

@@ -6,9 +6,18 @@ export default function Layout({ children }) {
     return (
         <div className="flex">
             <SideBar />
-            <div className="flex-1 ml-64 flex flex-col min-w-0">
+            <div
+                className="flex flex-col min-w-0 ml-64"
+                style={{
+                    width: "1824px",   // 19 inches
+                    height: "2112px",  // 22 inches
+                    maxWidth: "100vw",
+                    maxHeight: "100vh",
+                    background: "#f3f4f6" // same as bg-gray-100
+                }}
+            >
                 <Navbar />
-                <div className="p-6 bg-gray-100 min-h-screen min-w-0 overflow-x-hidden">
+                <div className="p-6 min-w-0 overflow-x-hidden flex-1">
                     <Outlet />
                 </div>
             </div>

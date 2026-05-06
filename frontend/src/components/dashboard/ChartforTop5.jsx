@@ -22,11 +22,11 @@ useEffect(() => {
     try {
       const result = await getTopExpensiveAssets();
 
-      console.log("FULL API RESULT:", result);
+     // console.log("FULL API RESULT:", result);
 
       const rows = result?.data || [];
 
-      console.log("Fetched Data:", rows);
+      //console.log("Fetched Data:", rows);
 
       setData(rows);
 

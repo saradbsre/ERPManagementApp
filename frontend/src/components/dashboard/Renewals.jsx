@@ -12,7 +12,7 @@ export default function RenewalTimeline() {
       try {
         const res = await getAlertData();
 
-        console.log("API:", res);
+        //console.log("API:", res);
 
         setData(res?.data?.data || []);
       } catch (err) {

@@ -238,19 +238,19 @@ else if (column.masterName === "amount") {
   }
 
   // ================= 3. FCAMT COLUMN =================
-  const fcamtCol = `fcamt`;
+  // const fcamtCol = `fcamt`;
 
-  if (!columns.some(c => c.name === fcamtCol)) {
-    newCols.push({
-      ...column,
-      name: fcamtCol,
-      displayName: `FC Amount`,
-      masterName: ""
-    });
-  }
+  // if (!columns.some(c => c.name === fcamtCol)) {
+  //   newCols.push({
+  //     ...column,
+  //     name: fcamtCol,
+  //     displayName: `FC Amount`,
+  //     masterName: ""
+  //   });
+  // }
 
   // ================= 4. TOTAL COLUMN =================
-  const totalCol = `total_${base}_${baseCurCode}`;
+  const totalCol = `${base}_in_${baseCurCode}`;
 
   if (!columns.some(c => c.name === totalCol)) {
     newCols.push({

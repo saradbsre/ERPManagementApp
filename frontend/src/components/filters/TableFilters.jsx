@@ -10,7 +10,7 @@ export default function TableFilters({
 
   // ================= MASTER LIST =================
   const masterList1 = [
-    ...new Set([...(masterList || []), "currency"])
+    ...new Set([...(masterList || []), "currency", "services"])
   ];
 
   // ================= GET OPTIONS =================

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { fetchSections, fetchMasters } from "../api/api";
+import { fetchSections, fetchMasters, getReportsName } from "../api/api";
 import {
   LayoutDashboard,
   Settings,
@@ -14,6 +14,7 @@ export default function Sidebar() {
   const [sections, setSections] = useState([]);
   const [openMain, setOpenMain] = useState(null);
   const [masters, setMasters] = useState([]);
+  const [reports, setReports] = useState([]);
 
   const User = JSON.parse(localStorage.getItem("user"));
   const role = (User?.role || "user").toLowerCase().trim();
@@ -21,6 +22,7 @@ export default function Sidebar() {
   useEffect(() => {
     loadSections();
     loadMasters();
+    loadReportFilters();
   }, []);
 
   const loadSections = async () => {
@@ -40,6 +42,16 @@ export default function Sidebar() {
       console.error(err);
     }
   };
+
+  const loadReportFilters = async () => {
+    try {
+      const res = await getReportsName();
+      setReports(res.data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
 
   const isActive = (path) => location.pathname === path;
 
@@ -84,6 +96,17 @@ export default function Sidebar() {
         name: sec.display_name,
         module: sec,
         path: `/workspace/${sec.module_id}`,
+      })),
+    },
+    {
+      name: "Reports",
+      icon: <FolderKanban size={18} />,
+      children: reports.map((report) => ({
+        key: `${report.id}_${report.filter_name}`,
+        id: report.id,
+        name: report.filter_name,
+        report: report,
+        path: `/reports/${report.id}`,
       })),
     },
   ].filter(Boolean); // ✅ remove false entries
@@ -131,7 +154,7 @@ export default function Sidebar() {
                   <Link
                     key={child.key}
                     to={child.path}
-                    state={child.master ? { master: child.master } : { module: child.module }}
+                    state={child.master ? { master: child.master } : child.report ? { report: child.report } : { module: child.module }}
                     className={`block px-3 py-2 rounded text-sm
                       ${isActive(child.path) ? "bg-gray-300" : "hover:bg-gray-200"}
                     `}

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, act } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns  } from "../../api/api";
+import { fetchSections, getModuleData, exportColumnNames, importTable, exportPdf,upsertSavedFilter, getFilteredReports, getMasterValues, getReportCustomizedColumns, upsertReportCustomizedColumns  } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -13,7 +13,6 @@ import PermissionButton from "../PermissionButton";
 import { formatDateTime } from "../../utils/formatDateTime";
 import { formatDate } from "../../utils/formatDate";
 import { Currency } from "lucide-react";
-import DateTimeRangeFilter from "../DateRangeFilter";
 import DateOnlyFilter from "../DateOnlyFilter";
 
 
@@ -34,19 +33,16 @@ const Modal = ({ title, children, onClose }) => (
 );
 
 
-export default function DynamicTablePage() {
+export default function ReportPage() {
     const { id } = useParams();
     const location = useLocation();
-    const [isCreating, setIsCreating] = useState(false);
-    const [newRow, setNewRow] = useState({});
+    const report = location.state?.report;
     const [editRowId, setEditRowId] = useState(null);
     const [editRow, setEditRow] = useState({});
-    const [originalRow, setOriginalRow] = useState({});
     const [module, setModule] = useState(location.state?.module || null);
     const [columns, setColumns] = useState([]);
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [showImportExport, setShowImportExport] = useState(false);
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
     const [file, setFile] = useState(null);
@@ -69,102 +65,146 @@ export default function DynamicTablePage() {
     const [printLogo, setPrintLogo] = useState(null);
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email;
-    const [providerPlansMap, setProviderPlansMap] = useState({});
-    const [providerPlans, setProviderPlans] = useState([]);
     const [autoFilledFields, setAutoFilledFields] = useState({});
-    const [planManuallyChanged, setPlanManuallyChanged] = useState(false);
     const [dateFilters, setDateFilters] = useState({});
     const [activeDateFilter, setActiveDateFilter] = useState(null);
     const [showSaveFilter, setShowSaveFilter] = useState(false);
     const [saveFilterName, setSaveFilterName] = useState("");
-    const currentModule =  module;
-    const [savedTableColumns, setSavedTableColumns] = useState([]);
-    const [printModuleName, setPrintModuleName] = useState("");
+    const [showTableColumnModal, setShowTableColumnModal] = useState(false);
+    const [tableColumnMode, setTableColumnMode] = useState("default");
+    const filter_name = report?.filter_name || "Custom Filter";
+    const [isInitialized, setIsInitialized] = useState(false);
+    const masterList = [
+        ...new Set(columns.map(c => c.master).filter(Boolean))
+    ];
+    const isFilterActive =
+    Boolean(search) ||
+    (filters?.length > 0) ||
+    (Object.keys(dateFilters || {}).length > 0);
 
 
-const isFilterActive =
-  search ||
-  filters?.length > 0 
- // Object.keys(dateFilters || {}).length > 0;
 
-//console.log("is filter active?", isFilterActive, { search, filters, dateFilters });
+// LOAD MODULE & DATA
+const loadModule = async () => {
+  try {
+    const sectionRes = await fetchSections();
 
-//const [newRow, setNewRow] = useState({});
-const formatCard = (value, columnName) => {
-  if (!value) return "-";
+    console.log("RAW RESPONSE:", sectionRes);
 
-  const name = (columnName || "").toLowerCase();
+    const modules =
+      sectionRes?.data?.data ||
+      sectionRes?.data ||
+      sectionRes ||
+      [];
 
-  const isCard =
-    name.includes("card") ||
-    name.includes("credit_card") ||
-    name.includes("card_number") ||
-    name.includes("cardno") ||
-    name.includes("card_no");
+    const mod = modules.find(
+  m => String(m.module_id) === String(report.module_id)
+);
 
-  if (!isCard) return value;
+    // console.log("ID:", id);
+    // console.log("Modules:", modules);
+    // console.log("Matched module:", mod);
 
-  const digits = value.toString().replace(/\D/g, ""); // remove spaces/dashes
+    if (!mod) return;
 
-  if (digits.length < 4) return "****";
+    setModule(mod);
 
-  const last4 = digits.slice(-4);
+    const cols = Array.isArray(mod.columns)
+      ? mod.columns.filter(c => c.is_active !== false)
+      : [];
 
-  return `**** **** **** ${last4}`;
+    setColumns(cols);
+
+  } catch (err) {
+    console.error("loadModule error:", err);
+  }
 };
 
-const normalize = (val) => {
-  if (typeof val === "object") return val?.value ?? "";
-  return val ?? "";
+  const loadReportData = async () => {
+  try {
+    if (!report) return;
+
+    const res = await getFilteredReports({
+      module_id: report.module_id,
+      filters: filters || [],
+      search: search || "",
+      dateFilters: dateFilters || {}
+    });
+
+    setRows(res.data || []);
+  } catch (err) {
+    console.error("loadReportData error:", err);
+  }
 };
+// SYNC AUTH ACROSS TABS USEFFECT
+useEffect(() => {
+  if (!report?.filters) return;
 
-const getCurrentMonthRange = () => {
-  const now = new Date();
+  const parsed = JSON.parse(report.filters);
 
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  setFilters(parsed.filters || []);
+  setSearch(parsed.search || "");
+  setDateFilters(parsed.dateFilters || {});
 
-  return {
-    start: start.toISOString(),
-    end: end.toISOString(),
-  };
-};
-
-
+  setIsInitialized(true);
+}, [report]);
 
 useEffect(() => {
-  if (!dateColumns.length) return;
+  if (!isInitialized) return;
 
-  const defaultRange = getCurrentMonthRange();
+  loadReportData();
+}, [filters, search, dateFilters]);
 
-  const initialFilters = {};
 
-  dateColumns.forEach(col => {
-    initialFilters[col.column_name] = defaultRange;
-  });
+   useEffect(() => {
+        loadModule();
+    }, [id]);
+    console.log("id:", id);
 
-  setDateFilters(initialFilters);
-}, [columns]);
+    useEffect(() => {
+  const active = isFilterActive;
+  
+  console.log("isFilterActive:", isFilterActive);
+  console.log("saveFilterName:", saveFilterName);
 
-const buildDatePayload = (df = dateFilters) => {
-  const payload = {};
+  setShowSaveFilter(active);
+}, [search, filters, dateFilters]);
 
-  Object.entries(df || {}).forEach(([key, range]) => {
-    if (range?.start && range?.end) {
-      payload[key] = {
-        start: range.start,
-        end: range.end
-      };
-    }
-  });
+       useEffect(() => {
+      if (!columns.length) return;
+    
+      const uniqueMasters = new Set();
+    
+      columns.forEach(c => {
+        if (c.master) uniqueMasters.add(c.master);
+        if (c.master1) uniqueMasters.add(c.master1);
+      });
+    
+      uniqueMasters.forEach(async (master) => {
+        try {
+          const res = await getMasterValues(master);
+    
+          setMasterDataMap(prev => ({
+            ...prev,
+            [master]: res.data.data || []
+          }));
+        } catch (err) {
+          console.error("Master fetch failed:", master, err);
+        }
+      });
+    
+    }, [columns]);
 
-  return payload;
-};
+    useEffect(() => {
+  if (report?.filter_name) {
+    setSaveFilterName(report.filter_name);
+  }
+}, [report]);
 
 const fetchCustomizedColumns = async () => {
   try {
-    const res = await getCustomizedColumns(
-      currentModule?.module_id,
+    const res = await getReportCustomizedColumns(
+      report.id,
       activeUserEmail
     );
 
@@ -176,19 +216,89 @@ const fetchCustomizedColumns = async () => {
   }
 };
 
+const saveColumnSelection = async () => {
+  try {
+    // 1️⃣ Save locally (optional but fast UX)
+    // localStorage.setItem(
+    //   `table_columns_${id}`,
+    //   JSON.stringify(selectedColumns)
+    // );
+
+    // 2️⃣ Save to DB
+    await upsertReportCustomizedColumns(
+      report.id,
+      activeUserEmail,
+      selectedColumns
+    );
+
+    // 3️⃣ Update state
+    setSavedTableColumns(selectedColumns);
+    setShowColumnSelector(false);
+    setTableColumnMode("custom");
+
+  } catch (err) {
+    console.error("Failed to save customized columns:", err);
+  }
+};
+
+useEffect(() => {
+  if (!report?.filters) return;
+
+  try {
+    const parsed = JSON.parse(report.filters);
+
+    setFilters(parsed.filters || []);
+    setSearch(parsed.search || "");
+    setDateFilters(parsed.dateFilters || {});
+  } catch (err) {
+    console.error("Invalid report filters JSON:", err);
+  }
+}, [report]);
+ 
+// FORMATTING HELPERS
+    const formatCard = (value, columnName) => {
+    if (!value) return "-";
+
+    const name = (columnName || "").toLowerCase();
+
+    const isCard =
+        name.includes("card") ||
+        name.includes("credit_card") ||
+        name.includes("card_number") ||
+        name.includes("cardno") ||
+        name.includes("card_no");
+
+    if (!isCard) return value;
+
+    const digits = value.toString().replace(/\D/g, ""); // remove spaces/dashes
+
+    if (digits.length < 4) return "****";
+
+    const last4 = digits.slice(-4);
+
+    return `**** **** **** ${last4}`;
+    };
+
+    const normalize = (val) => {
+    if (typeof val === "object") return val?.value ?? "";
+    return val ?? "";
+    };
 
 
 
-const handleSaveFilter = async () => {
+    // CRUD HANDLERS (for inline editing - optional)
+
+     const handleSaveFilter = async () => {
   if (!saveFilterName.trim()) {
     alert("Filter name is required");
     return;
   }
 
   const payload = {
+    id: report?.id, // include ID for updates, omit for new filters
     filterName: saveFilterName.trim(),
     userId: activeUser?.email,     // ✅ string only
-    module_id: currentModule?.module_id,    // ✅ IMPORTANT
+    module_id: module?.module_id,    // ✅ IMPORTANT
     filterData: {
       search,
       filters,
@@ -196,7 +306,7 @@ const handleSaveFilter = async () => {
     }
   };
 
-  //console.log("Saving filter:", payload);
+  console.log("Saving filter:", payload);
 
   await upsertSavedFilter(payload);
 
@@ -204,76 +314,16 @@ const handleSaveFilter = async () => {
   setShowSaveFilter(false);
   loadSavedFilters();
 };
-
-useEffect(() => {
-  if (isFilterActive) {
-    setShowSaveFilter(true);
-  } else {
-    setShowSaveFilter(false);
-    setSaveFilterName("");
-  }
-}, [search, filters, dateFilters]);
-
-const applyTermMultiplier = (value, term) => {
-  if (!value) return 0;
-
-  if (term === "Yearly") return Number(value) * 12;
-  return Number(value); // Monthly or default
-};
-
-useEffect(() => {
-  if (!newRow.amount || !newRow.currency) return;
-
-  const calc = calculateCost(
-    newRow.amount,
-    newRow.currency,
-    newRow.term
-  );
-
-  if (calc === null) return;
-
-  setNewRow(prev => ({
-    ...prev,
-    total_amount_aed: calc.toFixed(2)
-  }));
-
-}, [newRow.amount, newRow.currency, newRow.term]);
-
-useEffect(() => {
-  if (!editRowId) return;
-  if (!editRow.amount || !editRow.currency) return;
-
-  const calc = calculateCost(
-    editRow.amount,
-    editRow.currency,
-    editRow.term
-  );
-
-  if (calc === null) return;
-
-  setEditRow(prev => ({
-    ...prev,
-    total_amount_aed: calc.toFixed(2)
-  }));
-
-}, [editRow.amount, editRow.currency, editRow.term]);
-
- const formatForInput = (value) => {
-  if (!value) return "";
-  return value.split("T")[0]; // removes time safely
-};
-    const masterList = [
-        ...new Set(columns.map(c => c.master).filter(Boolean))
-    ];
-    const [showTableColumnModal, setShowTableColumnModal] = useState(false);
-    const [tableColumnMode, setTableColumnMode] = useState("default");
     // default | saved | custom
     const companyList = [
         ...new Set(rows.map(r =>
             r.trade_name || r.company_name || r.company || ""
         ).filter(Boolean))
     ];
-
+   // console.log("Company List:", companyList);
+    const [savedTableColumns, setSavedTableColumns] = useState(
+        JSON.parse(localStorage.getItem(`table_columns_${id}`) || "[]")
+    );
 
     const savePrintOptions = () => {
         localStorage.setItem("print_logo", printLogo || "");
@@ -283,34 +333,8 @@ useEffect(() => {
     };
    
 
-       const handleCreate = () => {
-  setIsCreating(true);
-
-  const empty = {};
-  columns.forEach(col => {
-    empty[col.column_name] = "";
-  });
-
-  setNewRow(empty);
-
-  // ✅ RESET autofill tracking
-  setAutoFilledFields({});
-};
-
-const loadProviderPlans = async (providerId) => {
-  if (!providerId) {
-    setProviderPlans([]);
-    return;
-  }
-
-  try {
-    const res = await getProviderPlans(providerId);
-    setProviderPlans(res.data || []);
-  } catch (err) {
-    console.error("Failed to load provider plans:", err);
-    setProviderPlans([]);
-  }
-};
+     
+   
     
 
    const getVisibleColumns = () => {
@@ -353,57 +377,8 @@ const loadProviderPlans = async (providerId) => {
   return cols;
 };
     const visibleColumns = getVisibleColumns();
-const getCreateVisibleColumns = () => {
-  return normalizeCreateColumns(columns);
-};
 
-const normalizeCreateColumns = (cols) => {
-  let updated = [...cols];
 
-  // 1. REMOVE OLD MULTI CURRENCY FIELDS
-  updated = updated.filter(c => {
-    const name = c.column_name.toLowerCase();
-
-    if (name.startsWith("amount_") && name !== "amount") {
-      return false;
-    }
-
-    return true;
-  });
-
-  // 2. ENSURE SINGLE AMOUNT
-  if (!updated.some(c => c.column_name === "amount")) {
-    updated.push({
-      column_name: "amount",
-      display_name: "Amount",
-      data_type: "decimal"
-    });
-  }
-
-  // 3. ENSURE SINGLE CURRENCY
-//   if (!updated.some(c => c.column_name === "currency")) {
-//     updated.push({
-//       column_name: "currency",
-//       display_name: "Currency",
-//       data_type: "varchar"
-//     });
-//   }
-
-  // 4. FIX ORDER (THIS IS THE KEY FIX)
-  const order = ["currency","amount",  "total_amount_aed"];
-
-  const ordered = [
-    ...order
-      .map(key => updated.find(c => c.column_name === key))
-      .filter(Boolean)
-  ];
-
-  const rest = updated.filter(
-    c => !order.includes(c.column_name)
-  );
-
-  return [...rest,...ordered];
-};
     const generateTableHTML = (cols = columns) => {
         const logo = localStorage.getItem("print_logo");
         const company = localStorage.getItem("print_company");
@@ -443,8 +418,8 @@ const normalizeCreateColumns = (cols) => {
 ` : ``}
 
     <h2 style="text-align:center; margin-bottom:10px;">
-  ${printModuleName?.trim() || module?.display_name}
-</h2>
+      ${module?.display_name}
+    </h2>
     </div>
 
     <table>
@@ -522,402 +497,9 @@ const normalizeCreateColumns = (cols) => {
 const dateColumns = visibleColumns.filter(col =>
   col.data_type?.toLowerCase().includes("date")
 );
-const transformColumns = (mod, dataRows = []) => {
 
-  let cols = mod?.columns || [];
 
-  console.log("🔥 Columns:", cols);
-  console.log("🔥 Data rows:", dataRows);
 
-  // ================= 1. EXTRACT CURRENCIES (FIXED) =================
-  const currencies = new Set();
-
-  dataRows.forEach(row => {
-    if (row.currency) {
-      currencies.add(row.currency.trim().toUpperCase());
-    }
-  });
-
-  const currencyList = Array.from(currencies);
-
-  console.log("🔥 Final Currency List:", currencyList);
-
-  // ================= 2. CLEAN COLUMNS FIRST =================
-  cols = cols.filter(col => {
-    const name = col.column_name?.toLowerCase();
-
-    // ❌ remove ONLY fc columns (DO NOT remove currency logic here)
-    return !(
-      name.includes("fc_") ||
-      name.startsWith("fc_") ||
-      name.includes("fcamount") ||
-     // name.includes("fc_amount") ||
-        name.includes("currency") 
-    );
-  });
-
-  // ================= 3. BUILD COLUMNS =================
-  const finalCols = [];
-
-  cols.forEach(col => {
-
-    const name = col.column_name.toLowerCase();
-
-    // ================= AMOUNT DETECTION (FIXED) =================
-    const isAmount =
-      (
-        col.data_type?.toLowerCase() === "decimal" ||
-        col.data_type?.toLowerCase() === "float" ||
-        col.data_type?.toLowerCase() === "numeric" ||
-        name.includes("amount")
-      ) &&
-      !name.includes("total");
-
-    // ================= EXPAND AMOUNT =================
-    if (isAmount && currencyList.length > 0) {
-
-      currencyList.forEach(cur => {
-        finalCols.push({
-          ...col,
-          column_name: `${col.column_name}_${cur.toLowerCase()}`,
-          display_name: `${col.display_name} (${cur})`,
-        });
-      });
-
-      return;
-    }
-
-    // ================= NORMAL COLUMN =================
-    finalCols.push(col);
-  });
-
-  // ================= 4. SET STATE =================
-  const result = finalCols.filter(c => c.is_active !== false);
-
-  setColumns(result);
-
-  console.log("🔥 Final Transformed Columns:", result);
-};
-
-    // ================= LOAD MODULE =================
-   const loadModule = async () => {
-  try {
-    const res = await fetchSections();
-    const mod = res.data.find(m => m.module_id == id);
-    // console.log("Matched module:", mod);
-    if (mod) {
-      setModule(mod);
-
-      const dataRes = await getModuleData(id, activeUserEmail);
-
-      const rowsData = dataRes.data || [];
-      setRows(rowsData);
-
-      setColumns(
-  (mod?.columns || []).filter(c => c.is_active !== false)
-);// ✅ PASS ROWS HERE
-      //console.log("Module loaded:", rowsData);
-    }
-
-  } catch (err) {
-    console.error(err);
-  }
-};
-
-    // ================= LOAD DATA =================
-const loadData = async (overrideDateFilters) => {
-  setLoading(true);
-
-  const df = dateFilters;
-
-  const payload = {
-    search,
-    filters: JSON.stringify(filters || []),
-    dateFilters: JSON.stringify(buildDatePayload(df))
-  };
-
-  try {
-    const res = await getModuleData(id, activeUserEmail, payload);
-    setRows(res.data || []);
-  } catch (err) {
-    setRows([]);
-  } finally {
-    setLoading(false);
-  }
-};
-
-useEffect(() => {
-  loadData();
-}, [dateFilters, filters, search]);
-
-    const loadCurrencies = async () => {
-        try {
-            const res = await currencises();
-            setCurrencies(res.data || []);
-        } catch (err) {
-            console.error("Failed to load currencies:", err);
-        }
-    };
-
-   useEffect(() => {
-        loadModule();
-        loadData();
-        loadCurrencies();
-
-    }, [id]);
- 
-
-
-   useEffect(() => {
-  if (!columns.length) return;
-
-  const uniqueMasters = new Set();
-
-  columns.forEach(c => {
-    if (c.master) uniqueMasters.add(c.master);
-    if (c.master1) uniqueMasters.add(c.master1);
-  });
-
-  uniqueMasters.forEach(async (master) => {
-    try {
-      const res = await getMasterValues(master);
-
-      setMasterDataMap(prev => ({
-        ...prev,
-        [master]: res.data.data || []
-      }));
-    } catch (err) {
-      console.error("Master fetch failed:", master, err);
-    }
-  });
-
-}, [columns]);
-
-const getMasterOptions = (col, searchText = "") => {
-  let options = [];
-
-  const master1 = col.master;
-  const master2 = col.master1;
-
-  // ================= 1️⃣ PICK CORRECT MASTER =================
-
-  // If only one master exists
-  if (master1 && !master2) {
-    options = masterDataMap[master1] || [];
-  } 
-  else if (!master1 && master2) {
-    options = masterDataMap[master2] || [];
-  } 
-  else if (master1 && master2) {
-    // BOTH EXISTS → DO NOT MERGE blindly
-
-    const name = (col.column_name || "").toLowerCase();
-
-    if (name.includes("plan")) {
-      options = masterDataMap["plans"] || [];
-    } 
-    else if (name.includes("provider")) {
-      options = masterDataMap["service_providers"] || [];
-    } 
-    else {
-      options = masterDataMap[master1] || [];
-    }
-  }
-
-  // ================= 2️⃣ FILTER PLANS BY PROVIDER =================
-  if (
-    (col.master === "plans" || col.column_name?.includes("plan")) &&
-    providerPlans?.length
-  ) {
-    const allowedIds = providerPlans.map(p => p.plan_id);
-
-    options = options.filter(p => allowedIds.includes(p.id));
-  }
-
-  // ================= 3️⃣ SEARCH =================
-  if (!searchText) return options;
-
-  const search = searchText.toString().toLowerCase();
-
-  return options.filter(v => {
-    const valStr = typeof v === "object" ? v.value : v;
-    return valStr?.toLowerCase().includes(search);
-  });
-};
-
-
-   const getExchangeRate = (currencyCode) => {
-  const list = currencies || [];
-  const currency = list.find(
-    c => c.currency_code === currencyCode
-  );
-  // If your rates are "1 AED = X currency", invert for non-AED
-  if (currencyCode === "AED") return 1;
-  if (currency?.exchange_rate) return 1 / Number(currency.exchange_rate);
-  return 1;
-};
-const calculateCost = (amount, currencyCode, term) => {
-  if (!amount || !currencyCode) return null;
-
-  const rate = getExchangeRate(currencyCode);
-  if (!rate || isNaN(rate)) return null;
-
-  const adjustedAmount = applyTermMultiplier(amount, term);
-
-  const monthly = Number(adjustedAmount) * Number(rate);
-
-  return monthly;
-};
-
-const handleNewRowChange = (key, value, masterName) => {
-  setNewRow(prev => {
-    const updated = {
-      ...prev,
-      [key]: value
-    };
-
-    if (masterName === "billing_cycle") {
-      sessionStorage.setItem("billing_cycle", value);
-      updated.term = value;
-    }
-
-    return updated;
-  });
-
-  // ✅ provider change
- if (key === "service_providers") {
-
-  const providerValue =
-    typeof value === "object" ? value.value : value;
-
-  const masterList = masterDataMap?.[masterName] || [];
-
-  const matched = masterList.find(item =>
-    (item.value || item).toLowerCase() === providerValue.toLowerCase()
-  );
-
-  const providerId = matched?.id;
-console.log("Selected provider ID:", providerId);
-  if (providerId) {
-    //  reset manual flag when provider changes
-    setPlanManuallyChanged(false);
-
-    loadProviderPlans(providerId);
-  }
-
-  // clear existing plan
-  setNewRow(prev => ({
-    ...prev,
-  }));
-}
-};
-useEffect(() => {
-  if (!providerPlans?.length || !masterDataMap?.plans) return;
-
-  const planMaster = masterDataMap.plans;
-
-  const mappedPlans = providerPlans
-    .map(p => planMaster.find(m => m.id === p.plan_id))
-    .filter(Boolean);
-
-  setProviderPlansMap(mappedPlans);
-
-  // ✅ ONLY auto-select if user hasn't changed it
-  if (!planManuallyChanged && mappedPlans.length > 0) {
-    const firstPlan = mappedPlans[0];
-    console.log("Auto-selecting plan:", firstPlan);
-    setNewRow(prev => ({
-      ...prev,
-      plan_provider: firstPlan.value
-    }));
-  }
-
-}, [providerPlans, masterDataMap.plans]);
-  
-   const handleSave = async () => {
-    try {
-        // Clone the newRow to avoid mutating state directly
-        const payload = { ...newRow };
-
-        // Set fcamt and currency from the form values
-        if (payload.amount && payload.currency) {
-           // payload.fc_amount = payload.total_amount_aed;
-            payload.currency = payload.currency;
-        }
-
-        // Remove all amount_xxx fields (like amount_usd, amount_aed, etc.)
-        Object.keys(payload).forEach(key => {
-            if (key.startsWith("amount_")) {
-                delete payload[key];
-            }
-        });
-
-        // Optionally remove the original 'amount' field if not needed
-        // delete payload.amount;
-
-        await createModuleRow(id, payload, activeUserEmail);
-
-        setIsCreating(false);
-        setNewRow({});
-        loadData(); // refresh table
-    } catch (err) {
-        console.error(err);
-    }
-};
-
-    const handleCancel = () => {
-        setIsCreating(false);
-        setNewRow({});
-    };
-
-    const handleEdit = (row) => {
-        setEditRowId(row.id);
-        setEditRow({ ...row });
-        setOriginalRow({ ...row });
-    };
-
-    const handleSaveEdit = async () => {
-        try {
-            const changedData = {};
-
-            Object.keys(editRow).forEach((key) => {
-                if (editRow[key] !== originalRow[key]) {
-                    changedData[key] = editRow[key];
-                }
-            });
-
-            if (Object.keys(changedData).length === 0) {
-                setEditRowId(null);
-                return;
-            }
-
-            await updateModuleRow(id, editRowId, changedData, activeUserEmail);
-
-            setEditRowId(null);
-            setEditRow({});
-            setOriginalRow({});
-
-            loadData();
-        } catch (err) {
-            console.error(err);
-        }
-    };
-
-    const handleCancelEdit = () => {
-        setEditRowId(null);
-        setEditRow({});
-    };
-
-    const handleDelete = async (row) => {
-        if (!window.confirm("Delete this record?")) return;
-
-        try {
-            await deleteModuleRow(id, row.id, activeUserEmail);
-            loadData();
-        } catch (err) {
-            console.error(err);
-        }
-    };
 
     const handleExcel = (mode) => {
         const cols = getColumnsToUse(mode);
@@ -975,15 +557,15 @@ useEffect(() => {
     }, []);
 
     const handlePrint = (mode, savedCols = []) => {
-    const cols = getColumnsToUse(mode, savedCols);
+  const cols = getColumnsToUse(mode, savedCols);
 
-    openPrintWindow({
-        content: generateTableHTML(cols),
-        userName: activeUser?.email || "User",
-    });
+  openPrintWindow({
+    content: generateTableHTML(cols),
+    userName: activeUser?.email || "User",
+  });
 
-    setShowPrintModal(false);
-    };
+  setShowPrintModal(false);
+};
 
 
 
@@ -1004,32 +586,9 @@ useEffect(() => {
         );
     };
 
-   const saveColumnSelection = async () => {
-  try {
-    // 1️⃣ Save locally (optional but fast UX)
-    // localStorage.setItem(
-    //   `table_columns_${id}`,
-    //   JSON.stringify(selectedColumns)
-    // );
+   
 
-    // 2️⃣ Save to DB
-    await upsertCustomizedColumns(
-      currentModule?.module_id,
-      activeUserEmail,
-      selectedColumns
-    );
-
-    // 3️⃣ Update state
-    setSavedTableColumns(selectedColumns);
-    setShowColumnSelector(false);
-    setTableColumnMode("custom");
-
-  } catch (err) {
-    console.error("Failed to save customized columns:", err);
-  }
-};
-
-   const getColumnsToUse = (mode, savedCols = []) => {
+       const getColumnsToUse = (mode, savedCols = []) => {
   if (mode === "saved") {
     return columns.filter(c =>
       savedCols.includes(c.column_name)
@@ -1041,15 +600,7 @@ useEffect(() => {
   return columns;
 };
     // ================= SEARCH FILTER =================
-    const filtered = applyFilters(rows, filters, columns);
-
-    const finalRows = filtered.filter(row =>
-        columns.some(col =>
-            String(row[col.column_name] || "")
-                .toLowerCase()
-                .includes(search.toLowerCase())
-        )
-    );
+    const finalRows = rows;
 
     const normalizedRows = finalRows.map(row => {
   const currency = (row.currency || "").toLowerCase();
@@ -1100,65 +651,9 @@ useEffect(() => {
         }
     };
 
-       const disableOthers = hasAnyAmountValue(newRow, visibleColumns);
-       //console.log("Disable Others check for new row:", newRow, disableOthers);
-    const disableEditOthers = hasAnyAmountValue(editRow, visibleColumns);
+     
 
-useEffect(() => {
-  if (!isCreating) return; // only during create
 
-  visibleColumns.forEach(col => {
-    if (!col.master) return;
-
-    const key = col.column_name;
-
-    // ✅ skip if already auto-filled once
-    if (autoFilledFields[key]) return;
-
-    const options = getMasterOptions(col, newRow[key] || "");
-
-    if (options.length === 1) {
-      const val =
-        typeof options[0] === "object"
-          ? options[0].value
-          : options[0];
-
-      setNewRow(prev => ({
-        ...prev,
-        [key]: val
-      }));
-
-      // ✅ mark as auto-filled
-      setAutoFilledFields(prev => ({
-        ...prev,
-        [key]: true
-      }));
-    }
-  });
-}, [visibleColumns, masterDataMap, isCreating]);
-
-useEffect(() => {
-  if (!editRowId) return;
-
-  visibleColumns.forEach(col => {
-    if (!col.master) return;
-
-    const options = getMasterOptions(col, editRow[col.column_name] || "");
-
-    if (options.length === 1) {
-      const val = typeof options[0] === "object" ? options[0].value : options[0];
-
-      setEditRow(prev => {
-        if (prev[col.column_name] === val) return prev;
-
-        return {
-          ...prev,
-          [col.column_name]: val
-        };
-      });
-    }
-  });
-}, [editRow, editRowId, visibleColumns, masterDataMap]);
     return (
         <div className="h-full flex flex-col">
 
@@ -1166,42 +661,14 @@ useEffect(() => {
             <div className="flex justify-between items-center mb-4">
 
                 <h1 className="text-xl font-semibold text-gray-800">
-                    {module?.display_name || "Loading..."}
+                    {module?.display_name} - {report?.filter_name || "Loading..."}
                 </h1>
 
                 <div className="flex items-center gap-2">
 
-  {/* NEW */}
+
   
-  <PermissionButton
-    user={activeUser}
-    permission="add"
-//      onClick={() => {
-//     const empty = {};
-//     visibleColumns.forEach(col => {
-//       empty[col.column_name] = "";
-//     });
 
-//     setNewRow(empty);
-//     setShowCreateModal(true);
-//   }}
-onClick={handleCreate}
-    className="px-3 py-1.5 text-sm rounded-md bg-green-600 text-white 
-               hover:bg-green-700 hover:shadow-md transition"
-  >
-    + New
-  </PermissionButton>
-
-  {/* IMPORT */}
-  {/* <PermissionButton
-    user={activeUser}
-    permission="add"
-    onClick={() => setShowImportModal(true)}
-    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
-               hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
-  >
-    Import
-  </PermissionButton> */}
 
   {/* PRINT */}
   <PermissionButton
@@ -1288,7 +755,7 @@ onClick={handleCreate}
   </div>
 )}
                  {/* ✅ DATE FILTER BUTTONS */}
- {dateColumns.map((col, i) => {
+  {dateColumns.map((col, i) => {
   const filter = dateFilters?.[col.column_name];
 
   const format = (date) =>
@@ -1362,26 +829,22 @@ onClick={handleCreate}
             </div>
             {activeDateFilter && (
   <div className="mb-4">
-<DateOnlyFilter
-  onApply={(range) => {
-    if (!range?.start || !range?.end) return;
+   <DateOnlyFilter
+    onApply={(range) => {
+  if (!range?.start || !range?.end) return;
 
-    const updatedFilters = {
-      ...dateFilters,
-      [activeDateFilter]: {
-        start: range.start,
-        end: range.end,
-        source: "picker"
-      }
-    };
+  setDateFilters(prev => ({
+    ...prev,
+    [activeDateFilter]: {
+      start: range.start,
+      end: range.end,
+      source: "picker"
+    }
+  }));
 
-    setDateFilters(updatedFilters);
-    setActiveDateFilter(null);
-
-    // ✅ FORCE API CALL
-    loadData(updatedFilters);
-  }}
-/>
+  setActiveDateFilter(null);
+}}
+   />
   </div>
 )}
 
@@ -1530,136 +993,12 @@ onClick={handleCreate}
                                     </th>
                                 ))}
 
-                                <th className="px-4 py-3 border-b text-right">Actions</th>
+                                {/* <th className="px-4 py-3 border-b text-right">Actions</th> */}
                             </tr>
                         </thead>
 
                         {/* TABLE BODY */}
                     <tbody className="divide-y">
-
-{/* ================= CREATE ROW ================= */}
-{isCreating && (
-  <tr className="bg-blue-50">
-    <td className="px-4 py-3 whitespace-nowrap"></td>
-
-    {visibleColumns.map((col) => {
-      const isMaster = !!col.master;
-      const isDate = col.data_type?.toLowerCase().includes("date");
-
-      // ✅ normalize value (IMPORTANT FIX)
-      const rawValue = newRow[col.column_name];
-     let value =
-  typeof rawValue === "object"
-    ? rawValue?.value ?? ""
-    : rawValue ?? "";
-
-// 🔐 CREDIT CARD MASKING (CREATE MODE)
-if (col.master === "credit_card" && value) {
-  const raw = String(value);
-  const last4 = raw.slice(-4);
-  value = `**** **** **** ${last4}`;
-}
-
-      return (
-        <td
-          key={col.column_id}
-          className={`px-4 py-2 ${getAlignClass(col.display_name)} whitespace-nowrap`}
-        >
-          <div className="relative">
-
-            <input
-              type={isDate ? "date" : "text"}
-              className="border px-2 py-1 rounded w-full"
-              value={
-                col.column_name === "total_amount_aed"
-                  ? newRow.total_amount_aed || ""
-                  : isDate
-                  ? formatForInput(value)
-                  : value
-              }
-              disabled={col.column_name === "total_amount_aed"} // ✅ readonly
-              onChange={(e) => {
-                let val = e.target.value;
-
-                if (isNumericColumn(col.column_name)) {
-                  val = handleNumericInput(val);
-                }
-
-                handleNewRowChange(col.column_name, val, col.master);
-
-                setAutoFilledFields(prev => ({
-                  ...prev,
-                  [col.column_name]: true
-                }));
-
-                if (col.column_name === "plans") {
-                  setPlanManuallyChanged(true);
-                }
-
-                setActiveDropdown(`create-${col.column_name}`);
-              }}
-              onFocus={() =>
-                isMaster && setActiveDropdown(`create-${col.column_name}`)
-              }
-              onBlur={() =>
-                setTimeout(() => setActiveDropdown(null), 150)
-              }
-            />
-
-            {/* MASTER DROPDOWN */}
-            {isMaster &&
-              activeDropdown === `create-${col.column_name}` && (
-                <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
-
-                  {getMasterOptions(col, value, newRow)
-                    .slice(0, 20)
-                    .map((val, i) => {
-                      const display =
-                        typeof val === "object" ? val.value : val;
-
-                      return (
-                        <div
-                          key={i}
-                          className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
-                          onMouseDown={() => {
-                            handleNewRowChange(
-                              col.column_name,
-                              display,
-                              col.master
-                            );
-
-                            setAutoFilledFields(prev => ({
-                              ...prev,
-                              [col.column_name]: true
-                            }));
-
-                            if (col.column_name === "plans") {
-                              setPlanManuallyChanged(true);
-                            }
-                          }}
-                        >
-                          {display}
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-
-          </div>
-        </td>
-      );
-    })}
-
-    {/* ACTIONS */}
-    <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
-      <button onClick={handleSave} className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-              hover:bg-blue-100 hover:border-blue-500 transition">Save</button>
-      <button onClick={handleCancel} className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-              hover:bg-red-100 hover:border-red-500 transition">Cancel</button>
-    </td>
-  </tr>
-)}
-
 {/* ================= DATA ROWS ================= */}
 {paginatedRows.map((row, i) => (
   <tr key={row.id ?? i} className="hover:bg-gray-50">
@@ -1675,17 +1014,10 @@ if (col.master === "credit_card" && value) {
 
       // ✅ normalize row value (CRITICAL FIX)
       const rawValue = row?.[col.column_name];
-      let value =
-  typeof rawValue === "object"
-    ? rawValue?.value ?? ""
-    : rawValue ?? "";
-
-// 🔐 CREDIT CARD MASKING (CREATE MODE)
-if (col.master === "credit_card" && value) {
-  const raw = String(value);
-  const last4 = raw.slice(-4);
-  value = `**** **** **** ${last4}`;
-}
+      const value =
+        typeof rawValue === "object"
+          ? rawValue?.value ?? "-"
+          : rawValue ?? "-";
 
       return (
         <td
@@ -1732,34 +1064,7 @@ if (col.master === "credit_card" && value) {
                 }
               />
 
-              {/* DROPDOWN */}
-              {isMaster && activeDropdown === editKey && (
-                <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
-
-                  {getMasterOptions(col, editRow[col.column_name] || "", editRow)
-                    .slice(0, 20)
-                    .map((val, i) => {
-                      const display =
-                        typeof val === "object" ? val.value : val;
-
-                      return (
-                        <div
-                          key={i}
-                          className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
-                          onMouseDown={() =>
-                            setEditRow({
-                              ...editRow,
-                              [col.column_name]: display,
-                            })
-                          }
-                        >
-                          {display}
-                        </div>
-                      );
-                    })}
-
-                </div>
-              )}
+           
 
             </div>
           ) : (
@@ -1771,14 +1076,9 @@ if (col.master === "credit_card" && value) {
                 return value ? Number(value).toFixed(2) : "-";
               }
 
-              if (col.column_name.toLowerCase().includes("amount")) {
+               if (col.column_name.toLowerCase().includes("amount")) {
                 return value ? Number(value).toLocaleString() : "-";
               }
-              if (col.master === "credit_card") {
-                const raw = String(value ?? "");
-                const last4 = raw.slice(-4);
-                return raw ? `**** **** **** ${last4}` : "-";
-                }
 
               return typeof value === "object" ? value.value : value;
 
@@ -1789,45 +1089,7 @@ if (col.master === "credit_card" && value) {
       );
     })}
 
-    {/* ACTIONS */}
-    <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
-
-      {editRowId === row.id ? (
-        <>
-          <button onClick={handleSaveEdit} className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-              hover:bg-blue-100 hover:border-blue-500 transition">Save</button>
-          <button onClick={handleCancelEdit} className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-              hover:bg-red-100 hover:border-red-500 transition">Cancel</button>
-        </>
-      ) : (
-        <>
-          <PermissionButton
-            user={activeUser}
-            permission="modify"
-            onClick={() => {
-              setEditRowId(row.id);
-              setEditRow(row);
-              setOriginalRow(row);
-            }}
-            className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-              hover:bg-blue-100 hover:border-blue-500 transition"
-          >
-            Edit
-          </PermissionButton>
-
-          <PermissionButton
-            user={activeUser}
-            permission="delete"
-            onClick={() => handleDelete(row)}
-           className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-              hover:bg-red-100 hover:border-red-500 transition"
-          >
-            Delete
-          </PermissionButton>
-        </>
-      )}
-
-    </td>
+  
 
   </tr>
 ))}
@@ -1905,7 +1167,7 @@ if (col.master === "credit_card" && value) {
                                 </button>
 
                                 <button
-                                    onClick={async () => {
+                                     onClick={async () => {
                                     const savedCols = await fetchCustomizedColumns();
 
                                     handlePrint("saved", savedCols); // ✅ pass directly
@@ -1925,7 +1187,7 @@ if (col.master === "credit_card" && value) {
                                     onClick={() => setShowPrintOptions(true)}
                                     className="btn btn-green flex-1"
                                 >
-                                     Header
+                                    Add Logo
                                 </button>
 
                             </div>
@@ -1944,10 +1206,9 @@ if (col.master === "credit_card" && value) {
                                 </button>
 
                                 <button
-                                     onClick={async () => {
-                                    const savedCols = await fetchCustomizedColumns();
-
-                                    handleExcel("saved", savedCols); // ✅ pass directly
+                                    onClick={async () => {
+                                        const savedCols = await fetchCustomizedColumns();
+                                        handleExcel("saved",savedCols)
                                     }}
                                     className="btn btn-blue flex-1"
                                 >
@@ -1978,7 +1239,10 @@ if (col.master === "credit_card" && value) {
                                 </button>
 
                                 <button
-                                    onClick={() => handlePdf("saved")}
+                                     onClick={async () => {
+                                        const savedCols = await fetchCustomizedColumns();
+                                        handlePdf("saved",savedCols)
+                                    }}
                                     className="btn btn-blue flex-1"
                                 >
                                     Saved
@@ -1995,65 +1259,65 @@ if (col.master === "credit_card" && value) {
 
                         </Modal>
                     )}
-                   {showTableColumnModal && (
-  <Modal
-    title="Customize Columns"
-    onClose={() => setShowTableColumnModal(false)}
-  >
-    <div className="flex gap-3">
-
-      {/* DEFAULT */}
-      <button
-        onClick={() => {
-          setTableColumnMode("default");
-          setSelectedColumns([]); // reset
-        }}
-        className="btn btn-gray flex-1"
-      >
-        Default
-      </button>
-
-      {/* SAVED (DB or localStorage fallback) */}
-      <button
-        onClick={async () => {
-          try {
-            // preferred: API saved columns
-            const res = await getCustomizedColumns(currentModule?.module_id,
-      activeUserEmail);
-
-            if (res?.data?.data?.columns) {
-              setSavedTableColumns(res.data.data.columns);
-            } else {
-              setSavedTableColumns(saved);
-            }
-
-            setTableColumnMode("saved");
-          } catch (err) {
-            console.error(err);
-          }
-        }}
-        className="btn btn-blue flex-1"
-      >
-        Saved
-      </button>
-
-      {/* CUSTOM */}
-      <button
-        onClick={() => {
-          setShowColumnSelector(true);
-          setTableColumnMode("custom");
-
-          // optional: preload existing config into selector
-          setSelectedColumns(savedTableColumns || []);
-        }}
-        className="btn btn-green flex-1"
-      >
-        Customize
-      </button>
-
-    </div>
-  </Modal>
-)}
+                     {showTableColumnModal && (
+                      <Modal
+                        title="Customize Columns"
+                        onClose={() => setShowTableColumnModal(false)}
+                      >
+                        <div className="flex gap-3">
+                    
+                          {/* DEFAULT */}
+                          <button
+                            onClick={() => {
+                              setTableColumnMode("default");
+                              setSelectedColumns([]); // reset
+                            }}
+                            className="btn btn-gray flex-1"
+                          >
+                            Default
+                          </button>
+                    
+                          {/* SAVED (DB or localStorage fallback) */}
+                          <button
+                            onClick={async () => {
+                              try {
+                                // preferred: API saved columns
+                                const res = await getReportCustomizedColumns(report.id,
+                          activeUserEmail);
+                    
+                                if (res?.data?.data?.columns) {
+                                  setSavedTableColumns(res.data.data.columns);
+                                } else {
+                                  setSavedTableColumns(saved);
+                                }
+                    
+                                setTableColumnMode("saved");
+                              } catch (err) {
+                                console.error(err);
+                              }
+                            }}
+                            className="btn btn-blue flex-1"
+                          >
+                            Saved
+                          </button>
+                    
+                          {/* CUSTOM */}
+                          <button
+                            onClick={() => {
+                              setShowColumnSelector(true);
+                              setTableColumnMode("custom");
+                    
+                              // optional: preload existing config into selector
+                              setSelectedColumns(savedTableColumns || []);
+                            }}
+                            className="btn btn-green flex-1"
+                          >
+                            Customize
+                          </button>
+                    
+                        </div>
+                      </Modal>
+                    )}
 
                     {showColumnSelector && (
                         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
@@ -2132,19 +1396,6 @@ if (col.master === "credit_card" && value) {
                                             </option>
                                         ))}
                                     </select>
-                                    <div className="mt-3">
-                                    <label className="block text-sm font-medium mb-1">
-                                        Module Name
-                                    </label>
-
-                                    <input
-                                        type="text"
-                                        className="w-full border p-2 rounded"
-                                        placeholder="Enter module name (optional)"
-                                        value={printModuleName}
-                                        onChange={(e) => setPrintModuleName(e.target.value)}
-                                    />
-                                    </div>
                                 </div>
 
                                 <div className="flex justify-end gap-2 mt-4">

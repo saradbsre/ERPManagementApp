@@ -13,15 +13,13 @@ const masterTableConfig = {
     ]
   },
 
-  subscriptions: {
-    displayName: "Subscriptions Master",
+  service_providers: {
+    displayName: "Service Providers Master",
 
     columns: [
       { key: "provider_name", label: "Name", data_type: "string" },
-      { key: "plan_name", label: "Plan", data_type: "string" },
-      { key: "purchase_date", label: "Purchase Date", data_type: "datetime" },
-      // { key: "renewal_date", label: "Renewal Date", data_type: "datetime" },
-      { key: "billing_cycle", label: "Billing Cycle", data_type: "string" },
+      { key: "is_active", label: "Active Status", data_type: "boolean" },
+      { key: "services", label: "Services", data_type: "string" },
     ]
   },
 
@@ -40,6 +38,8 @@ const masterTableConfig = {
 
     columns: [
         { key: "value", label: "Term Name", data_type: "string" },
+        { key: "description", label: "Description", data_type: "string" },
+        { key: "is_active", label: "Is Active", data_type: "boolean" },
     ]
   },
    payment_method:{
@@ -65,15 +65,12 @@ const masterTableConfig = {
       { key: "trn", label: "TRN", data_type: "string" }
     ]
   },
-   domains: {
-    displayName: "Domains Master",
+   services: {
+    displayName: "Services Master",
 
     columns: [
-      { key: "domain_name", label: "Name", data_type: "string" },
-      { key: "plan_name", label: "Plan", data_type: "string" },
-      { key: "purchase_date", label: "Purchase Date", data_type: "datetime" },
-      // { key: "renewal_date", label: "Renewal Date", data_type: "datetime" },
-      { key: "billing_cycle", label: "Billing Cycle", data_type: "string" },
+      { key: "service_name", label: "Name", data_type: "string" },
+      { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
   },
    credit_card: {
@@ -86,7 +83,34 @@ const masterTableConfig = {
       // { key: "cvv", label: "CVV", data_type: "string" },
       { key: "billing_address", label: "Billing Address", data_type: "string" }
     ]
-  }
+  },
+  plans: {
+    displayName: "Plans Master",
+    columns: [
+      { key: "plan_name", label: "Plan Name", data_type: "string" },
+      // { key: "description", label: "Description", data_type: "string" },
+      { key: "is_active", label: "Active Status", data_type: "boolean" },
+    ]
+  },
+   department: {
+    displayName: "Department Master",
+    columns: [
+      { key: "department_name", label: "Department Name", data_type: "string" },
+      { key: "description", label: "Description", data_type: "string" },
+      { key: "is_active", label: "Active Status", data_type: "boolean" },
+    ]
+  },
+  providers: {
+    displayName: "Providers Master",
+    columns: [
+      { key: "provider_name", label: "Provider Name", data_type: "string" },
+      { key: "provider_code", label: "Provider Code", data_type: "string" },
+      { key: "provider_type", label: "Provider Type", data_type: "string" },
+      { key: "website", label: "Website", data_type: "string" },
+      { key: "support_email", label: "Support Email", data_type: "string" },
+      { key: "is_active", label: "Active Status", data_type: "boolean" },
+    ]
+   }
 };
 
 export default masterTableConfig;

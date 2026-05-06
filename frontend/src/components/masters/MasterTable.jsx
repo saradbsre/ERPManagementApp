@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, act } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { getMasterData, createMasterData, updateMasterData, deleteMasterData } from "../../api/api"; // 👈 create this API
+import { getMasterData, createMasterData, updateMasterData, deleteMasterData, saveProviderPlans,getProviderPlans } from "../../api/api"; // 👈 create this API
 import masterTableConfig from "../../utils/masterTableConfig"; // 👈 create this config
 import { getAlignClass } from "../../utils/leftAlign";
 import { handleNumericInput, isNumericColumn } from "../../utils/numberValidation";
@@ -51,6 +51,13 @@ export default function MasterTablePage() {
     const [showValidatePopup, setShowValidatePopup] = useState(false);
     const [validationMessage, setValidationMessage] = useState("");
     const [validationType, setValidationType] = useState("success"); // success, error, warning
+    const [showPlansModal, setShowPlansModal] = useState(false);
+const [selectedProvider, setSelectedProvider] = useState(null);
+const [allPlans, setAllPlans] = useState([]);
+const [selectedPlans, setSelectedPlans] = useState([]);
+const [newPlanName, setNewPlanName] = useState("");
+const [editingPlanId, setEditingPlanId] = useState(null);
+const [editingPlanName, setEditingPlanName] = useState("");
 
     const formatCard = (value, columnName) => {
   if (!value) return "";
@@ -91,6 +98,88 @@ export default function MasterTablePage() {
 
   return value;
 };
+const handleCreatePlan = async () => {
+  if (!newPlanName.trim()) return;
+
+  try {
+    const res = await createMasterData("plans", {
+      plan_name: newPlanName,
+     // plan_code: newPlanName.toLowerCase().replace(/\s+/g, "_")
+    }, activeUserEmail);
+
+    setAllPlans(prev => [...prev, res.data]);
+    setNewPlanName("");
+  } catch (err) {
+    console.error("CREATE PLAN ERROR:", err);
+  }
+};
+const handleUpdatePlan = async (id) => {
+  try {
+    await updateMasterData("plans", id, {
+      plan_name: editingPlanName
+    }, activeUserEmail);
+
+    setAllPlans(prev =>
+      prev.map(p =>
+        p.id === id ? { ...p, plan_name: editingPlanName } : p
+      )
+    );
+
+    setEditingPlanId(null);
+    setEditingPlanName("");
+  } catch (err) {
+    console.error("UPDATE PLAN ERROR:", err);
+  }
+};
+
+const openPlansModal = async (provider) => {
+  try {
+    // ✅ handle CREATE ROW case
+    if (!provider || !provider.id) {
+      setValidationMessage("Please save provider first before assigning plans");
+      setValidationType("warning");
+      setShowValidatePopup(true);
+      return;
+    }
+
+    setSelectedProvider(provider);
+    setShowPlansModal(true);
+
+    // 1. Get all plans
+    const plansRes = await getMasterData("plans", activeUserEmail);
+    setAllPlans(plansRes.data || []);
+
+    // 2. Get mapped plans for provider
+    const mappedRes = await getProviderPlans(provider.id);
+
+    // IMPORTANT: ensure array safety
+    const mappedIds = (mappedRes?.data || []).map(p => p.plan_id);
+
+    setSelectedPlans(mappedIds);
+
+  } catch (err) {
+    console.error("OPEN PLANS ERROR:", err);
+    setValidationMessage("Failed to load plans");
+    setValidationType("error");
+    setShowValidatePopup(true);
+  }
+};
+const handleSavePlans = async () => {
+  try {
+    await saveProviderPlans({
+      provider_id: selectedProvider.id,
+      plan_ids: selectedPlans
+    }, activeUserEmail);
+    setValidationMessage("Plans updated successfully!");
+    setValidationType("success");
+    setShowValidatePopup(true);
+
+    setShowPlansModal(false);
+  } catch (err) {
+    console.error("SAVE PLANS ERROR:", err);
+  }
+};
+
 
       const handleCreate = () => {
   setIsCreating(true);
@@ -366,6 +455,9 @@ useEffect(() => {
                                             {col.label}
                                         </th>
                                     ))}
+                                    {masterName === "service_providers" && (
+  <th className="px-4 py-3 text-center">Plans</th>
+)}
                                     <th className="px-4 py-3 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -380,36 +472,70 @@ useEffect(() => {
 
     {columns.map(col => {
       const isDate = isDateColumn(col);
-
+      const isToggle = col.key.toLowerCase() === "is_active";
       const inputType = "date";
+      const isServiceMaster = col.key.toLowerCase() === "services";
+
       return (
         <td key={col.key} className={`px-4 py-3 ${getAlignClass(col.key)}`}>
 
-          <input
-            type={isDate ? inputType : "text"}
-            className={`border px-2 py-1 rounded w-full ${getAlignClass(col.key)}`}
-            value={
-              isDate
-                ? formatForInput(newRow[col.key], inputType)
-                : (formatCard(newRow[col.key], col.key) || "")
-            }
-            onChange={(e) => {
-              let value = e.target.value;
-
-              if (isNumericColumn(col.key)) {
-                value = handleNumericInput(value);
+          {/* ================= TOGGLE ================= */}
+          {isToggle ? (
+            <button
+              onClick={() =>
+                setNewRow(prev => ({
+                  ...prev,
+                  [col.key]: prev[col.key] ? 0 : 1
+                }))
               }
+              className={`w-12 h-6 flex items-center rounded-full p-1 transition 
+                ${newRow[col.key] ? "bg-green-500" : "bg-gray-300"}`}
+            >
+              <div
+                className={`bg-white w-4 h-4 rounded-full shadow transform transition 
+                  ${newRow[col.key] ? "translate-x-6" : ""}`}
+              />
+            </button>
+          ) : (
+            <input
+              type={isDate ? inputType : "text"}
+              className={`border px-2 py-1 rounded w-full ${getAlignClass(col.key)}`}
+              value={
+                isDate
+                  ? formatForInput(newRow[col.key], inputType)
+                  : (formatCard(newRow[col.key], col.key) || "")
+              }
+              onChange={(e) => {
+                let value = e.target.value;
 
-              setNewRow({
-                ...newRow,
-                [col.key]: value
-              });
-            }}
-          />
+                if (isNumericColumn(col.key)) {
+                  value = handleNumericInput(value);
+                }
+
+                setNewRow({
+                  ...newRow,
+                  [col.key]: value
+                });
+              }}
+            />
+          )}
 
         </td>
       );
     })}
+
+    {/* PLANS BUTTON */}
+    {masterName === "service_providers" && (
+      <td className="px-4 py-3 text-center">
+        {/* <button
+          onClick={() => openPlansModal(null)}
+          className="px-2 py-1 text-xs rounded border border-blue-300 hover:bg-blue-100"
+          disabled // disable until name is entered
+        >
+           Plans
+        </button> */}
+      </td>
+    )}
 
     {/* ACTIONS */}
     <td className="px-4 py-3 flex gap-2 justify-end">
@@ -446,47 +572,86 @@ useEffect(() => {
 
       {columns.map(col => {
         const isDate = isDateColumn(col);
-
-       const inputType = "date";
+        const isToggle = col.key.toLowerCase() === "is_active";
+        const inputType = "date";
 
         return (
           <td key={col.key} className={`px-4 py-3 ${getAlignClass(col.key)}`}>
 
             {/* ================= EDIT MODE ================= */}
             {editRowId === rowKey ? (
-              <input
-                type={isDate ? inputType : "text"}
-                className={`border px-2 py-1 rounded w-full ${getAlignClass(col.key)}`}
-                value={
-                  isDate
-                    ? formatForInput(editRow[col.key], inputType)
-                    : (formatCard(editRow[col.key], col.key) || "")
-                }
-                onChange={(e) => {
-                  let value = e.target.value;
-
-                  if (isNumericColumn(col.key)) {
-                    value = handleNumericInput(value);
+              isToggle ? (
+                <button
+                  onClick={() =>
+                    setEditRow(prev => ({
+                      ...prev,
+                      [col.key]: prev[col.key] ? 0 : 1
+                    }))
                   }
+                  className={`w-12 h-6 flex items-center rounded-full p-1 transition 
+                    ${editRow[col.key] ? "bg-green-500" : "bg-gray-300"}`}
+                >
+                  <div
+                    className={`bg-white w-4 h-4 rounded-full shadow transform transition 
+                      ${editRow[col.key] ? "translate-x-6" : ""}`}
+                  />
+                </button>
+              ) : (
+                <input
+                  type={isDate ? inputType : "text"}
+                  className={`border px-2 py-1 rounded w-full ${getAlignClass(col.key)}`}
+                  value={
+                    isDate
+                      ? formatForInput(editRow[col.key], inputType)
+                      : (formatCard(editRow[col.key], col.key) || "")
+                  }
+                  onChange={(e) => {
+                    let value = e.target.value;
 
-                  setEditRow({
-                    ...editRow,
-                    [col.key]: value
-                  });
-                }}
-              />
+                    if (isNumericColumn(col.key)) {
+                      value = handleNumericInput(value);
+                    }
+
+                    setEditRow({
+                      ...editRow,
+                      [col.key]: value
+                    });
+                  }}
+                />
+              )
             ) : (
               /* ================= VIEW MODE ================= */
-              isDate
-                ? formatDate(row[col.key])
-                : (formatCard(row[col.key], col.key) || "-")
+              isToggle ? (
+                <span
+                  className={`px-2 py-1 text-xs rounded-full 
+                    ${row[col.key] ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-600"}`}
+                >
+                  {row[col.key] ? "Active" : "Inactive"}
+                </span>
+              ) : isDate ? (
+                formatDate(row[col.key])
+              ) : (
+                formatCard(row[col.key], col.key) || "-"
+              )
             )}
 
           </td>
         );
       })}
 
-      {/* ================= ACTIONS ================= */}
+      {/* PLANS BUTTON */}
+      {masterName === "service_providers" && (
+        <td className="px-4 py-3 text-center">
+          <button
+            onClick={() => openPlansModal(row)}
+            className="px-2 py-1 text-xs rounded border border-blue-300 hover:bg-blue-100"
+          >
+            Manage
+          </button>
+        </td>
+      )}
+
+      {/* ACTIONS */}
       <td className="px-4 py-3 flex justify-end gap-2">
 
         {editRowId === rowKey ? (
@@ -544,6 +709,135 @@ useEffect(() => {
 </tbody>
 
                         </table>
+                       {showPlansModal && (
+  <Modal
+    title={`Plans - ${selectedProvider?.provider_name || "New Provider"}`}
+    onClose={() => setShowPlansModal(false)}
+  >
+    {/* ================= PLAN GRID ================= */}
+    <div className="grid grid-cols-2 gap-3 max-h-72 overflow-auto pr-2">
+
+      {allPlans.map(plan => {
+        const isSelected = selectedPlans.includes(plan.id);
+
+        return (
+          <div
+            key={plan.id}
+            className={`p-3 rounded-lg border cursor-pointer transition flex items-center justify-between
+              ${isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-400"}
+            `}
+            onClick={() => {
+              if (isSelected) {
+                setSelectedPlans(selectedPlans.filter(id => id !== plan.id));
+              } else {
+                setSelectedPlans([...selectedPlans, plan.id]);
+              }
+            }}
+          >
+
+            {/* LEFT: CHECKBOX + NAME */}
+            <div className="flex items-center gap-2">
+
+              {/* <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => {}}
+              /> */}
+
+              {editingPlanId === plan.id ? (
+                <input
+                  value={editingPlanName}
+                  onChange={(e) => setEditingPlanName(e.target.value)}
+                  className="border px-2 py-1 rounded text-sm w-28"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span className="font-medium text-sm">
+                  {plan.plan_name}
+                </span>
+              )}
+
+            </div>
+
+            {/* RIGHT: ACTIONS */}
+            <div className="flex gap-2 items-center">
+
+              {editingPlanId === plan.id ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleUpdatePlan(plan.id);
+                  }}
+                  className="text-green-600 text-xs font-semibold"
+                >
+                  Save
+                </button>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingPlanId(plan.id);
+                    setEditingPlanName(plan.plan_name);
+                  }}
+                  className="text-blue-600 text-xs"
+                >
+                  Edit
+                </button>
+              )}
+
+            </div>
+
+          </div>
+        );
+      })}
+
+    </div>
+
+    {/* ================= ADD NEW PLAN ================= */}
+    <div className="mt-4 border-t pt-4">
+
+      <div className="flex gap-2">
+
+        <input
+          type="text"
+          placeholder="Add new plan (Basic, Pro...)"
+          value={newPlanName}
+          onChange={(e) => setNewPlanName(e.target.value)}
+          className="border px-3 py-2 rounded w-full focus:outline-blue-400"
+        />
+
+        <button
+          onClick={handleCreatePlan}
+          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+        >
+          Add
+        </button>
+
+      </div>
+
+    </div>
+
+    {/* ================= ACTIONS ================= */}
+    <div className="flex justify-end gap-2 mt-5">
+
+      <button
+        onClick={() => setShowPlansModal(false)}
+        className="px-4 py-2 border rounded hover:bg-gray-100"
+      >
+        Cancel
+      </button>
+
+      <button
+        onClick={handleSavePlans}
+        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+      >
+        Save Changes
+      </button>
+
+    </div>
+
+  </Modal>
+)}
                     </div>
                 </div>
         </div>

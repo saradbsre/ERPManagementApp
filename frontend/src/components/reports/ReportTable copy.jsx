@@ -1,6 +1,7 @@
+// table with crud operations, filters, search, pagination, column selector, export, print etc. created at 2026-05-05 by Agalya (same as CTable but with report specific features like total row, cost calculation, print options etc.)
 import { useEffect, useState, useRef, act } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns  } from "../../api/api";
+import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter  } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -14,7 +15,6 @@ import { formatDateTime } from "../../utils/formatDateTime";
 import { formatDate } from "../../utils/formatDate";
 import { Currency } from "lucide-react";
 import DateTimeRangeFilter from "../DateRangeFilter";
-import DateOnlyFilter from "../DateOnlyFilter";
 
 
 const Modal = ({ title, children, onClose }) => (
@@ -34,7 +34,7 @@ const Modal = ({ title, children, onClose }) => (
 );
 
 
-export default function DynamicTablePage() {
+export default function ReportPage() {
     const { id } = useParams();
     const location = useLocation();
     const [isCreating, setIsCreating] = useState(false);
@@ -69,25 +69,22 @@ export default function DynamicTablePage() {
     const [printLogo, setPrintLogo] = useState(null);
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email;
-    const [providerPlansMap, setProviderPlansMap] = useState({});
-    const [providerPlans, setProviderPlans] = useState([]);
-    const [autoFilledFields, setAutoFilledFields] = useState({});
-    const [planManuallyChanged, setPlanManuallyChanged] = useState(false);
-    const [dateFilters, setDateFilters] = useState({});
-    const [activeDateFilter, setActiveDateFilter] = useState(null);
-    const [showSaveFilter, setShowSaveFilter] = useState(false);
-    const [saveFilterName, setSaveFilterName] = useState("");
-    const currentModule =  module;
-    const [savedTableColumns, setSavedTableColumns] = useState([]);
-    const [printModuleName, setPrintModuleName] = useState("");
-
+  const [createAmount, setCreateAmount] = useState("");
+const [createCurrency, setCreateCurrency] = useState("");
+const [showCreateModal, setShowCreateModal] = useState(false);
+const [providerPlansMap, setProviderPlansMap] = useState({});
+const [providerPlans, setProviderPlans] = useState([]);
+const [autoFilledFields, setAutoFilledFields] = useState({});
+const [planManuallyChanged, setPlanManuallyChanged] = useState(false);
+const [dateFilters, setDateFilters] = useState({});
+const [activeDateFilter, setActiveDateFilter] = useState(null);
+const [showSaveFilter, setShowSaveFilter] = useState(false);
+const [saveFilterName, setSaveFilterName] = useState("");
 
 const isFilterActive =
   search ||
-  filters?.length > 0 
- // Object.keys(dateFilters || {}).length > 0;
-
-//console.log("is filter active?", isFilterActive, { search, filters, dateFilters });
+  filters?.length > 0 ||
+  Object.keys(dateFilters || {}).length > 0;
 
 //const [newRow, setNewRow] = useState({});
 const formatCard = (value, columnName) => {
@@ -118,66 +115,19 @@ const normalize = (val) => {
   return val ?? "";
 };
 
-const getCurrentMonthRange = () => {
-  const now = new Date();
-
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-  return {
-    start: start.toISOString(),
-    end: end.toISOString(),
-  };
+const isCreditCardColumn = (colName = "") => {
+  const name = colName.toLowerCase();
+  const result =  (
+    name.includes("card") ||
+    name.includes("credit_card") ||
+    name.includes("card_number") ||
+    name.includes("card_no")
+  );
+  //console.log(`Checking if "${colName}" is a credit card column:`, result);
+  return result;
 };
 
-
-
-useEffect(() => {
-  if (!dateColumns.length) return;
-
-  const defaultRange = getCurrentMonthRange();
-
-  const initialFilters = {};
-
-  dateColumns.forEach(col => {
-    initialFilters[col.column_name] = defaultRange;
-  });
-
-  setDateFilters(initialFilters);
-}, [columns]);
-
-const buildDatePayload = (df = dateFilters) => {
-  const payload = {};
-
-  Object.entries(df || {}).forEach(([key, range]) => {
-    if (range?.start && range?.end) {
-      payload[key] = {
-        start: range.start,
-        end: range.end
-      };
-    }
-  });
-
-  return payload;
-};
-
-const fetchCustomizedColumns = async () => {
-  try {
-    const res = await getCustomizedColumns(
-      currentModule?.module_id,
-      activeUserEmail
-    );
-
-    return res?.data?.data?.columns || [];
-
-  } catch (err) {
-    console.error("Failed to load customized columns:", err);
-    return [];
-  }
-};
-
-
-
+//console.log("Rendering CTable with columns:", columns);
 
 const handleSaveFilter = async () => {
   if (!saveFilterName.trim()) {
@@ -186,22 +136,21 @@ const handleSaveFilter = async () => {
   }
 
   const payload = {
-    filterName: saveFilterName.trim(),
-    userId: activeUser?.email,     // ✅ string only
-    module_id: currentModule?.module_id,    // ✅ IMPORTANT
-    filterData: {
+    filter_name: saveFilterName.trim(),
+    userid: activeUser?.email,
+    filters: JSON.stringify({
       search,
       filters,
       dateFilters
-    }
+    })
   };
+  console.log("Saving filter with payload:", payload);
 
-  //console.log("Saving filter:", payload);
-
-  await upsertSavedFilter(payload);
+  await upsertSavedFilter(payload.userid, saveFilterName.trim(), payload.filters);
 
   setSaveFilterName("");
   setShowSaveFilter(false);
+
   loadSavedFilters();
 };
 
@@ -273,7 +222,10 @@ useEffect(() => {
             r.trade_name || r.company_name || r.company || ""
         ).filter(Boolean))
     ];
-
+   // console.log("Company List:", companyList);
+    const [savedTableColumns, setSavedTableColumns] = useState(
+        JSON.parse(localStorage.getItem(`table_columns_${id}`) || "[]")
+    );
 
     const savePrintOptions = () => {
         localStorage.setItem("print_logo", printLogo || "");
@@ -297,7 +249,7 @@ useEffect(() => {
   setAutoFilledFields({});
 };
 
-const loadProviderPlans = async (providerId) => {
+    const loadProviderPlans = async (providerId) => {
   if (!providerId) {
     setProviderPlans([]);
     return;
@@ -443,8 +395,8 @@ const normalizeCreateColumns = (cols) => {
 ` : ``}
 
     <h2 style="text-align:center; margin-bottom:10px;">
-  ${printModuleName?.trim() || module?.display_name}
-</h2>
+      ${module?.display_name}
+    </h2>
     </div>
 
     <table>
@@ -604,7 +556,7 @@ const transformColumns = (mod, dataRows = []) => {
   try {
     const res = await fetchSections();
     const mod = res.data.find(m => m.module_id == id);
-    // console.log("Matched module:", mod);
+
     if (mod) {
       setModule(mod);
 
@@ -625,30 +577,18 @@ const transformColumns = (mod, dataRows = []) => {
 };
 
     // ================= LOAD DATA =================
-const loadData = async (overrideDateFilters) => {
-  setLoading(true);
-
-  const df = dateFilters;
-
-  const payload = {
-    search,
-    filters: JSON.stringify(filters || []),
-    dateFilters: JSON.stringify(buildDatePayload(df))
-  };
-
-  try {
-    const res = await getModuleData(id, activeUserEmail, payload);
-    setRows(res.data || []);
-  } catch (err) {
-    setRows([]);
-  } finally {
-    setLoading(false);
-  }
-};
-
-useEffect(() => {
-  loadData();
-}, [dateFilters, filters, search]);
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const res = await getModuleData(id,activeUserEmail);
+            setRows(res.data || []);
+           // console.log("Data loaded:", res.data || []);
+        } catch (err) {
+            setRows([]);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const loadCurrencies = async () => {
         try {
@@ -659,13 +599,13 @@ useEffect(() => {
         }
     };
 
-   useEffect(() => {
+    useEffect(() => {
         loadModule();
         loadData();
         loadCurrencies();
 
     }, [id]);
- 
+
 
 
    useEffect(() => {
@@ -797,9 +737,9 @@ const handleNewRowChange = (key, value, masterName) => {
   );
 
   const providerId = matched?.id;
-console.log("Selected provider ID:", providerId);
+
   if (providerId) {
-    //  reset manual flag when provider changes
+    // 🔥 reset manual flag when provider changes
     setPlanManuallyChanged(false);
 
     loadProviderPlans(providerId);
@@ -808,6 +748,7 @@ console.log("Selected provider ID:", providerId);
   // clear existing plan
   setNewRow(prev => ({
     ...prev,
+    plans: ""
   }));
 }
 };
@@ -825,10 +766,10 @@ useEffect(() => {
   // ✅ ONLY auto-select if user hasn't changed it
   if (!planManuallyChanged && mappedPlans.length > 0) {
     const firstPlan = mappedPlans[0];
-    console.log("Auto-selecting plan:", firstPlan);
+
     setNewRow(prev => ({
       ...prev,
-      plan_provider: firstPlan.value
+      plans: firstPlan.value
     }));
   }
 
@@ -974,15 +915,15 @@ useEffect(() => {
         return () => window.removeEventListener("click", close);
     }, []);
 
-    const handlePrint = (mode, savedCols = []) => {
-    const cols = getColumnsToUse(mode, savedCols);
+    const handlePrint = (mode) => {
+        const cols = getColumnsToUse(mode);
 
-    openPrintWindow({
-        content: generateTableHTML(cols),
-        userName: activeUser?.email || "User",
-    });
+        openPrintWindow({
+            content: generateTableHTML(cols),
+            userName: activeUser?.email || "User",
+        });
 
-    setShowPrintModal(false);
+        setShowPrintModal(false);
     };
 
 
@@ -1004,42 +945,22 @@ useEffect(() => {
         );
     };
 
-   const saveColumnSelection = async () => {
-  try {
-    // 1️⃣ Save locally (optional but fast UX)
-    // localStorage.setItem(
-    //   `table_columns_${id}`,
-    //   JSON.stringify(selectedColumns)
-    // );
+    const saveColumnSelection = () => {
+        // Save to the correct key for both saving and loading
+        localStorage.setItem(
+            `table_columns_${id}`,
+            JSON.stringify(selectedColumns)
+        );
+        setSavedTableColumns(selectedColumns); // Update state so "Saved" mode works immediately
+        setShowColumnSelector(false);
+        setTableColumnMode("custom"); // Switch to custom mode after saving
+    };
 
-    // 2️⃣ Save to DB
-    await upsertCustomizedColumns(
-      currentModule?.module_id,
-      activeUserEmail,
-      selectedColumns
-    );
-
-    // 3️⃣ Update state
-    setSavedTableColumns(selectedColumns);
-    setShowColumnSelector(false);
-    setTableColumnMode("custom");
-
-  } catch (err) {
-    console.error("Failed to save customized columns:", err);
-  }
-};
-
-   const getColumnsToUse = (mode, savedCols = []) => {
-  if (mode === "saved") {
-    return columns.filter(c =>
-      savedCols.includes(c.column_name)
-    );
-  }
-
-  if (mode === "default") return columns;
-
-  return columns;
-};
+    const getColumnsToUse = (mode) => {
+        if (mode === "saved") return columns.filter(c => selectedColumns.includes(c.column_name));
+        if (mode === "default") return columns;
+        return columns;
+    };
     // ================= SEARCH FILTER =================
     const filtered = applyFilters(rows, filters, columns);
 
@@ -1171,37 +1092,9 @@ useEffect(() => {
 
                 <div className="flex items-center gap-2">
 
-  {/* NEW */}
+
   
-  <PermissionButton
-    user={activeUser}
-    permission="add"
-//      onClick={() => {
-//     const empty = {};
-//     visibleColumns.forEach(col => {
-//       empty[col.column_name] = "";
-//     });
 
-//     setNewRow(empty);
-//     setShowCreateModal(true);
-//   }}
-onClick={handleCreate}
-    className="px-3 py-1.5 text-sm rounded-md bg-green-600 text-white 
-               hover:bg-green-700 hover:shadow-md transition"
-  >
-    + New
-  </PermissionButton>
-
-  {/* IMPORT */}
-  {/* <PermissionButton
-    user={activeUser}
-    permission="add"
-    onClick={() => setShowImportModal(true)}
-    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
-               hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
-  >
-    Import
-  </PermissionButton> */}
 
   {/* PRINT */}
   <PermissionButton
@@ -1288,17 +1181,7 @@ onClick={handleCreate}
   </div>
 )}
                  {/* ✅ DATE FILTER BUTTONS */}
- {dateColumns.map((col, i) => {
-  const filter = dateFilters?.[col.column_name];
-
-  const format = (date) =>
-    date ? new Date(date).toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric"
-    }) : "";
-
-  return (
+  {dateColumns.map((col, i) => (
     <button
       key={i}
       onClick={() =>
@@ -1308,18 +1191,9 @@ onClick={handleCreate}
       }
       className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
     >
-      <div className="flex flex-col items-start">
-        
-
-        {filter?.start && filter?.end && (
-          <span className="text-sm text-gray-600">
-            {col.display_name} Range: {format(filter.start)} - {format(filter.end)}
-          </span>
-        )}
-      </div>
+      {col.display_name}
     </button>
-  );
-})}
+  ))}
                 <button
                     onClick={() => setShowTableColumnModal(true)}
                     className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
@@ -1362,26 +1236,23 @@ onClick={handleCreate}
             </div>
             {activeDateFilter && (
   <div className="mb-4">
-<DateOnlyFilter
-  onApply={(range) => {
-    if (!range?.start || !range?.end) return;
+    <DateTimeRangeFilter
+      onApply={(range) => {
+        setDateFilters(prev => ({
+          ...prev,
+          [activeDateFilter]: range
+        }));
 
-    const updatedFilters = {
-      ...dateFilters,
-      [activeDateFilter]: {
-        start: range.start,
-        end: range.end,
-        source: "picker"
-      }
-    };
+        // OPTIONAL: API CALL
+        fetchLogs({
+          ...filters,
+          ...dateFilters,
+          [activeDateFilter]: range
+        });
 
-    setDateFilters(updatedFilters);
-    setActiveDateFilter(null);
-
-    // ✅ FORCE API CALL
-    loadData(updatedFilters);
-  }}
-/>
+        setActiveDateFilter(null);
+      }}
+    />
   </div>
 )}
 
@@ -1536,130 +1407,6 @@ onClick={handleCreate}
 
                         {/* TABLE BODY */}
                     <tbody className="divide-y">
-
-{/* ================= CREATE ROW ================= */}
-{isCreating && (
-  <tr className="bg-blue-50">
-    <td className="px-4 py-3 whitespace-nowrap"></td>
-
-    {visibleColumns.map((col) => {
-      const isMaster = !!col.master;
-      const isDate = col.data_type?.toLowerCase().includes("date");
-
-      // ✅ normalize value (IMPORTANT FIX)
-      const rawValue = newRow[col.column_name];
-     let value =
-  typeof rawValue === "object"
-    ? rawValue?.value ?? ""
-    : rawValue ?? "";
-
-// 🔐 CREDIT CARD MASKING (CREATE MODE)
-if (col.master === "credit_card" && value) {
-  const raw = String(value);
-  const last4 = raw.slice(-4);
-  value = `**** **** **** ${last4}`;
-}
-
-      return (
-        <td
-          key={col.column_id}
-          className={`px-4 py-2 ${getAlignClass(col.display_name)} whitespace-nowrap`}
-        >
-          <div className="relative">
-
-            <input
-              type={isDate ? "date" : "text"}
-              className="border px-2 py-1 rounded w-full"
-              value={
-                col.column_name === "total_amount_aed"
-                  ? newRow.total_amount_aed || ""
-                  : isDate
-                  ? formatForInput(value)
-                  : value
-              }
-              disabled={col.column_name === "total_amount_aed"} // ✅ readonly
-              onChange={(e) => {
-                let val = e.target.value;
-
-                if (isNumericColumn(col.column_name)) {
-                  val = handleNumericInput(val);
-                }
-
-                handleNewRowChange(col.column_name, val, col.master);
-
-                setAutoFilledFields(prev => ({
-                  ...prev,
-                  [col.column_name]: true
-                }));
-
-                if (col.column_name === "plans") {
-                  setPlanManuallyChanged(true);
-                }
-
-                setActiveDropdown(`create-${col.column_name}`);
-              }}
-              onFocus={() =>
-                isMaster && setActiveDropdown(`create-${col.column_name}`)
-              }
-              onBlur={() =>
-                setTimeout(() => setActiveDropdown(null), 150)
-              }
-            />
-
-            {/* MASTER DROPDOWN */}
-            {isMaster &&
-              activeDropdown === `create-${col.column_name}` && (
-                <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
-
-                  {getMasterOptions(col, value, newRow)
-                    .slice(0, 20)
-                    .map((val, i) => {
-                      const display =
-                        typeof val === "object" ? val.value : val;
-
-                      return (
-                        <div
-                          key={i}
-                          className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
-                          onMouseDown={() => {
-                            handleNewRowChange(
-                              col.column_name,
-                              display,
-                              col.master
-                            );
-
-                            setAutoFilledFields(prev => ({
-                              ...prev,
-                              [col.column_name]: true
-                            }));
-
-                            if (col.column_name === "plans") {
-                              setPlanManuallyChanged(true);
-                            }
-                          }}
-                        >
-                          {display}
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-
-          </div>
-        </td>
-      );
-    })}
-
-    {/* ACTIONS */}
-    <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
-      <button onClick={handleSave} className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-              hover:bg-blue-100 hover:border-blue-500 transition">Save</button>
-      <button onClick={handleCancel} className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-              hover:bg-red-100 hover:border-red-500 transition">Cancel</button>
-    </td>
-  </tr>
-)}
-
 {/* ================= DATA ROWS ================= */}
 {paginatedRows.map((row, i) => (
   <tr key={row.id ?? i} className="hover:bg-gray-50">
@@ -1675,17 +1422,10 @@ if (col.master === "credit_card" && value) {
 
       // ✅ normalize row value (CRITICAL FIX)
       const rawValue = row?.[col.column_name];
-      let value =
-  typeof rawValue === "object"
-    ? rawValue?.value ?? ""
-    : rawValue ?? "";
-
-// 🔐 CREDIT CARD MASKING (CREATE MODE)
-if (col.master === "credit_card" && value) {
-  const raw = String(value);
-  const last4 = raw.slice(-4);
-  value = `**** **** **** ${last4}`;
-}
+      const value =
+        typeof rawValue === "object"
+          ? rawValue?.value ?? "-"
+          : rawValue ?? "-";
 
       return (
         <td
@@ -1772,15 +1512,10 @@ if (col.master === "credit_card" && value) {
               }
 
               if (col.column_name.toLowerCase().includes("amount")) {
-                return value ? Number(value).toLocaleString() : "-";
+                return renderCellValue(value);
               }
-              if (col.master === "credit_card") {
-                const raw = String(value ?? "");
-                const last4 = raw.slice(-4);
-                return raw ? `**** **** **** ${last4}` : "-";
-                }
 
-              return typeof value === "object" ? value.value : value;
+              return renderCellValue(value);
 
             })()
           )}
@@ -1794,10 +1529,8 @@ if (col.master === "credit_card" && value) {
 
       {editRowId === row.id ? (
         <>
-          <button onClick={handleSaveEdit} className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-              hover:bg-blue-100 hover:border-blue-500 transition">Save</button>
-          <button onClick={handleCancelEdit} className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-              hover:bg-red-100 hover:border-red-500 transition">Cancel</button>
+          <button onClick={handleSaveEdit} className="btn btn-blue">Save</button>
+          <button onClick={handleCancelEdit} className="btn btn-red">Cancel</button>
         </>
       ) : (
         <>
@@ -1809,8 +1542,7 @@ if (col.master === "credit_card" && value) {
               setEditRow(row);
               setOriginalRow(row);
             }}
-            className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-              hover:bg-blue-100 hover:border-blue-500 transition"
+            className="btn btn-blue"
           >
             Edit
           </PermissionButton>
@@ -1819,8 +1551,7 @@ if (col.master === "credit_card" && value) {
             user={activeUser}
             permission="delete"
             onClick={() => handleDelete(row)}
-           className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-              hover:bg-red-100 hover:border-red-500 transition"
+            className="btn btn-red"
           >
             Delete
           </PermissionButton>
@@ -1905,11 +1636,7 @@ if (col.master === "credit_card" && value) {
                                 </button>
 
                                 <button
-                                    onClick={async () => {
-                                    const savedCols = await fetchCustomizedColumns();
-
-                                    handlePrint("saved", savedCols); // ✅ pass directly
-                                    }}
+                                    onClick={() => handlePrint("saved")}
                                     className="btn btn-blue flex-1"
                                 >
                                     Saved
@@ -1925,7 +1652,7 @@ if (col.master === "credit_card" && value) {
                                     onClick={() => setShowPrintOptions(true)}
                                     className="btn btn-green flex-1"
                                 >
-                                     Header
+                                    Add Logo
                                 </button>
 
                             </div>
@@ -1944,11 +1671,7 @@ if (col.master === "credit_card" && value) {
                                 </button>
 
                                 <button
-                                     onClick={async () => {
-                                    const savedCols = await fetchCustomizedColumns();
-
-                                    handleExcel("saved", savedCols); // ✅ pass directly
-                                    }}
+                                    onClick={() => handleExcel("saved")}
                                     className="btn btn-blue flex-1"
                                 >
                                     Saved
@@ -1995,65 +1718,49 @@ if (col.master === "credit_card" && value) {
 
                         </Modal>
                     )}
-                   {showTableColumnModal && (
-  <Modal
-    title="Customize Columns"
-    onClose={() => setShowTableColumnModal(false)}
-  >
-    <div className="flex gap-3">
+                    {showTableColumnModal && (
+                        <Modal title="Customize Columns" onClose={() => setShowTableColumnModal(false)}>
 
-      {/* DEFAULT */}
-      <button
-        onClick={() => {
-          setTableColumnMode("default");
-          setSelectedColumns([]); // reset
-        }}
-        className="btn btn-gray flex-1"
-      >
-        Default
-      </button>
+                            <div className="flex gap-3">
 
-      {/* SAVED (DB or localStorage fallback) */}
-      <button
-        onClick={async () => {
-          try {
-            // preferred: API saved columns
-            const res = await getCustomizedColumns(currentModule?.module_id,
-      activeUserEmail);
+                                {/* DEFAULT */}
+                                <button
+                                    onClick={() => {
+                                        setTableColumnMode("default");
+                                    }}
+                                    className="btn btn-gray flex-1"
+                                >
+                                    Default
+                                </button>
 
-            if (res?.data?.data?.columns) {
-              setSavedTableColumns(res.data.data.columns);
-            } else {
-              setSavedTableColumns(saved);
-            }
+                                {/* SAVED */}
+                                <button
+                                    onClick={() => {
+                                        const saved = JSON.parse(localStorage.getItem(`table_columns_${id}`) || "[]");
+                                        setSavedTableColumns(saved);
+                                        setTableColumnMode("saved");
+                                    }}
+                                    className="btn btn-blue flex-1"
+                                >
+                                    Saved
+                                </button>
+                                {/* CUSTOM */}
+                                <button
+                                    onClick={() => {
+                                        setShowColumnSelector(true);
+                                        setTableColumnMode("custom"); // Optional, but keeps UI in sync
+                                    }}
+                                    className="btn btn-green flex-1"
+                                >
+                                    Customize
+                                </button>
 
-            setTableColumnMode("saved");
-          } catch (err) {
-            console.error(err);
-          }
-        }}
-        className="btn btn-blue flex-1"
-      >
-        Saved
-      </button>
+                            </div>
 
-      {/* CUSTOM */}
-      <button
-        onClick={() => {
-          setShowColumnSelector(true);
-          setTableColumnMode("custom");
 
-          // optional: preload existing config into selector
-          setSelectedColumns(savedTableColumns || []);
-        }}
-        className="btn btn-green flex-1"
-      >
-        Customize
-      </button>
 
-    </div>
-  </Modal>
-)}
+                        </Modal>
+                    )}
 
                     {showColumnSelector && (
                         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
@@ -2132,19 +1839,6 @@ if (col.master === "credit_card" && value) {
                                             </option>
                                         ))}
                                     </select>
-                                    <div className="mt-3">
-                                    <label className="block text-sm font-medium mb-1">
-                                        Module Name
-                                    </label>
-
-                                    <input
-                                        type="text"
-                                        className="w-full border p-2 rounded"
-                                        placeholder="Enter module name (optional)"
-                                        value={printModuleName}
-                                        onChange={(e) => setPrintModuleName(e.target.value)}
-                                    />
-                                    </div>
                                 </div>
 
                                 <div className="flex justify-end gap-2 mt-4">

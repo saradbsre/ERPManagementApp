@@ -5,6 +5,7 @@ const API = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  withCredentials: true,   // 🔥 ADD THIS
 });
 
 API.interceptors.request.use((config) => {
@@ -90,11 +91,16 @@ export const fetchSections = () => {
   return API.get("/sections");
 }
 
-export const getModuleData = (moduleId, activeUserEmail) => {
+export const getModuleData = (moduleId, activeUserEmail, filters = {}) => {
   return API.get(`/module-data/${moduleId}`, {
-    params: { activeUserEmail }
+    params: {
+      activeUserEmail,
+      search: filters.search || "",
+      filters: filters.filters || "[]",
+      dateFilters: filters.dateFilters || "{}"
+    }
   });
-}
+};
 
 export const createModuleRow = (moduleId, data, activeUserEmail) => {
   return API.post(`/module-data/${moduleId}`, data, {
@@ -202,15 +208,11 @@ export const getLogs = (params = {}) => {
 };
 
 export const logOut = () => {
-  const token = localStorage.getItem("token");
-
   return API.post(
     "/auth/logout",
     {},
     {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      withCredentials: true
     }
   );
 };
@@ -225,4 +227,67 @@ export const fetchForgotPasswordReqs = () => {
 
 export const resetPassword = (data) => {
   return API.post("/auth/reset-password", data);
+};
+
+export const saveProviderPlans = (data) => {
+  return API.post("/providers/plans", data);
+}
+
+export const getProviderPlans = (providerId) => {
+  return API.get(`/providers/${providerId}/plans`);
+}
+
+export const upsertSavedFilter = (payload) => {
+  return API.post(`/saved-filters/${payload.userId}`, payload);
+}
+
+export const getReportsName = (activeUserEmail, reportId) => {
+  return API.get("/reports", {
+    params: {
+      activeUserEmail,
+      reportId
+    }
+  });
+};
+
+export const getFilteredReports = (data) => {
+  return API.post("/reports/data", data);
+};
+
+export const getCustomizedColumns = (moduleId, activeUserEmail, reportId = null) => {
+  return API.get(`/custom-columns/${moduleId}`, {
+    params: {
+      module_id: moduleId,
+      user_id: activeUserEmail,
+      report_id: reportId
+    }
+  });
+};
+
+export const getReportCustomizedColumns = (reportId, activeUserEmail, moduleId = null) => {
+  return API.get(`/custom-columns/${reportId}`, {
+    params: {
+      module_id: moduleId,
+      user_id: activeUserEmail,
+      report_id: reportId
+    }
+  });
+};
+
+export const upsertCustomizedColumns = (moduleId, userId, columns, reportId = null) => {
+  return API.post(`/custom-columns/${moduleId}`, {
+    module_id: moduleId,
+    user_id: userId,
+    report_id: reportId,
+    columns
+  });
+};
+
+export const upsertReportCustomizedColumns = (reportId, userId, columns, moduleId = null) => {
+  return API.post(`/custom-columns/${reportId}`, {
+    module_id: moduleId,
+    user_id: userId,
+    report_id: reportId,
+    columns
+  });
 };

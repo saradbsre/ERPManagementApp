@@ -1,6 +1,8 @@
+// table with new popup madal and all currency columns
+
 import { useEffect, useState, useRef, act } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns  } from "../../api/api";
+import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -13,9 +15,6 @@ import PermissionButton from "../PermissionButton";
 import { formatDateTime } from "../../utils/formatDateTime";
 import { formatDate } from "../../utils/formatDate";
 import { Currency } from "lucide-react";
-import DateTimeRangeFilter from "../DateRangeFilter";
-import DateOnlyFilter from "../DateOnlyFilter";
-
 
 const Modal = ({ title, children, onClose }) => (
     <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
@@ -69,26 +68,9 @@ export default function DynamicTablePage() {
     const [printLogo, setPrintLogo] = useState(null);
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email;
-    const [providerPlansMap, setProviderPlansMap] = useState({});
-    const [providerPlans, setProviderPlans] = useState([]);
-    const [autoFilledFields, setAutoFilledFields] = useState({});
-    const [planManuallyChanged, setPlanManuallyChanged] = useState(false);
-    const [dateFilters, setDateFilters] = useState({});
-    const [activeDateFilter, setActiveDateFilter] = useState(null);
-    const [showSaveFilter, setShowSaveFilter] = useState(false);
-    const [saveFilterName, setSaveFilterName] = useState("");
-    const currentModule =  module;
-    const [savedTableColumns, setSavedTableColumns] = useState([]);
-    const [printModuleName, setPrintModuleName] = useState("");
-
-
-const isFilterActive =
-  search ||
-  filters?.length > 0 
- // Object.keys(dateFilters || {}).length > 0;
-
-//console.log("is filter active?", isFilterActive, { search, filters, dateFilters });
-
+  const [createAmount, setCreateAmount] = useState("");
+const [createCurrency, setCreateCurrency] = useState("");
+const [showCreateModal, setShowCreateModal] = useState(false);
 //const [newRow, setNewRow] = useState({});
 const formatCard = (value, columnName) => {
   if (!value) return "-";
@@ -113,106 +95,19 @@ const formatCard = (value, columnName) => {
   return `**** **** **** ${last4}`;
 };
 
-const normalize = (val) => {
-  if (typeof val === "object") return val?.value ?? "";
-  return val ?? "";
+const isCreditCardColumn = (colName = "") => {
+  const name = colName.toLowerCase();
+  const result =  (
+    name.includes("card") ||
+    name.includes("credit_card") ||
+    name.includes("card_number") ||
+    name.includes("card_no")
+  );
+  console.log(`Checking if "${colName}" is a credit card column:`, result);
+  return result;
 };
 
-const getCurrentMonthRange = () => {
-  const now = new Date();
-
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-  return {
-    start: start.toISOString(),
-    end: end.toISOString(),
-  };
-};
-
-
-
-useEffect(() => {
-  if (!dateColumns.length) return;
-
-  const defaultRange = getCurrentMonthRange();
-
-  const initialFilters = {};
-
-  dateColumns.forEach(col => {
-    initialFilters[col.column_name] = defaultRange;
-  });
-
-  setDateFilters(initialFilters);
-}, [columns]);
-
-const buildDatePayload = (df = dateFilters) => {
-  const payload = {};
-
-  Object.entries(df || {}).forEach(([key, range]) => {
-    if (range?.start && range?.end) {
-      payload[key] = {
-        start: range.start,
-        end: range.end
-      };
-    }
-  });
-
-  return payload;
-};
-
-const fetchCustomizedColumns = async () => {
-  try {
-    const res = await getCustomizedColumns(
-      currentModule?.module_id,
-      activeUserEmail
-    );
-
-    return res?.data?.data?.columns || [];
-
-  } catch (err) {
-    console.error("Failed to load customized columns:", err);
-    return [];
-  }
-};
-
-
-
-
-const handleSaveFilter = async () => {
-  if (!saveFilterName.trim()) {
-    alert("Filter name is required");
-    return;
-  }
-
-  const payload = {
-    filterName: saveFilterName.trim(),
-    userId: activeUser?.email,     // ✅ string only
-    module_id: currentModule?.module_id,    // ✅ IMPORTANT
-    filterData: {
-      search,
-      filters,
-      dateFilters
-    }
-  };
-
-  //console.log("Saving filter:", payload);
-
-  await upsertSavedFilter(payload);
-
-  setSaveFilterName("");
-  setShowSaveFilter(false);
-  loadSavedFilters();
-};
-
-useEffect(() => {
-  if (isFilterActive) {
-    setShowSaveFilter(true);
-  } else {
-    setShowSaveFilter(false);
-    setSaveFilterName("");
-  }
-}, [search, filters, dateFilters]);
+console.log("Rendering CTable with columns:", columns);
 
 const applyTermMultiplier = (value, term) => {
   if (!value) return 0;
@@ -222,7 +117,13 @@ const applyTermMultiplier = (value, term) => {
 };
 
 useEffect(() => {
-  if (!newRow.amount || !newRow.currency) return;
+  if (!newRow.amount || !newRow.currency) {
+    setNewRow(prev => ({
+      ...prev,
+      total_amount_aed: ""
+    }));
+    return;
+  }
 
   const calc = calculateCost(
     newRow.amount,
@@ -230,33 +131,13 @@ useEffect(() => {
     newRow.term
   );
 
-  if (calc === null) return;
+  if (!calc) return;
 
   setNewRow(prev => ({
     ...prev,
     total_amount_aed: calc.toFixed(2)
   }));
-
 }, [newRow.amount, newRow.currency, newRow.term]);
-
-useEffect(() => {
-  if (!editRowId) return;
-  if (!editRow.amount || !editRow.currency) return;
-
-  const calc = calculateCost(
-    editRow.amount,
-    editRow.currency,
-    editRow.term
-  );
-
-  if (calc === null) return;
-
-  setEditRow(prev => ({
-    ...prev,
-    total_amount_aed: calc.toFixed(2)
-  }));
-
-}, [editRow.amount, editRow.currency, editRow.term]);
 
  const formatForInput = (value) => {
   if (!value) return "";
@@ -273,7 +154,10 @@ useEffect(() => {
             r.trade_name || r.company_name || r.company || ""
         ).filter(Boolean))
     ];
-
+   // console.log("Company List:", companyList);
+    const [savedTableColumns, setSavedTableColumns] = useState(
+        JSON.parse(localStorage.getItem(`table_columns_${id}`) || "[]")
+    );
 
     const savePrintOptions = () => {
         localStorage.setItem("print_logo", printLogo || "");
@@ -281,36 +165,7 @@ useEffect(() => {
 
         setShowPrintOptions(false);
     };
-   
 
-       const handleCreate = () => {
-  setIsCreating(true);
-
-  const empty = {};
-  columns.forEach(col => {
-    empty[col.column_name] = "";
-  });
-
-  setNewRow(empty);
-
-  // ✅ RESET autofill tracking
-  setAutoFilledFields({});
-};
-
-const loadProviderPlans = async (providerId) => {
-  if (!providerId) {
-    setProviderPlans([]);
-    return;
-  }
-
-  try {
-    const res = await getProviderPlans(providerId);
-    setProviderPlans(res.data || []);
-  } catch (err) {
-    console.error("Failed to load provider plans:", err);
-    setProviderPlans([]);
-  }
-};
     
 
    const getVisibleColumns = () => {
@@ -443,8 +298,8 @@ const normalizeCreateColumns = (cols) => {
 ` : ``}
 
     <h2 style="text-align:center; margin-bottom:10px;">
-  ${printModuleName?.trim() || module?.display_name}
-</h2>
+      ${module?.display_name}
+    </h2>
     </div>
 
     <table>
@@ -519,9 +374,7 @@ const normalizeCreateColumns = (cols) => {
   `;
     };
     
-const dateColumns = visibleColumns.filter(col =>
-  col.data_type?.toLowerCase().includes("date")
-);
+
 const transformColumns = (mod, dataRows = []) => {
 
   let cols = mod?.columns || [];
@@ -551,7 +404,7 @@ const transformColumns = (mod, dataRows = []) => {
       name.includes("fc_") ||
       name.startsWith("fc_") ||
       name.includes("fcamount") ||
-     // name.includes("fc_amount") ||
+      name.includes("fc_amount") ||
         name.includes("currency") 
     );
   });
@@ -604,7 +457,7 @@ const transformColumns = (mod, dataRows = []) => {
   try {
     const res = await fetchSections();
     const mod = res.data.find(m => m.module_id == id);
-    // console.log("Matched module:", mod);
+
     if (mod) {
       setModule(mod);
 
@@ -613,10 +466,8 @@ const transformColumns = (mod, dataRows = []) => {
       const rowsData = dataRes.data || [];
       setRows(rowsData);
 
-      setColumns(
-  (mod?.columns || []).filter(c => c.is_active !== false)
-);// ✅ PASS ROWS HERE
-      //console.log("Module loaded:", rowsData);
+      transformColumns(mod, rowsData); // ✅ PASS ROWS HERE
+      console.log("Module loaded:", rowsData);
     }
 
   } catch (err) {
@@ -625,30 +476,18 @@ const transformColumns = (mod, dataRows = []) => {
 };
 
     // ================= LOAD DATA =================
-const loadData = async (overrideDateFilters) => {
-  setLoading(true);
-
-  const df = dateFilters;
-
-  const payload = {
-    search,
-    filters: JSON.stringify(filters || []),
-    dateFilters: JSON.stringify(buildDatePayload(df))
-  };
-
-  try {
-    const res = await getModuleData(id, activeUserEmail, payload);
-    setRows(res.data || []);
-  } catch (err) {
-    setRows([]);
-  } finally {
-    setLoading(false);
-  }
-};
-
-useEffect(() => {
-  loadData();
-}, [dateFilters, filters, search]);
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const res = await getModuleData(id,activeUserEmail);
+            setRows(res.data || []);
+            console.log("Data loaded:", res.data || []);
+        } catch (err) {
+            setRows([]);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const loadCurrencies = async () => {
         try {
@@ -659,93 +498,45 @@ useEffect(() => {
         }
     };
 
-   useEffect(() => {
+    useEffect(() => {
         loadModule();
         loadData();
         loadCurrencies();
 
     }, [id]);
- 
+
+    const handleCreate = () => {
+        setIsCreating(true);
+
+        const empty = {};
+        columns.forEach(col => {
+            empty[col.column_name] = "";
+        });
+
+        setNewRow(empty);
+    };
 
 
-   useEffect(() => {
-  if (!columns.length) return;
-
-  const uniqueMasters = new Set();
-
-  columns.forEach(c => {
-    if (c.master) uniqueMasters.add(c.master);
-    if (c.master1) uniqueMasters.add(c.master1);
-  });
-
-  uniqueMasters.forEach(async (master) => {
-    try {
-      const res = await getMasterValues(master);
-
-      setMasterDataMap(prev => ({
-        ...prev,
-        [master]: res.data.data || []
-      }));
-    } catch (err) {
-      console.error("Master fetch failed:", master, err);
-    }
-  });
-
-}, [columns]);
-
-const getMasterOptions = (col, searchText = "") => {
-  let options = [];
-
-  const master1 = col.master;
-  const master2 = col.master1;
-
-  // ================= 1️⃣ PICK CORRECT MASTER =================
-
-  // If only one master exists
-  if (master1 && !master2) {
-    options = masterDataMap[master1] || [];
-  } 
-  else if (!master1 && master2) {
-    options = masterDataMap[master2] || [];
-  } 
-  else if (master1 && master2) {
-    // BOTH EXISTS → DO NOT MERGE blindly
-
-    const name = (col.column_name || "").toLowerCase();
-
-    if (name.includes("plan")) {
-      options = masterDataMap["plans"] || [];
-    } 
-    else if (name.includes("provider")) {
-      options = masterDataMap["service_providers"] || [];
-    } 
-    else {
-      options = masterDataMap[master1] || [];
-    }
-  }
-
-  // ================= 2️⃣ FILTER PLANS BY PROVIDER =================
-  if (
-    (col.master === "plans" || col.column_name?.includes("plan")) &&
-    providerPlans?.length
-  ) {
-    const allowedIds = providerPlans.map(p => p.plan_id);
-
-    options = options.filter(p => allowedIds.includes(p.id));
-  }
-
-  // ================= 3️⃣ SEARCH =================
-  if (!searchText) return options;
-
-  const search = searchText.toString().toLowerCase();
-
-  return options.filter(v => {
-    const valStr = typeof v === "object" ? v.value : v;
-    return valStr?.toLowerCase().includes(search);
-  });
-};
+    useEffect(() => {
+        if (!columns.length) return;
 
 
+        const uniqueMasters = [...new Set(columns.map(c => c.master).filter(Boolean))];
+
+        uniqueMasters.forEach(async (master) => {
+            try {
+                const res = await getMasterValues(master);
+
+                setMasterDataMap(prev => ({
+                    ...prev,
+                    [master]: res.data.data || []
+                }));
+
+            } catch (err) {
+                console.error("Master fetch failed:", master, err);
+            }
+        });
+    }, [columns]);
    const getExchangeRate = (currencyCode) => {
   const list = currencies || [];
   const currency = list.find(
@@ -769,71 +560,71 @@ const calculateCost = (amount, currencyCode, term) => {
   return monthly;
 };
 
-const handleNewRowChange = (key, value, masterName) => {
-  setNewRow(prev => {
-    const updated = {
-      ...prev,
-      [key]: value
+    const handleNewRowChange = (key, value, masterName) => {
+        setNewRow(prev => {
+            const updated = {
+                ...prev,
+                [key]: value
+            };
+
+            // store billing cycle
+            if (masterName === "billing_cycle") {
+                sessionStorage.setItem("billing_cycle", value);
+                updated.term = value;
+            }
+
+            return updated;
+        });
     };
 
-    if (masterName === "billing_cycle") {
-      sessionStorage.setItem("billing_cycle", value);
-      updated.term = value;
-    }
+    useEffect(() => {
+        const amountFields = [
+            "amount_aed",
+            "amount_usd",
+            "amount_eur",
+            "amount_gbp"
+        ];
 
-    return updated;
-  });
+        let amount = 0;
+        let currency = "";
 
-  // ✅ provider change
- if (key === "service_providers") {
+        for (let key of amountFields) {
+            if (newRow[key]) {
+                amount = Number(newRow[key]);
+                currency = key.replace("amount_", "").toUpperCase();
+                break;
+            }
+        }
 
-  const providerValue =
-    typeof value === "object" ? value.value : value;
+        const billing =
+            newRow.term || sessionStorage.getItem("billing_cycle");
 
-  const masterList = masterDataMap?.[masterName] || [];
+        if (!amount || !currency || !billing) return;
 
-  const matched = masterList.find(item =>
-    (item.value || item).toLowerCase() === providerValue.toLowerCase()
-  );
+        const calc = calculateCost(amount, currency);
 
-  const providerId = matched?.id;
-console.log("Selected provider ID:", providerId);
-  if (providerId) {
-    //  reset manual flag when provider changes
-    setPlanManuallyChanged(false);
+       setNewRow(prev => ({
+  ...prev,
+  total_cost_aed: calc ? calc.toFixed(2) : ""
+}));
+    }, [
+        newRow.amount_aed,
+        newRow.amount_usd,
+        newRow.amount_eur,
+        newRow.amount_gbp,
+        newRow.term
+    ]);
+    useEffect(() => {
+        const savedBilling = sessionStorage.getItem("billing_cycle");
 
-    loadProviderPlans(providerId);
-  }
+        if (savedBilling) {
+            setNewRow(prev => ({
+                ...prev,
+                //billing_cycle: savedBilling
+            }));
+        }
+    }, []);
 
-  // clear existing plan
-  setNewRow(prev => ({
-    ...prev,
-  }));
-}
-};
-useEffect(() => {
-  if (!providerPlans?.length || !masterDataMap?.plans) return;
-
-  const planMaster = masterDataMap.plans;
-
-  const mappedPlans = providerPlans
-    .map(p => planMaster.find(m => m.id === p.plan_id))
-    .filter(Boolean);
-
-  setProviderPlansMap(mappedPlans);
-
-  // ✅ ONLY auto-select if user hasn't changed it
-  if (!planManuallyChanged && mappedPlans.length > 0) {
-    const firstPlan = mappedPlans[0];
-    console.log("Auto-selecting plan:", firstPlan);
-    setNewRow(prev => ({
-      ...prev,
-      plan_provider: firstPlan.value
-    }));
-  }
-
-}, [providerPlans, masterDataMap.plans]);
-  
    const handleSave = async () => {
     try {
         // Clone the newRow to avoid mutating state directly
@@ -841,7 +632,7 @@ useEffect(() => {
 
         // Set fcamt and currency from the form values
         if (payload.amount && payload.currency) {
-           // payload.fc_amount = payload.total_amount_aed;
+            payload.fc_amount = payload.total_amount_aed;
             payload.currency = payload.currency;
         }
 
@@ -974,15 +765,15 @@ useEffect(() => {
         return () => window.removeEventListener("click", close);
     }, []);
 
-    const handlePrint = (mode, savedCols = []) => {
-    const cols = getColumnsToUse(mode, savedCols);
+    const handlePrint = (mode) => {
+        const cols = getColumnsToUse(mode);
 
-    openPrintWindow({
-        content: generateTableHTML(cols),
-        userName: activeUser?.email || "User",
-    });
+        openPrintWindow({
+            content: generateTableHTML(cols),
+            userName: activeUser?.email || "User",
+        });
 
-    setShowPrintModal(false);
+        setShowPrintModal(false);
     };
 
 
@@ -1004,42 +795,22 @@ useEffect(() => {
         );
     };
 
-   const saveColumnSelection = async () => {
-  try {
-    // 1️⃣ Save locally (optional but fast UX)
-    // localStorage.setItem(
-    //   `table_columns_${id}`,
-    //   JSON.stringify(selectedColumns)
-    // );
+    const saveColumnSelection = () => {
+        // Save to the correct key for both saving and loading
+        localStorage.setItem(
+            `table_columns_${id}`,
+            JSON.stringify(selectedColumns)
+        );
+        setSavedTableColumns(selectedColumns); // Update state so "Saved" mode works immediately
+        setShowColumnSelector(false);
+        setTableColumnMode("custom"); // Switch to custom mode after saving
+    };
 
-    // 2️⃣ Save to DB
-    await upsertCustomizedColumns(
-      currentModule?.module_id,
-      activeUserEmail,
-      selectedColumns
-    );
-
-    // 3️⃣ Update state
-    setSavedTableColumns(selectedColumns);
-    setShowColumnSelector(false);
-    setTableColumnMode("custom");
-
-  } catch (err) {
-    console.error("Failed to save customized columns:", err);
-  }
-};
-
-   const getColumnsToUse = (mode, savedCols = []) => {
-  if (mode === "saved") {
-    return columns.filter(c =>
-      savedCols.includes(c.column_name)
-    );
-  }
-
-  if (mode === "default") return columns;
-
-  return columns;
-};
+    const getColumnsToUse = (mode) => {
+        if (mode === "saved") return columns.filter(c => selectedColumns.includes(c.column_name));
+        if (mode === "default") return columns;
+        return columns;
+    };
     // ================= SEARCH FILTER =================
     const filtered = applyFilters(rows, filters, columns);
 
@@ -1104,61 +875,7 @@ useEffect(() => {
        //console.log("Disable Others check for new row:", newRow, disableOthers);
     const disableEditOthers = hasAnyAmountValue(editRow, visibleColumns);
 
-useEffect(() => {
-  if (!isCreating) return; // only during create
 
-  visibleColumns.forEach(col => {
-    if (!col.master) return;
-
-    const key = col.column_name;
-
-    // ✅ skip if already auto-filled once
-    if (autoFilledFields[key]) return;
-
-    const options = getMasterOptions(col, newRow[key] || "");
-
-    if (options.length === 1) {
-      const val =
-        typeof options[0] === "object"
-          ? options[0].value
-          : options[0];
-
-      setNewRow(prev => ({
-        ...prev,
-        [key]: val
-      }));
-
-      // ✅ mark as auto-filled
-      setAutoFilledFields(prev => ({
-        ...prev,
-        [key]: true
-      }));
-    }
-  });
-}, [visibleColumns, masterDataMap, isCreating]);
-
-useEffect(() => {
-  if (!editRowId) return;
-
-  visibleColumns.forEach(col => {
-    if (!col.master) return;
-
-    const options = getMasterOptions(col, editRow[col.column_name] || "");
-
-    if (options.length === 1) {
-      const val = typeof options[0] === "object" ? options[0].value : options[0];
-
-      setEditRow(prev => {
-        if (prev[col.column_name] === val) return prev;
-
-        return {
-          ...prev,
-          [col.column_name]: val
-        };
-      });
-    }
-  });
-}, [editRow, editRowId, visibleColumns, masterDataMap]);
     return (
         <div className="h-full flex flex-col">
 
@@ -1176,16 +893,15 @@ useEffect(() => {
   <PermissionButton
     user={activeUser}
     permission="add"
-//      onClick={() => {
-//     const empty = {};
-//     visibleColumns.forEach(col => {
-//       empty[col.column_name] = "";
-//     });
+     onClick={() => {
+    const empty = {};
+    visibleColumns.forEach(col => {
+      empty[col.column_name] = "";
+    });
 
-//     setNewRow(empty);
-//     setShowCreateModal(true);
-//   }}
-onClick={handleCreate}
+    setNewRow(empty);
+    setShowCreateModal(true);
+  }}
     className="px-3 py-1.5 text-sm rounded-md bg-green-600 text-white 
                hover:bg-green-700 hover:shadow-md transition"
   >
@@ -1260,73 +976,18 @@ onClick={handleCreate}
                     setFilters={setFilters}
                     currencies={currencies}
                 />
-                {isFilterActive && (
-  <div className="flex items-center gap-2 ml-2 bg-gray-50 px-3 py-2 rounded-lg border">
-
-    {/* INPUT */}
-    <input
-      type="text"
-      placeholder="Enter filter name (required)"
-      value={saveFilterName}
-      onChange={(e) => setSaveFilterName(e.target.value)}
-      className="border px-2 py-1 rounded text-sm w-52"
-    />
-
-    {/* SAVE BUTTON */}
-    <button
-      onClick={handleSaveFilter}
-      disabled={!saveFilterName.trim()}
-      className={`px-3 py-1 rounded text-sm text-white ${
-        saveFilterName.trim()
-          ? "bg-blue-500 hover:bg-blue-600"
-          : "bg-gray-300 cursor-not-allowed"
-      }`}
-    >
-      Save As
-    </button>
-
-  </div>
-)}
-                 {/* ✅ DATE FILTER BUTTONS */}
- {dateColumns.map((col, i) => {
-  const filter = dateFilters?.[col.column_name];
-
-  const format = (date) =>
-    date ? new Date(date).toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric"
-    }) : "";
-
-  return (
-    <button
-      key={i}
-      onClick={() =>
-        setActiveDateFilter(
-          activeDateFilter === col.column_name ? null : col.column_name
-        )
-      }
-      className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
-    >
-      <div className="flex flex-col items-start">
-        
-
-        {filter?.start && filter?.end && (
-          <span className="text-sm text-gray-600">
-            {col.display_name} Range: {format(filter.start)} - {format(filter.end)}
-          </span>
-        )}
-      </div>
-    </button>
-  );
-})}
                 <button
                     onClick={() => setShowTableColumnModal(true)}
                     className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
                 >
                     Customize Columns
                 </button>
-               
+                {/* {console.log("masterTypes", columns.reduce((acc, col) => {
+    if (col.master) {
+      acc[col.master] = col.data_type;
+    }
+    return acc;
+  }, {}))} */}
 
                 {/* PAGINATION (LEFT SIDE LIKE YOU WANTED) */}
                 <div className="flex items-center gap-2 text-sm ml-4">
@@ -1360,156 +1021,120 @@ onClick={handleCreate}
 
 
             </div>
-            {activeDateFilter && (
-  <div className="mb-4">
-<DateOnlyFilter
-  onApply={(range) => {
-    if (!range?.start || !range?.end) return;
-
-    const updatedFilters = {
-      ...dateFilters,
-      [activeDateFilter]: {
-        start: range.start,
-        end: range.end,
-        source: "picker"
-      }
-    };
-
-    setDateFilters(updatedFilters);
-    setActiveDateFilter(null);
-
-    // ✅ FORCE API CALL
-    loadData(updatedFilters);
-  }}
-/>
-  </div>
-)}
 
             {/* ACTIVE FILTER CHIPS */}
             {/* ACTIVE FILTERS (2nd ROW UI) */}
             <div className="flex flex-wrap gap-2 mt-0 mb-4">
 
-  {filters.map((f, i) => {
+                {filters.map((f, i) => {
+                    const options =
+                        f.master === "currency"
+                            ? currencies.map(c => c.currency_code)
+                            : masterDataMap?.[f.master] || [];
 
-    const masterName = normalize(f.master);
+                    return (
+                        <div
+                            key={i}
+                            className="relative flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-3 py-1 shadow-sm"
+                        >
 
-    const options =
-      masterName === "currency"
-        ? currencies.map(c => c.currency_code)
-        : (masterDataMap?.[masterName] || []).map(normalize);
+                            {/* MASTER NAME */}
+                            <span className="text-sm font-medium text-gray-700">
+                                {f.master}
+                            </span>
 
-    const selectedValues = (f.values || []).map(normalize);
+                            {/* SELECTED VALUES */}
+                            <div className="flex gap-1 flex-wrap">
+                                {(f.values || []).map((val, idx) => (
+                                    <span
+                                        key={idx}
+                                        className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
+                                    >
+                                        {val}
+                                        <button
+                                            onClick={() => {
+                                                const updated = [...filters];
+                                                updated[i].values =
+                                                    updated[i].values.filter(v => v !== val);
+                                                setFilters(updated);
+                                            }}
+                                            className="text-blue-500 hover:text-red-500"
+                                        >
+                                            ✕
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
 
-    return (
-      <div
-        key={i}
-        className="relative flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-3 py-1 shadow-sm"
-      >
+                            {/* ADD BUTTON */}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenIndex(openIndex === i ? null : i);
+                                }}
+                                className="text-xs text-gray-500 hover:text-gray-700"
+                            >
+                                + Add
+                            </button>
 
-        {/* MASTER NAME */}
-        <span className="text-sm font-medium text-gray-700">
-          {masterName}
-        </span>
+                            {/* DROPDOWN */}
+                            {openIndex === i && (
+                                <div ref={el => (dropdownRefs.current[i] = el)}
+                                    className="absolute top-8 left-0 bg-white border rounded-lg shadow-lg w-56 max-h-60 overflow-auto z-50"
+                                    onClick={e => e.stopPropagation()}>
 
-        {/* SELECTED VALUES */}
-        <div className="flex gap-1 flex-wrap">
-          {selectedValues.map((val, idx) => (
-            <span
-              key={idx}
-              className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
-            >
-              {val}
-              <button
-                onClick={() => {
-                  const updated = [...filters];
+                                    {options.map((opt, idx) => {
+                                        const checked = (f.values || []).includes(opt);
 
-                  updated[i].values =
-                    updated[i].values
-                      .map(normalize)
-                      .filter(v => v !== val);
+                                        return (
+                                            <label
+                                                key={idx}
+                                                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={() => {
+                                                        const updated = [...filters];
 
-                  setFilters(updated);
-                }}
-                className="text-blue-500 hover:text-red-500"
-              >
-                ✕
-              </button>
-            </span>
-          ))}
-        </div>
+                                                        if (!updated[i].values) {
+                                                            updated[i].values = [];
+                                                        }
 
-        {/* ADD BUTTON */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpenIndex(openIndex === i ? null : i);
-          }}
-          className="text-xs text-gray-500 hover:text-gray-700"
-        >
-          + Add
-        </button>
+                                                        if (checked) {
+                                                            updated[i].values =
+                                                                updated[i].values.filter(v => v !== opt);
+                                                        } else {
+                                                            updated[i].values.push(opt);
+                                                        }
 
-        {/* DROPDOWN */}
-        {openIndex === i && (
-          <div
-            ref={el => (dropdownRefs.current[i] = el)}
-            className="absolute top-8 left-0 bg-white border rounded-lg shadow-lg w-56 max-h-60 overflow-auto z-50"
-            onClick={e => e.stopPropagation()}
-          >
+                                                        setFilters(updated);
+                                                    }}
+                                                />
 
-            {options.map((opt, idx) => {
-              const label = normalize(opt);
+                                                <span className="text-sm">{opt}</span>
+                                            </label>
+                                        );
+                                    })}
 
-              const checked = selectedValues.includes(label);
+                                </div>
+                            )}
 
-              return (
-                <label
-                  key={idx}
-                  className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => {
-                      const updated = [...filters];
+                            {/* REMOVE FILTER */}
+                            <button
+                                onClick={() =>
+                                    setFilters(filters.filter((_, index) => index !== i))
+                                }
+                                className="text-gray-400 hover:text-red-500 ml-1"
+                            >
+                                ✕
+                            </button>
 
-                      const current =
-                        (updated[i].values || []).map(normalize);
+                        </div>
+                    );
+                })}
 
-                      if (checked) {
-                        updated[i].values =
-                          current.filter(v => v !== label);
-                      } else {
-                        updated[i].values = [...current, label];
-                      }
-
-                      setFilters(updated);
-                    }}
-                  />
-
-                  <span className="text-sm">{label}</span>
-                </label>
-              );
-            })}
-
-          </div>
-        )}
-
-        {/* REMOVE FILTER */}
-        <button
-          onClick={() =>
-            setFilters(filters.filter((_, index) => index !== i))
-          }
-          className="text-gray-400 hover:text-red-500 ml-1"
-        >
-          ✕
-        </button>
-
-      </div>
-    );
-  })}
-
-</div>
+            </div>
 
 
             {/* ================= TABLE WRAPPER ================= */}
@@ -1535,128 +1160,185 @@ onClick={handleCreate}
                         </thead>
 
                         {/* TABLE BODY */}
-                    <tbody className="divide-y">
+                      <tbody className="divide-y">
 
 {/* ================= CREATE ROW ================= */}
 {isCreating && (
   <tr className="bg-blue-50">
     <td className="px-4 py-3 whitespace-nowrap"></td>
 
-    {visibleColumns.map((col) => {
-      const isMaster = !!col.master;
-      const isDate = col.data_type?.toLowerCase().includes("date");
+    {(() => {
+      let amountRendered = false;
 
-      // ✅ normalize value (IMPORTANT FIX)
-      const rawValue = newRow[col.column_name];
-     let value =
-  typeof rawValue === "object"
-    ? rawValue?.value ?? ""
-    : rawValue ?? "";
+      return visibleColumns.map((col) => {
 
-// 🔐 CREDIT CARD MASKING (CREATE MODE)
-if (col.master === "credit_card" && value) {
-  const raw = String(value);
-  const last4 = raw.slice(-4);
-  value = `**** **** **** ${last4}`;
-}
+        const isMaster = !!col.master;
+        const isDate = col.data_type?.toLowerCase().includes("date");
+        const isAmount =
+          col.data_type?.toLowerCase().includes("decimal") ||
+          col.data_type?.toLowerCase().includes("float") ||
+          col.column_name.toLowerCase().includes("amount");
 
-      return (
-        <td
-          key={col.column_id}
-          className={`px-4 py-2 ${getAlignClass(col.display_name)} whitespace-nowrap`}
-        >
-          <div className="relative">
+        // =========================
+        // ✅ SINGLE AMOUNT FIELD
+        // =========================
+        if (isAmount) {
+          if (amountRendered) return null;
 
-            <input
-              type={isDate ? "date" : "text"}
-              className="border px-2 py-1 rounded w-full"
-              value={
-                col.column_name === "total_amount_aed"
-                  ? newRow.total_amount_aed || ""
-                  : isDate
-                  ? formatForInput(value)
-                  : value
-              }
-              disabled={col.column_name === "total_amount_aed"} // ✅ readonly
-              onChange={(e) => {
-                let val = e.target.value;
+          amountRendered = true;
 
-                if (isNumericColumn(col.column_name)) {
-                  val = handleNumericInput(val);
+          return (
+            <td
+              key="amount-single"
+              className="px-4 py-2 whitespace-nowrap"
+            >
+              <div className="flex gap-2">
+
+                {/* AMOUNT INPUT */}
+                <input
+                  type="text"
+                  className="border px-2 py-1 rounded w-1/2"
+                  value={newRow.amount || ""}
+                  onChange={(e) => {
+                    let value = handleNumericInput(e.target.value);
+
+                    setNewRow(prev => ({
+                      ...prev,
+                      amount: value
+                    }));
+                  }}
+                />
+
+                {/* CURRENCY DROPDOWN */}
+                <select
+                  className="border px-2 py-1 rounded w-1/2"
+                  value={newRow.currency || ""}
+                  onChange={(e) => {
+                    setNewRow(prev => ({
+                      ...prev,
+                      currency: e.target.value
+                    }));
+                  }}
+                >
+                  <option value="">Currency</option>
+                  {currencies.map((c) => (
+                    <option
+                      key={c.currency_code}
+                      value={c.currency_code}
+                    >
+                      {c.currency_code}
+                    </option>
+                  ))}
+                </select>
+
+              </div>
+            </td>
+          );
+        }
+
+        // =========================
+        // NORMAL COLUMNS
+        // =========================
+        return (
+          <td
+            key={col.column_id}
+            className={`px-4 py-2 ${getAlignClass(col.display_name)} whitespace-nowrap`}
+          >
+            <div className="relative">
+
+              <input
+                type={isDate ? "date" : "text"}
+                className="border px-2 py-1 rounded w-full"
+                value={
+                  isDate
+                    ? formatForInput(newRow[col.column_name])
+                    : (formatCard(newRow[col.column_name], col.column_name) || "")
                 }
-
-                handleNewRowChange(col.column_name, val, col.master);
-
-                setAutoFilledFields(prev => ({
-                  ...prev,
-                  [col.column_name]: true
-                }));
-
-                if (col.column_name === "plans") {
-                  setPlanManuallyChanged(true);
+                disabled={
+                  isTotalField(col.column_name) ||
+                  (!isAmountField(col.column_name) && disableOthers)
                 }
+                onChange={(e) => {
+                  let value = e.target.value;
 
-                setActiveDropdown(`create-${col.column_name}`);
-              }}
-              onFocus={() =>
-                isMaster && setActiveDropdown(`create-${col.column_name}`)
-              }
-              onBlur={() =>
-                setTimeout(() => setActiveDropdown(null), 150)
-              }
-            />
+                  if (isNumericColumn(col.column_name)) {
+                    value = handleNumericInput(value);
+                  }
 
-            {/* MASTER DROPDOWN */}
-            {isMaster &&
-              activeDropdown === `create-${col.column_name}` && (
-                <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
+                  handleNewRowChange(
+                    col.column_name,
+                    value,
+                    col.master
+                  );
+                }}
+                onFocus={() =>
+                  setActiveDropdown(`create-${col.column_name}`)
+                }
+                onBlur={() =>
+                  setTimeout(() => setActiveDropdown(null), 150)
+                }
+              />
 
-                  {getMasterOptions(col, value, newRow)
-                    .slice(0, 20)
-                    .map((val, i) => {
-                      const display =
-                        typeof val === "object" ? val.value : val;
+              {/* =========================
+                  MASTER DROPDOWN (UNCHANGED)
+              ========================== */}
+              {isMaster &&
+                activeDropdown === `create-${col.column_name}` && (
+                  <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
 
-                      return (
+                    {(masterDataMap[col.master] || [])
+                      .filter(val =>
+                        val.toLowerCase().includes(
+                          (newRow[col.column_name] || "").toLowerCase()
+                        )
+                      )
+                      .slice(0, 20)
+                      .map((val, i) => (
                         <div
                           key={i}
                           className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
-                          onMouseDown={() => {
+                          onMouseDown={() =>
                             handleNewRowChange(
                               col.column_name,
-                              display,
+                              val,
                               col.master
-                            );
-
-                            setAutoFilledFields(prev => ({
-                              ...prev,
-                              [col.column_name]: true
-                            }));
-
-                            if (col.column_name === "plans") {
-                              setPlanManuallyChanged(true);
-                            }
-                          }}
+                            )
+                          }
                         >
-                          {display}
+                          {val}
                         </div>
-                      );
-                    })}
-                </div>
-              )}
+                      ))}
 
-          </div>
-        </td>
-      );
-    })}
+                  </div>
+                )}
 
-    {/* ACTIONS */}
+            </div>
+          </td>
+        );
+      });
+    })()}
+
+    {/* ================= ACTIONS ================= */}
     <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
-      <button onClick={handleSave} className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-              hover:bg-blue-100 hover:border-blue-500 transition">Save</button>
-      <button onClick={handleCancel} className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-              hover:bg-red-100 hover:border-red-500 transition">Cancel</button>
+
+      <button
+        onClick={handleSave}
+        className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
+        hover:bg-blue-100 hover:border-blue-500 transition"
+      >
+        Save
+      </button>
+
+      <button
+        onClick={handleCancel}
+        className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
+        hover:bg-red-100 hover:border-red-500 transition"
+      >
+        Cancel
+      </button>
+
     </td>
+
   </tr>
 )}
 
@@ -1669,135 +1351,143 @@ if (col.master === "credit_card" && value) {
     </td>
 
     {visibleColumns.map((col) => {
-      const isMaster = !!col.master;
-      const editKey = `edit-${row.id}-${col.column_name}`;
-      const isDate = col.data_type?.toLowerCase().includes("date");
+  const isMaster = !!col.master;
+  const editKey = `edit-${row.id}-${col.column_name}`;
 
-      // ✅ normalize row value (CRITICAL FIX)
-      const rawValue = row?.[col.column_name];
-      let value =
-  typeof rawValue === "object"
-    ? rawValue?.value ?? ""
-    : rawValue ?? "";
+  const isDate =
+    col.data_type?.toLowerCase().includes("date");
 
-// 🔐 CREDIT CARD MASKING (CREATE MODE)
-if (col.master === "credit_card" && value) {
-  const raw = String(value);
-  const last4 = raw.slice(-4);
-  value = `**** **** **** ${last4}`;
-}
+  const isAmount =
+    col.data_type?.toLowerCase().includes("decimal") ||
+    col.data_type?.toLowerCase().includes("float") ||
+    col.column_name.toLowerCase().includes("amount");
 
-      return (
-        <td
-          key={col.column_id}
-          className={`px-4 py-3 whitespace-nowrap ${getAlignClass(col.display_name)}`}
-        >
+  // extract currency from column name: "Amount (USD)"
+  const match = col.display_name?.match(/\(([^)]+)\)/);
+  const columnCurrency = match?.[1]; // USD, AED
 
-          {/* ================= EDIT MODE ================= */}
-          {editRowId === row.id ? (
-            <div className="relative">
+  const rowCurrency = row.currency; // from DB
 
-              <input
-                type={isDate ? "date" : "text"}
-                className="border px-2 py-1 rounded w-full"
-                value={
-                  col.column_name === "total_amount_aed"
-                    ? editRow.total_amount_aed || ""
-                    : isDate
-                    ? formatForInput(editRow[col.column_name])
-                    : (
-                        typeof editRow[col.column_name] === "object"
-                          ? editRow[col.column_name]?.value ?? ""
-                          : editRow[col.column_name] ?? ""
-                      )
-                }
-                disabled={col.column_name === "total_amount_aed"} // ✅ readonly
-                onChange={(e) => {
-                  let val = e.target.value;
+  return (
+    <td
+      key={col.column_id}
+      className={`px-4 py-3 whitespace-nowrap ${getAlignClass(col.display_name)}`}
+    >
 
-                  if (isNumericColumn(col.column_name)) {
-                    val = handleNumericInput(val);
-                  }
+      {/* ================= EDIT MODE ================= */}
+      {editRowId === row.id ? (
+        <div className="relative">
 
-                  setEditRow({
-                    ...editRow,
-                    [col.column_name]: val,
-                  });
+          <input
+            type={isDate ? "date" : "text"}
+            className="border px-2 py-1 rounded w-full"
+            value={
+              isDate
+                ? formatForInput(editRow[col.column_name])
+                : (formatCard(editRow[col.column_name], col.column_name) || "")
+            }
+            onChange={(e) => {
+              let value = e.target.value;
 
-                  setActiveDropdown(editKey);
-                }}
-                onFocus={() => setActiveDropdown(editKey)}
-                onBlur={() =>
-                  setTimeout(() => setActiveDropdown(null), 150)
-                }
-              />
+              if (isNumericColumn(col.column_name)) {
+                value = handleNumericInput(value);
+              }
 
-              {/* DROPDOWN */}
-              {isMaster && activeDropdown === editKey && (
-                <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
+              setEditRow({
+                ...editRow,
+                [col.column_name]: value,
+              });
+            }}
+            onFocus={() => setActiveDropdown(editKey)}
+            onBlur={() =>
+              setTimeout(() => setActiveDropdown(null), 150)
+            }
+          />
 
-                  {getMasterOptions(col, editRow[col.column_name] || "", editRow)
-                    .slice(0, 20)
-                    .map((val, i) => {
-                      const display =
-                        typeof val === "object" ? val.value : val;
+          {/* EDIT DROPDOWN */}
+          {isMaster && activeDropdown === editKey && (
+            <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
 
-                      return (
-                        <div
-                          key={i}
-                          className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
-                          onMouseDown={() =>
-                            setEditRow({
-                              ...editRow,
-                              [col.column_name]: display,
-                            })
-                          }
-                        >
-                          {display}
-                        </div>
-                      );
-                    })}
-
-                </div>
-              )}
+              {(masterDataMap[col.master] || [])
+                .filter(val =>
+                  val.toLowerCase().includes(
+                    (editRow[col.column_name] || "").toLowerCase()
+                  )
+                )
+                .slice(0, 20)
+                .map((val, i) => (
+                  <div
+                    key={i}
+                    className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
+                    onMouseDown={() =>
+                      setEditRow({
+                        ...editRow,
+                        [col.column_name]: val,
+                      })
+                    }
+                  >
+                    {val}
+                  </div>
+                ))}
 
             </div>
-          ) : (
-            (() => {
-
-              if (isDate) return formatDate(value);
-
-              if (col.column_name === "total_amount_aed") {
-                return value ? Number(value).toFixed(2) : "-";
-              }
-
-              if (col.column_name.toLowerCase().includes("amount")) {
-                return value ? Number(value).toLocaleString() : "-";
-              }
-              if (col.master === "credit_card") {
-                const raw = String(value ?? "");
-                const last4 = raw.slice(-4);
-                return raw ? `**** **** **** ${last4}` : "-";
-                }
-
-              return typeof value === "object" ? value.value : value;
-
-            })()
           )}
 
-        </td>
-      );
-    })}
+        </div>
+      ) : (
+        /* ================= VIEW MODE ================= */
+      (() => {
+  const value = row?.[col.column_name];
+
+  const isDate =
+    col.data_type?.toLowerCase().includes("date");
+
+  const isAmount =
+    col.column_name.toLowerCase().includes("amount");
+
+  // ================= DATE =================
+  if (isDate) {
+    return formatDate(value);
+  }
+
+  // ================= TOTAL AMOUNT (IMPORTANT FIX) =================
+  if (col.column_name === "total_amount_aed") {
+    return value ? Number(value).toFixed(2) : "-";
+  }
+
+  // ================= AMOUNT =================
+  if (isAmount) {
+    return value ?? "-";
+  }
+
+  return value ?? "-";
+})()
+      )}
+
+    </td>
+  );
+})}
 
     {/* ACTIONS */}
     <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
 
       {editRowId === row.id ? (
         <>
-          <button onClick={handleSaveEdit} className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-              hover:bg-blue-100 hover:border-blue-500 transition">Save</button>
-          <button onClick={handleCancelEdit} className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-              hover:bg-red-100 hover:border-red-500 transition">Cancel</button>
+          <button
+            onClick={handleSaveEdit}
+            className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
+            hover:bg-blue-100 hover:border-blue-500 transition"
+          >
+            Save
+          </button>
+
+          <button
+            onClick={handleCancelEdit}
+            className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
+            hover:bg-red-100 hover:border-red-500 transition"
+          >
+            Cancel
+          </button>
         </>
       ) : (
         <>
@@ -1810,7 +1500,7 @@ if (col.master === "credit_card" && value) {
               setOriginalRow(row);
             }}
             className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-              hover:bg-blue-100 hover:border-blue-500 transition"
+            hover:bg-blue-100 hover:border-blue-500 transition"
           >
             Edit
           </PermissionButton>
@@ -1819,8 +1509,8 @@ if (col.master === "credit_card" && value) {
             user={activeUser}
             permission="delete"
             onClick={() => handleDelete(row)}
-           className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-              hover:bg-red-100 hover:border-red-500 transition"
+            className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
+            hover:bg-red-100 hover:border-red-500 transition"
           >
             Delete
           </PermissionButton>
@@ -1905,11 +1595,7 @@ if (col.master === "credit_card" && value) {
                                 </button>
 
                                 <button
-                                    onClick={async () => {
-                                    const savedCols = await fetchCustomizedColumns();
-
-                                    handlePrint("saved", savedCols); // ✅ pass directly
-                                    }}
+                                    onClick={() => handlePrint("saved")}
                                     className="btn btn-blue flex-1"
                                 >
                                     Saved
@@ -1925,7 +1611,7 @@ if (col.master === "credit_card" && value) {
                                     onClick={() => setShowPrintOptions(true)}
                                     className="btn btn-green flex-1"
                                 >
-                                     Header
+                                    Add Logo
                                 </button>
 
                             </div>
@@ -1944,11 +1630,7 @@ if (col.master === "credit_card" && value) {
                                 </button>
 
                                 <button
-                                     onClick={async () => {
-                                    const savedCols = await fetchCustomizedColumns();
-
-                                    handleExcel("saved", savedCols); // ✅ pass directly
-                                    }}
+                                    onClick={() => handleExcel("saved")}
                                     className="btn btn-blue flex-1"
                                 >
                                     Saved
@@ -1995,65 +1677,49 @@ if (col.master === "credit_card" && value) {
 
                         </Modal>
                     )}
-                   {showTableColumnModal && (
-  <Modal
-    title="Customize Columns"
-    onClose={() => setShowTableColumnModal(false)}
-  >
-    <div className="flex gap-3">
+                    {showTableColumnModal && (
+                        <Modal title="Customize Columns" onClose={() => setShowTableColumnModal(false)}>
 
-      {/* DEFAULT */}
-      <button
-        onClick={() => {
-          setTableColumnMode("default");
-          setSelectedColumns([]); // reset
-        }}
-        className="btn btn-gray flex-1"
-      >
-        Default
-      </button>
+                            <div className="flex gap-3">
 
-      {/* SAVED (DB or localStorage fallback) */}
-      <button
-        onClick={async () => {
-          try {
-            // preferred: API saved columns
-            const res = await getCustomizedColumns(currentModule?.module_id,
-      activeUserEmail);
+                                {/* DEFAULT */}
+                                <button
+                                    onClick={() => {
+                                        setTableColumnMode("default");
+                                    }}
+                                    className="btn btn-gray flex-1"
+                                >
+                                    Default
+                                </button>
 
-            if (res?.data?.data?.columns) {
-              setSavedTableColumns(res.data.data.columns);
-            } else {
-              setSavedTableColumns(saved);
-            }
+                                {/* SAVED */}
+                                <button
+                                    onClick={() => {
+                                        const saved = JSON.parse(localStorage.getItem(`table_columns_${id}`) || "[]");
+                                        setSavedTableColumns(saved);
+                                        setTableColumnMode("saved");
+                                    }}
+                                    className="btn btn-blue flex-1"
+                                >
+                                    Saved
+                                </button>
+                                {/* CUSTOM */}
+                                <button
+                                    onClick={() => {
+                                        setShowColumnSelector(true);
+                                        setTableColumnMode("custom"); // Optional, but keeps UI in sync
+                                    }}
+                                    className="btn btn-green flex-1"
+                                >
+                                    Customize
+                                </button>
 
-            setTableColumnMode("saved");
-          } catch (err) {
-            console.error(err);
-          }
-        }}
-        className="btn btn-blue flex-1"
-      >
-        Saved
-      </button>
+                            </div>
 
-      {/* CUSTOM */}
-      <button
-        onClick={() => {
-          setShowColumnSelector(true);
-          setTableColumnMode("custom");
 
-          // optional: preload existing config into selector
-          setSelectedColumns(savedTableColumns || []);
-        }}
-        className="btn btn-green flex-1"
-      >
-        Customize
-      </button>
 
-    </div>
-  </Modal>
-)}
+                        </Modal>
+                    )}
 
                     {showColumnSelector && (
                         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
@@ -2132,19 +1798,6 @@ if (col.master === "credit_card" && value) {
                                             </option>
                                         ))}
                                     </select>
-                                    <div className="mt-3">
-                                    <label className="block text-sm font-medium mb-1">
-                                        Module Name
-                                    </label>
-
-                                    <input
-                                        type="text"
-                                        className="w-full border p-2 rounded"
-                                        placeholder="Enter module name (optional)"
-                                        value={printModuleName}
-                                        onChange={(e) => setPrintModuleName(e.target.value)}
-                                    />
-                                    </div>
                                 </div>
 
                                 <div className="flex justify-end gap-2 mt-4">
@@ -2169,7 +1822,218 @@ if (col.master === "credit_card" && value) {
 
                         </div>
                     )}
-                  
+                   {showCreateModal && (
+  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    <div className="bg-white w-[750px] max-h-[80vh] overflow-auto p-5 rounded-lg shadow-lg">
+
+      <h2 className="text-lg font-semibold mb-4">
+        Create Record
+      </h2>
+
+      <div className="grid grid-cols-2 gap-3">
+
+        {console.log("Rendering create row with columns:", visibleColumns)} {/* DEBUG LOG */}
+
+        {getCreateVisibleColumns().map((col) => {
+
+          const isMaster = !!col.master;
+
+          const isDate = col.data_type?.toLowerCase().includes("date");
+
+          const isAmount =
+            col.column_name.toLowerCase().includes("amount") &&
+            col.column_name.toLowerCase() !== "total_amount_aed";
+
+          const isTotalAmount =
+            col.column_name.toLowerCase() === "total_amount_aed";
+
+          // ================= AMOUNT FIELD =================
+          if (isAmount) {
+            return (
+              <div key={col.column_id} className="col-span-2 flex gap-2">
+
+                 {/* CURRENCY */}
+              <select
+  className="border px-2 py-1 rounded w-1/2"
+  value={newRow.currency || ""}
+  onChange={(e) => {
+  const currency = e.target.value;
+
+  setNewRow(prev => {
+    let total = prev.total_amount_aed;
+
+    if (prev.amount && currency) {
+  total = calculateCost(prev.amount, currency, prev.term);
+}
+
+    return {
+      ...prev,
+      currency,
+      total_amount_aed: total || ""
+    };
+  });
+}}
+>
+  <option value="">Select Currency</option>
+  {currencies.map(c => (
+    <option key={c.currency_code} value={c.currency_code}>
+      {c.currency_code}
+    </option>
+  ))}
+</select>
+
+                {/* AMOUNT */}
+                <input
+  type="text"
+  placeholder="Amount"
+  className="border px-2 py-1 rounded w-1/2"
+  value={newRow.amount || ""}
+ onChange={(e) => {
+  const value = handleNumericInput(e.target.value);
+
+  setNewRow(prev => {
+    const currency = prev.currency;
+
+    let total = prev.total_amount_aed;
+
+    if (value && currency) {
+  total = calculateCost(value, currency, prev.term);
+}
+
+    return {
+      ...prev,
+      amount: value,
+      total_amount_aed: total || ""
+    };
+  });
+}}
+/>
+
+               
+
+              </div>
+            );
+          }
+
+          // ================= TOTAL AMOUNT =================
+          if (isTotalAmount) {
+            return (
+              <div key={col.column_id} className="col-span-2">
+
+                <label className="text-xs text-gray-500">
+                  {col.display_name}
+                </label>
+
+                <input
+                  type="text"
+                  className="border px-2 py-1 rounded w-full bg-gray-100"
+                  value={newRow.total_amount_aed || ""}
+                  readOnly
+                />
+
+              </div>
+            );
+          }
+
+          // ================= NORMAL FIELD =================
+          // ================= NORMAL FIELD =================
+return (
+  <div key={col.column_id} className="relative">
+
+    <label className="text-xs text-gray-500">
+      {col.display_name}
+    </label>
+
+    <input
+  type={isDate ? "date" : "text"}
+  className="border px-2 py-1 rounded w-full"
+  value={
+  isCreditCardColumn(col.column_name)
+    ? (formatCard(newRow[col.column_name] || "")).replace(/\D/g, "")
+    : (newRow[col.column_name] || "")
+}
+  onChange={(e) => {
+    let value = e.target.value;
+
+    if (isCreditCardColumn(col.column_name)) {
+      value = value.replace(/\D/g, ""); // only numbers
+    }
+
+    if (isNumericColumn(col.column_name)) {
+      value = handleNumericInput(value);
+    }
+
+    handleNewRowChange(col.column_name, value, col.master);
+  }}
+  onFocus={() =>
+    isMaster && setActiveDropdown(`create-${col.column_name}`)
+  }
+  onBlur={() =>
+    setTimeout(() => setActiveDropdown(null), 150)
+  }
+/>
+
+    {/* ✅ MASTER DROPDOWN FIXED */}
+    {isMaster &&
+      activeDropdown === `create-${col.column_name}` && (
+        <div className="absolute z-50 bg-white border w-full max-h-40 overflow-auto shadow rounded">
+
+          {(masterDataMap[col.master] || [])
+            .filter(val =>
+              val.toLowerCase().includes(
+                (newRow[col.column_name] || "").toLowerCase()
+              )
+            )
+            .map((val, i) => (
+              <div
+                key={i}
+                className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
+                onMouseDown={() =>
+                  handleNewRowChange(
+                    col.column_name,
+                    val,
+                    col.master
+                  )
+                }
+              >
+                {val}
+              </div>
+            ))}
+
+        </div>
+    )}
+
+  </div>
+);
+        })}
+
+      </div>
+
+      {/* ACTIONS */}
+      <div className="flex justify-end gap-2 mt-5">
+
+        <button
+          onClick={() => setShowCreateModal(false)}
+          className="px-4 py-2 border rounded"
+        >
+          Cancel
+        </button>
+
+        <button
+          onClick={() => {
+            handleSave();
+            setShowCreateModal(false);
+          }}
+          className="px-4 py-2 bg-blue-600 text-white rounded"
+        >
+          Save
+        </button>
+
+      </div>
+
+    </div>
+  </div>
+)}
 
                 </div>
             </div>

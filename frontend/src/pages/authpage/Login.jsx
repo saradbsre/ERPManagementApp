@@ -26,30 +26,7 @@ export default function Login() {
     const [signupError, setSignupError] = useState({});
     const [checkingAuth, setCheckingAuth] = useState(true);
 
-    useEffect(() => {
-    const token = localStorage.getItem("token");
 
-    if (token) {
-        try {
-            const payload = JSON.parse(atob(token.split(".")[1]));
-
-            if (payload.exp * 1000 > Date.now()) {
-                navigate("/dashboard");
-                return;
-            } else {
-                localStorage.removeItem("token");
-                localStorage.removeItem("user");
-            }
-        } catch {
-            localStorage.removeItem("token");
-            localStorage.removeItem("user");
-        }
-    }
-
-    setCheckingAuth(false);
-}, []);
-
-if (checkingAuth) return null; // or spinner
 
 
     const handleLogin = async (e) => {
@@ -61,16 +38,19 @@ if (checkingAuth) return null; // or spinner
             const res = await loginUser({
                 email: username,
                 password: password,
+                withCredentials: true,
             });
 
             // save token
-            localStorage.setItem("token", res.data.token);
+            //localStorage.setItem("token", res.data.token);
 
             // save username for future autocomplete
              if (res.data.user) {
             localStorage.setItem("user", JSON.stringify(res.data.user));
+            window.dispatchEvent(new Event("storage"));
              }
-
+             console.log("Logged in user:", res.data.user);
+             console.log("going to dashboard...");
             // optional navigation
             navigate("/dashboard");
 
