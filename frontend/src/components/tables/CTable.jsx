@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, act } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns  } from "../../api/api";
+import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData  } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -80,6 +80,8 @@ export default function DynamicTablePage() {
     const currentModule =  module;
     const [savedTableColumns, setSavedTableColumns] = useState([]);
     const [printModuleName, setPrintModuleName] = useState("");
+    const [showPlanProviderPopup, setShowPlanProviderPopup] = useState(false);
+    const [pendingColumn, setPendingColumn] = useState(null);
 
 
 const isFilterActive =
@@ -176,7 +178,12 @@ const fetchCustomizedColumns = async () => {
   }
 };
 
-
+const addMasterValue = async (masterName, value) => { 
+    try { 
+        await addMasterData(masterName, { value }); 
+    } catch (err) { 
+        console.error("Master add failed:", err); } 
+    };
 
 
 const handleSaveFilter = async () => {
@@ -404,120 +411,307 @@ const normalizeCreateColumns = (cols) => {
 
   return [...rest,...ordered];
 };
-    const generateTableHTML = (cols = columns) => {
-        const logo = localStorage.getItem("print_logo");
-        const company = localStorage.getItem("print_company");
+   const toNumber = (val) => {
+  if (val === null || val === undefined || val === "") return 0;
 
-        // ================= TOTAL CALCULATION =================
-        const totals = {};
+  const n = Number(String(val).replace(/,/g, ""));
+  return isNaN(n) ? 0 : n;
+};
 
-        cols.forEach(col => {
-            const key = col.column_name.toLowerCase();
+const formatNumber = (val) => {
+  const num = toNumber(val);
 
-            if (
-                //   key.includes("amount") ||
-                //   key.includes("amt") ||
-                //   key.includes("price") ||
-                key.includes("total")
-            ) {
-                totals[col.column_name] = finalRows.reduce((sum, row) => {
-                    const val = parseFloat(
-                        (row[col.column_name] ?? 0).toString().replace(/,/g, "")
-                    );
-                    return sum + (isNaN(val) ? 0 : val);
-                }, 0);
-            }
-        });
+  return num.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
 
-        //    <div style="text-align:center; margin-bottom:15px;">
-        //       <img src="${logoUrl}" style="height:110px; object-fit:contain;" />
-        //     </div>
+const isNumericColumn = (col) => {
+  const name = col.column_name.toLowerCase();
+   console.log("Checking columns from raw data:", name);
+  return (
+    name.includes("amount") ||
+    name.includes("cost") ||
+    name.includes("price") ||
+    name.includes("total")
+  );
+};
 
-        // ================= HTML =================
-        return `
-  <div style="text-align:center; margin-bottom:10px;">
-   ${company ? `
-  <h1 style="font-size:24px; margin-bottom:5px;">
-    ${company}
-  </h1>
-` : ``}
+const isTotalColumn = (col) => {
+  const name = col.column_name.toLowerCase();
+   console.log("Checking columns from raw data:", name);
+  return (
+    name.includes("total")
+  );
+};
 
-    <h2 style="text-align:center; margin-bottom:10px;">
-  ${printModuleName?.trim() || module?.display_name}
-</h2>
+// SORT TOTAL LAST
+const sortColumns = (cols) => {
+    console.log("Sorting columns:", cols.map(c => c.column_name));
+  const normal = cols.filter(
+    c => !c.column_name.toLowerCase().includes("total")
+  );
+
+  const total = cols.filter(
+    c => c.column_name.toLowerCase().includes("total")
+  );
+
+  return [...normal, ...total];
+};
+
+const generateTableHTML = (cols = columns) => {
+
+  const company = localStorage.getItem("print_company");
+
+  // =====================================================
+  // DISTINCT CURRENCIES
+  // =====================================================
+  const currencies = [
+    ...new Set(
+      finalRows
+        .map(r => r.currency)
+        .filter(Boolean)
+    )
+  ];
+
+  // =====================================================
+  // REMOVE:
+  // 1. amount column
+  // 2. currency column
+  // =====================================================
+const normalCols = cols.filter(c => {
+
+  const name = c.column_name.toLowerCase();
+
+  // REMOVE ONLY PURE amount COLUMN
+  // KEEP total_amount_aed
+  return (
+    name !== "amount" &&
+    name !== "currency"
+  );
+
+});
+
+  
+  const currencyCols = currencies.map(cur => ({
+    column_name: `amount_${cur.toLowerCase()}`,
+    display_name: `AMOUNT (${cur.toUpperCase()})`,
+    currency: cur,
+    isDynamicCurrency: true
+  }));
+
+  // =====================================================
+  // FINAL COLUMNS
+  // =====================================================
+  const sortedCols = sortColumns([
+    ...normalCols,
+    ...currencyCols
+  ]);
+
+  // =====================================================
+  // TOTALS
+  // =====================================================
+  const totals = {};
+
+  sortedCols.forEach(col => {
+
+  // ONLY TOTAL COLUMNS
+  if (isTotalColumn(col)) {
+
+    totals[col.column_name] = finalRows.reduce((sum, row) => {
+      return sum + toNumber(row[col.column_name]);
+    }, 0);
+
+  }
+
+});
+
+  // =====================================================
+  // HTML
+  // =====================================================
+  return `
+
+    <div style="text-align:center; margin-bottom:10px;">
+
+      ${
+        company
+          ? `
+            <h1 style="font-size:24px; margin-bottom:5px;">
+              ${company}
+            </h1>
+          `
+          : ``
+      }
+
+      <h2 style="margin-bottom:10px;">
+        ${printModuleName?.trim() || module?.display_name}
+      </h2>
+
     </div>
 
-    <table>
+    <table
+      border="1"
+      cellspacing="0"
+      cellpadding="5"
+      style="width:100%; border-collapse:collapse;"
+    >
+
+      <!-- ================= HEADER ================= -->
+
       <thead>
+
         <tr>
+
           <th>S.No</th>
-          ${cols.map(c => `<th>${c.display_name}</th>`).join("")}
+
+          ${sortedCols.map(col => `
+            <th>${col.display_name}</th>
+          `).join("")}
+
         </tr>
+
       </thead>
+
+      <!-- ================= BODY ================= -->
 
       <tbody>
 
         ${finalRows.map((row, index) => `
+
           <tr>
-            <td class="text-center">${index + 1}</td>
 
-            ${cols.map((col, i) => {
-            const value = formatCard(row[col.column_name], col.column_name) ?? "-";
+            <td style="text-align:center">
+              ${index + 1}
+            </td>
 
-            // 1️⃣ First column → LEFT
-            if (i === 0) {
-                return `<td class="text-left">${value}</td>`;
-            }
+            ${sortedCols.map(col => {
 
-            // 2️⃣ Amount columns → RIGHT
-            if (
-                col.column_name.toLowerCase().includes("amount") ||
-                col.column_name.toLowerCase().includes("amt") ||
-                col.column_name.toLowerCase().includes("price") ||
-                col.column_name.toLowerCase().includes("total")
-            ) {
-                return `<td class="text-right">${value}</td>`;
-            }
+              let value = "";
 
-            // 3️⃣ Others → CENTER
-            return `<td class="text-center">${value}</td>`;
-        }).join("")}
+              // =========================================
+              // DYNAMIC CURRENCY COLUMN
+              // =========================================
+              if (col.isDynamicCurrency) {
+
+                if (row.currency === col.currency) {
+                  value = row.amount;
+                } else {
+                  value = "";
+                }
+
+              }
+
+              // =========================================
+              // NORMAL COLUMN
+              // =========================================
+              else {
+
+                const raw = row[col.column_name];
+
+                value =
+                  typeof raw === "object"
+                    ? raw?.value ?? ""
+                    : raw ?? "";
+
+              }
+
+              // =========================================
+              // DATE
+              // =========================================
+              if (
+                col.data_type?.toLowerCase().includes("date")
+              ) {
+
+                return `
+                  <td style="text-align:center">
+                    ${formatDate(value)}
+                  </td>
+                `;
+              }
+
+              // =========================================
+              // CREDIT CARD
+              // =========================================
+              if (col.master === "credit_card") {
+
+                const str = String(value);
+                const last4 = str.slice(-4);
+
+                return `
+                  <td style="text-align:center">
+                    **** **** **** ${last4}
+                  </td>
+                `;
+              }
+
+              // =========================================
+              // NUMBER / AMOUNT
+              // =========================================
+              if (
+                isNumericColumn(col) ||
+                col.isDynamicCurrency
+              ) {
+
+                return `
+                  <td style="text-align:right">
+                    ${
+                      value !== ""
+                        ? formatNumber(value)
+                        : ""
+                    }
+                  </td>
+                `;
+              }
+
+              // =========================================
+              // DEFAULT
+              // =========================================
+              return `
+                <td style="text-align:center">
+                  ${value || "-"}
+                </td>
+              `;
+
+            }).join("")}
 
           </tr>
+
         `).join("")}
 
         <!-- ================= TOTAL ROW ================= -->
+
         <tr style="font-weight:bold; background:#f5f5f5;">
-          <td class="text-center"></td>
 
-          ${cols.map((col, i) => {
-            const key = col.column_name;
+          <td style="text-align:center">
+            Total
+          </td>
 
-            // First column → "Total"
-            if (i === 0) {
-                return `<td class="text-left">Total</td>`;
-            }
+       ${sortedCols.map(col => {
 
-            // Numeric columns → show total
-            if (totals[key] !== undefined) {
-                return `<td class="text-right">
-                ${totals[key].toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
-                })}
-              </td>`;
-            }
+  // ONLY SHOW TOTAL FOR total COLUMNS
+  if (!isTotalColumn(col)) {
+    return `<td></td>`;
+  }
 
-            // Others → empty
-            return `<td></td>`;
-        }).join("")}
+  return `
+    <td style="text-align:right">
+      ${formatNumber(
+        totals[col.column_name] || 0
+      )}
+    </td>
+  `;
+
+}).join("")}
 
         </tr>
 
       </tbody>
+
     </table>
+
   `;
-    };
+};
     
 const dateColumns = visibleColumns.filter(col =>
   col.data_type?.toLowerCase().includes("date")
@@ -677,7 +871,7 @@ useEffect(() => {
     if (c.master) uniqueMasters.add(c.master);
     if (c.master1) uniqueMasters.add(c.master1);
   });
-
+  //console.log("Unique masters to fetch:", uniqueMasters);
   uniqueMasters.forEach(async (master) => {
     try {
       const res = await getMasterValues(master);
@@ -686,6 +880,7 @@ useEffect(() => {
         ...prev,
         [master]: res.data.data || []
       }));
+     // console.log(`Master data for ${master}:`, res.data.data || []);
     } catch (err) {
       console.error("Master fetch failed:", master, err);
     }
@@ -694,54 +889,86 @@ useEffect(() => {
 }, [columns]);
 
 const getMasterOptions = (col, searchText = "") => {
+
   let options = [];
 
   const master1 = col.master;
   const master2 = col.master1;
 
-  // ================= 1️⃣ PICK CORRECT MASTER =================
-
-  // If only one master exists
-  if (master1 && !master2) {
-    options = masterDataMap[master1] || [];
-  } 
-  else if (!master1 && master2) {
-    options = masterDataMap[master2] || [];
-  } 
-  else if (master1 && master2) {
-    // BOTH EXISTS → DO NOT MERGE blindly
-
-    const name = (col.column_name || "").toLowerCase();
-
-    if (name.includes("plan")) {
-      options = masterDataMap["plans"] || [];
-    } 
-    else if (name.includes("provider")) {
-      options = masterDataMap["service_providers"] || [];
-    } 
-    else {
-      options = masterDataMap[master1] || [];
-    }
+  // ================= 1️⃣ LOAD MASTER 1 =================
+  if (master1 && masterDataMap?.[master1]) {
+    options = [
+      ...options,
+      ...masterDataMap[master1]
+    ];
   }
 
-  // ================= 2️⃣ FILTER PLANS BY PROVIDER =================
+  // ================= 2️⃣ LOAD MASTER 2 =================
+  if (master2 && masterDataMap?.[master2]) {
+    options = [
+      ...options,
+      ...masterDataMap[master2]
+    ];
+  }
+
+ // ================= 3️⃣ REMOVE DUPLICATES =================
+ options = options.filter(
+   (item, index, self) =>
+     index === self.findIndex(
+       t =>
+         t.id === item.id &&
+         JSON.stringify(t) === JSON.stringify(item)
+     )
+ );
+
+
+
+  // ================= 4️⃣ FILTER PLANS BY PROVIDER =================
   if (
-    (col.master === "plans" || col.column_name?.includes("plan")) &&
+    (
+      col.master === "plans" ||
+      col.master1 === "plans" ||
+      col.column_name?.toLowerCase().includes("plan")
+    ) &&
     providerPlans?.length
   ) {
+
     const allowedIds = providerPlans.map(p => p.plan_id);
 
-    options = options.filter(p => allowedIds.includes(p.id));
+    options = options.filter(p => {
+
+      // keep providers always
+      if (!allowedIds.includes(p.id)) {
+
+        // allow providers
+        if (
+          masterDataMap?.service_providers?.some(
+            sp => sp.id === p.id
+          )
+        ) {
+          return true;
+        }
+      }
+
+      return allowedIds.includes(p.id);
+    });
   }
 
-  // ================= 3️⃣ SEARCH =================
+  // ================= 5️⃣ SEARCH FILTER =================
   if (!searchText) return options;
 
   const search = searchText.toString().toLowerCase();
 
   return options.filter(v => {
-    const valStr = typeof v === "object" ? v.value : v;
-    return valStr?.toLowerCase().includes(search);
+
+    const valStr =
+      typeof v === "object"
+        ? (v.value || v.provider_name || "")
+        : v;
+
+    return valStr
+      ?.toLowerCase()
+      .includes(search);
   });
 };
 
@@ -769,7 +996,10 @@ const calculateCost = (amount, currencyCode, term) => {
   return monthly;
 };
 
-const handleNewRowChange = (key, value, masterName) => {
+
+
+const handleNewRowChange = async (key, value, masterName) => {
+
   setNewRow(prev => {
     const updated = {
       ...prev,
@@ -784,32 +1014,89 @@ const handleNewRowChange = (key, value, masterName) => {
     return updated;
   });
 
-  // ✅ provider change
- if (key === "service_providers") {
+  // =========================
+  // PROVIDER HANDLING
+  // =========================
+  if (key === "service_providers") {
 
-  const providerValue =
-    typeof value === "object" ? value.value : value;
+    const providerValue =
+      typeof value === "object" ? value.value : value;
 
-  const masterList = masterDataMap?.[masterName] || [];
+    let masterList = [];
 
-  const matched = masterList.find(item =>
-    (item.value || item).toLowerCase() === providerValue.toLowerCase()
-  );
+    try {
+      const res = await getMasterData(
+        "service_providers",
+        activeUserEmail
+      );
 
-  const providerId = matched?.id;
-console.log("Selected provider ID:", providerId);
-  if (providerId) {
-    //  reset manual flag when provider changes
+      masterList = Array.isArray(res?.data)
+        ? res.data
+        : res?.data?.data || [];
+
+    } catch (err) {
+      masterList = masterDataMap?.[masterName] || [];
+    }
+
+    if (!masterList.length) {
+      masterList = masterDataMap?.[masterName] || [];
+    }
+
+    // =========================
+    // 1️⃣ GET PROVIDER ID
+    // =========================
+    const matched = masterList.find(item =>
+      (item.provider_name || item.value || "")
+        .toLowerCase()
+        .trim() === providerValue.toLowerCase().trim()
+    );
+
+    const providerId = matched?.providers || matched?.id;
+
+    console.log("✅ Provider ID:", providerId);
+
+    if (!providerId) return;
+
+    // =========================
+    // 2️⃣ IF: RESOLVE MASTER VALUE FIRST
+    // =========================
+    let providerLabel = '';
+
+    try {
+      const providerRes = await getMasterValues("providers");
+
+      const providerMaster =
+        providerRes?.data?.data ||
+        providerRes?.data ||
+        providerRes ||
+        [];
+
+      const selectedProvider = providerMaster.find(
+        item => String(item.id) === String(providerId)
+      );
+
+      providerLabel = selectedProvider?.value || '';
+
+      console.log("🔥 Resolved Provider:", selectedProvider);
+
+    } catch (err) {
+      console.error("Provider master fetch failed:", err);
+    }
+
+    // =========================
+    // 3️⃣ UPDATE UI (AFTER IF)
+    // =========================
+    setNewRow(prev => ({
+      ...prev,
+      plan_provider: providerLabel
+    }));
+
+    // =========================
+    // 4️⃣ FINAL STEP (ELSE LOGIC)
+    // =========================
     setPlanManuallyChanged(false);
-
     loadProviderPlans(providerId);
   }
-
-  // clear existing plan
-  setNewRow(prev => ({
-    ...prev,
-  }));
-}
 };
 useEffect(() => {
   if (!providerPlans?.length || !masterDataMap?.plans) return;
@@ -1105,14 +1392,13 @@ useEffect(() => {
     const disableEditOthers = hasAnyAmountValue(editRow, visibleColumns);
 
 useEffect(() => {
-  if (!isCreating) return; // only during create
+  if (!isCreating) return;
 
-  visibleColumns.forEach(col => {
+  visibleColumns.forEach((col) => {
     if (!col.master) return;
 
     const key = col.column_name;
 
-    // ✅ skip if already auto-filled once
     if (autoFilledFields[key]) return;
 
     const options = getMasterOptions(col, newRow[key] || "");
@@ -1123,42 +1409,48 @@ useEffect(() => {
           ? options[0].value
           : options[0];
 
-      setNewRow(prev => ({
+      setNewRow((prev) => ({
         ...prev,
         [key]: val
       }));
 
-      // ✅ mark as auto-filled
-      setAutoFilledFields(prev => ({
+      setAutoFilledFields((prev) => ({
         ...prev,
         [key]: true
       }));
     }
   });
-}, [visibleColumns, masterDataMap, isCreating]);
-
+}, [isCreating, visibleColumns, masterDataMap]);
 useEffect(() => {
   if (!editRowId) return;
 
-  visibleColumns.forEach(col => {
+  visibleColumns.forEach((col) => {
     if (!col.master) return;
 
-    const options = getMasterOptions(col, editRow[col.column_name] || "");
+    const key = col.column_name;
+
+    const options = getMasterOptions(
+      col,
+      editRow?.[key] || ""
+    );
 
     if (options.length === 1) {
-      const val = typeof options[0] === "object" ? options[0].value : options[0];
+      const val =
+        typeof options[0] === "object"
+          ? options[0].value
+          : options[0];
 
-      setEditRow(prev => {
-        if (prev[col.column_name] === val) return prev;
+      setEditRow((prev) => {
+        if (prev[key] === val) return prev;
 
         return {
           ...prev,
-          [col.column_name]: val
+          [key]: val
         };
       });
     }
   });
-}, [editRow, editRowId, visibleColumns, masterDataMap]);
+}, [editRowId, visibleColumns, masterDataMap]);
     return (
         <div className="h-full flex flex-col">
 
@@ -1545,6 +1837,7 @@ onClick={handleCreate}
     {visibleColumns.map((col) => {
       const isMaster = !!col.master;
       const isDate = col.data_type?.toLowerCase().includes("date");
+      const isAmount = col.data_type?.toLowerCase().includes("decimal")
 
       // ✅ normalize value (IMPORTANT FIX)
       const rawValue = newRow[col.column_name];
@@ -1598,52 +1891,115 @@ if (col.master === "credit_card" && value) {
 
                 setActiveDropdown(`create-${col.column_name}`);
               }}
-              onFocus={() =>
-                isMaster && setActiveDropdown(`create-${col.column_name}`)
-              }
-              onBlur={() =>
-                setTimeout(() => setActiveDropdown(null), 150)
-              }
+              onFocus={() => {
+                if (!isMaster) return;
+
+                if (col.column_name === "plan_provider") {
+                    setPendingColumn(col);
+                    setShowPlanProviderPopup(true);
+                    return;
+                }
+
+                setActiveDropdown(`create-${col.column_name}`);
+                }}
+              onBlur={(e) => {
+
+                if (isAmount && e.target.value !== "") {
+                    handleNewRowChange(
+                    col.column_name,
+                    Number(e.target.value).toFixed(2),
+                    col.master
+                    );
+                }
+
+                setTimeout(() => setActiveDropdown(null), 150);
+                }}
             />
 
             {/* MASTER DROPDOWN */}
-            {isMaster &&
-              activeDropdown === `create-${col.column_name}` && (
-                <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
+           {isMaster &&
+  activeDropdown === `create-${col.column_name}` && (() => {
 
-                  {getMasterOptions(col, value, newRow)
-                    .slice(0, 20)
-                    .map((val, i) => {
-                      const display =
-                        typeof val === "object" ? val.value : val;
+    const rawOptions = getMasterOptions(col, value, newRow).slice(0, 20);
 
-                      return (
-                        <div
-                          key={i}
-                          className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
-                          onMouseDown={() => {
-                            handleNewRowChange(
-                              col.column_name,
-                              display,
-                              col.master
-                            );
+    const filteredOptions = rawOptions.filter((val) => {
+      const display = typeof val === "object" ? val.value : val;
 
-                            setAutoFilledFields(prev => ({
-                              ...prev,
-                              [col.column_name]: true
-                            }));
+      return display
+        ?.toLowerCase()
+        .includes((value || "").toLowerCase());
+    });
 
-                            if (col.column_name === "plans") {
-                              setPlanManuallyChanged(true);
-                            }
-                          }}
-                        >
-                          {display}
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
+    const showAdd =
+      value &&
+      filteredOptions.length === 0;
+
+    return (
+      <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
+
+        {/* EXISTING OPTIONS */}
+        {filteredOptions.map((val, i) => {
+          const display = typeof val === "object" ? val.value : val;
+
+          return (
+            <div
+              key={i}
+              className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
+              onMouseDown={() => {
+                handleNewRowChange(
+                  col.column_name,
+                  display,
+                  col.master
+                );
+
+                setAutoFilledFields((prev) => ({
+                  ...prev,
+                  [col.column_name]: true
+                }));
+
+                if (col.column_name === "plans") {
+                  setPlanManuallyChanged(true);
+                }
+
+                setActiveDropdown(null);
+              }}
+            >
+              {display}
+            </div>
+          );
+        })}
+
+        {/* ➕ ADD NEW VALUE */}
+        {showAdd && (
+          <div
+            className="px-3 py-2 text-green-600 hover:bg-green-50 cursor-pointer border-t font-medium"
+            onMouseDown={async () => {
+              const newValue = value;
+
+              // 🔥 CALL API TO ADD MASTER
+              await addMasterValue(col.master, newValue);
+
+              handleNewRowChange(
+                col.column_name,
+                newValue,
+                col.master
+              );
+
+              setAutoFilledFields((prev) => ({
+                ...prev,
+                [col.column_name]: true
+              }));
+
+              setActiveDropdown(null);
+            }}
+          >
+            ➕ Add
+          </div>
+        )}
+
+      </div>
+    );
+  })()}
 
           </div>
         </td>
@@ -1672,6 +2028,7 @@ if (col.master === "credit_card" && value) {
       const isMaster = !!col.master;
       const editKey = `edit-${row.id}-${col.column_name}`;
       const isDate = col.data_type?.toLowerCase().includes("date");
+      const isAmount = col.data_type?.toLowerCase().includes("decimal");
 
       // ✅ normalize row value (CRITICAL FIX)
       const rawValue = row?.[col.column_name];
@@ -1727,9 +2084,18 @@ if (col.master === "credit_card" && value) {
                   setActiveDropdown(editKey);
                 }}
                 onFocus={() => setActiveDropdown(editKey)}
-                onBlur={() =>
-                  setTimeout(() => setActiveDropdown(null), 150)
+                onBlur={(e) => {
+
+                if (isAmount && e.target.value !== "") {
+
+                    setEditRow(prev => ({
+                    ...prev,
+                    [col.column_name]: Number(e.target.value).toFixed(2)
+                    }));
                 }
+
+                setTimeout(() => setActiveDropdown(null), 150);
+                }}
               />
 
               {/* DROPDOWN */}
@@ -1763,26 +2129,38 @@ if (col.master === "credit_card" && value) {
 
             </div>
           ) : (
-            (() => {
+           (() => {
 
-              if (isDate) return formatDate(value);
+  if (isDate) return formatDate(value);
 
-              if (col.column_name === "total_amount_aed") {
-                return value ? Number(value).toFixed(2) : "-";
-              }
+  if (col.column_name === "total_amount_aed") {
+    return value ? Number(value).toFixed(2) : "-";
+  }
 
-              if (col.column_name.toLowerCase().includes("amount")) {
-                return value ? Number(value).toLocaleString() : "-";
-              }
-              if (col.master === "credit_card") {
-                const raw = String(value ?? "");
-                const last4 = raw.slice(-4);
-                return raw ? `**** **** **** ${last4}` : "-";
-                }
+  // ✅ DECIMAL FORMAT
+  if (
+    col.data_type?.toLowerCase().includes("decimal") &&
+    value !== ""
+  ) {
+    return Number(value).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }
 
-              return typeof value === "object" ? value.value : value;
+  if (col.column_name.toLowerCase().includes("amount")) {
+    return value ? Number(value).toLocaleString() : "-";
+  }
 
-            })()
+  if (col.master === "credit_card") {
+    const raw = String(value ?? "");
+    const last4 = raw.slice(-4);
+    return raw ? `**** **** **** ${last4}` : "-";
+  }
+
+  return typeof value === "object" ? value.value : value;
+
+})()
           )}
 
         </td>
@@ -1960,6 +2338,12 @@ if (col.master === "credit_card" && value) {
                                 >
                                     Customize
                                 </button>
+                                <button
+                                    onClick={() => setShowPrintOptions(true)}
+                                    className="btn btn-green flex-1"
+                                >
+                                     Header
+                                </button>
 
                             </div>
 
@@ -1989,6 +2373,12 @@ if (col.master === "credit_card" && value) {
                                     className="btn btn-green flex-1"
                                 >
                                     Customize
+                                </button>
+                                <button
+                                    onClick={() => setShowPrintOptions(true)}
+                                    className="btn btn-green flex-1"
+                                >
+                                     Header
                                 </button>
 
                             </div>

@@ -192,9 +192,9 @@ const handleAddColumn = () => {
 
     updated[editIndex] = {
       ...column,
-      name: formatName(column.displayName)
+     // name: formatName(column.displayName)
     };
-
+    console.log("updated columns", updated)
     setColumns(updated);
     setEditIndex(null);
   }

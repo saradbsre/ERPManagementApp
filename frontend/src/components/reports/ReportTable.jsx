@@ -74,6 +74,7 @@ export default function ReportPage() {
     const [tableColumnMode, setTableColumnMode] = useState("default");
     const filter_name = report?.filter_name || "Custom Filter";
     const [isInitialized, setIsInitialized] = useState(false);
+    const [printModuleName, setPrintModuleName] = useState("");
     const masterList = [
         ...new Set(columns.map(c => c.master).filter(Boolean))
     ];
@@ -337,31 +338,95 @@ useEffect(() => {
    
     
 
-   const getVisibleColumns = () => {
-  let cols = columns;
+const getVisibleColumns = () => {
+  let cols = [...columns];
 
-  // ✅ APPLY CURRENCY FILTER ON COLUMNS
-  const currencyFilter = filters.find(f => f.master === "currency");
+  // ✅ distinct currencies
+  const distinctCurrencies = [
+    ...new Set(
+      rows
+        .map(r => (r.currency || "").toUpperCase())
+        .filter(Boolean)
+    )
+  ];
+
+  // ✅ remove currency column
+  cols = cols.filter(
+    c => c.column_name.toLowerCase() !== "currency"
+  );
+
+  const dynamicCols = [];
+
+  cols.forEach(col => {
+    const name = col.column_name.toLowerCase();
+
+    // ✅ amount/cost/price columns except total
+    const isCurrencyColumn =
+      (
+        name.includes("amount") ||
+        name.includes("cost") ||
+        name.includes("price")
+      ) &&
+      !name.includes("total");
+
+    if (isCurrencyColumn) {
+
+      distinctCurrencies.forEach(cur => {
+        dynamicCols.push({
+          ...col,
+          column_id: `${col.column_name}_${cur}`,
+          column_name: `${col.column_name}_${cur.toLowerCase()}`,
+          display_name: `${col.display_name} (${cur})`,
+          data_type: "decimal"
+        });
+      });
+
+    } else {
+      dynamicCols.push(col);
+    }
+  });
+
+  // ✅ move total columns to end
+  const normalCols = dynamicCols.filter(
+    c => !c.column_name.toLowerCase().includes("total")
+  );
+
+  const totalCols = dynamicCols.filter(
+    c => c.column_name.toLowerCase().includes("total")
+  );
+
+  cols = [...normalCols, ...totalCols];
+
+  // ✅ currency filter logic
+  const currencyFilter = filters.find(
+    f => f.master === "currency"
+  );
 
   if (currencyFilter && currencyFilter.values.length > 0) {
-    const selectedCurrencies = currencyFilter.values.map(v =>
-      v.toLowerCase()
-    );
+
+    const selectedCurrencies =
+      currencyFilter.values.map(v => v.toLowerCase());
 
     cols = cols.filter(col => {
+
       const name = col.column_name.toLowerCase();
 
-      // keep non-amount columns
-      if (!name.includes("amount")) return true;
+      // keep non currency columns
+      if (
+        !name.includes("_aed") &&
+        !name.includes("_usd") &&
+        !name.includes("_eur")
+      ) {
+        return true;
+      }
 
-      // keep only selected currency columns
       return selectedCurrencies.some(cur =>
-        name.includes(cur)
+        name.endsWith(`_${cur}`)
       );
     });
   }
 
-  // ✅ existing modes (keep your logic)
+  // ✅ saved/custom modes
   if (tableColumnMode === "saved") {
     cols = cols.filter(c =>
       savedTableColumns.includes(c.column_name)
@@ -379,120 +444,307 @@ useEffect(() => {
     const visibleColumns = getVisibleColumns();
 
 
-    const generateTableHTML = (cols = columns) => {
-        const logo = localStorage.getItem("print_logo");
-        const company = localStorage.getItem("print_company");
+   const toNumber = (val) => {
+  if (val === null || val === undefined || val === "") return 0;
 
-        // ================= TOTAL CALCULATION =================
-        const totals = {};
+  const n = Number(String(val).replace(/,/g, ""));
+  return isNaN(n) ? 0 : n;
+};
 
-        cols.forEach(col => {
-            const key = col.column_name.toLowerCase();
+const formatNumber = (val) => {
+  const num = toNumber(val);
 
-            if (
-                //   key.includes("amount") ||
-                //   key.includes("amt") ||
-                //   key.includes("price") ||
-                key.includes("total")
-            ) {
-                totals[col.column_name] = finalRows.reduce((sum, row) => {
-                    const val = parseFloat(
-                        (row[col.column_name] ?? 0).toString().replace(/,/g, "")
-                    );
-                    return sum + (isNaN(val) ? 0 : val);
-                }, 0);
-            }
-        });
+  return num.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
 
-        //    <div style="text-align:center; margin-bottom:15px;">
-        //       <img src="${logoUrl}" style="height:110px; object-fit:contain;" />
-        //     </div>
+const isNumericColumn = (col) => {
+  const name = col.column_name.toLowerCase();
+   console.log("Checking columns from raw data:", name);
+  return (
+    name.includes("amount") ||
+    name.includes("cost") ||
+    name.includes("price") ||
+    name.includes("total")
+  );
+};
 
-        // ================= HTML =================
-        return `
-  <div style="text-align:center; margin-bottom:10px;">
-   ${company ? `
-  <h1 style="font-size:24px; margin-bottom:5px;">
-    ${company}
-  </h1>
-` : ``}
+const isTotalColumn = (col) => {
+  const name = col.column_name.toLowerCase();
+   console.log("Checking columns from raw data:", name);
+  return (
+    name.includes("total")
+  );
+};
 
-    <h2 style="text-align:center; margin-bottom:10px;">
-      ${module?.display_name}
-    </h2>
+// SORT TOTAL LAST
+const sortColumns = (cols) => {
+    console.log("Sorting columns:", cols.map(c => c.column_name));
+  const normal = cols.filter(
+    c => !c.column_name.toLowerCase().includes("total")
+  );
+
+  const total = cols.filter(
+    c => c.column_name.toLowerCase().includes("total")
+  );
+
+  return [...normal, ...total];
+};
+
+const generateTableHTML = (cols = columns) => {
+
+  const company = localStorage.getItem("print_company");
+
+  // =====================================================
+  // DISTINCT CURRENCIES
+  // =====================================================
+  const currencies = [
+    ...new Set(
+      finalRows
+        .map(r => r.currency)
+        .filter(Boolean)
+    )
+  ];
+
+  // =====================================================
+  // REMOVE:
+  // 1. amount column
+  // 2. currency column
+  // =====================================================
+const normalCols = cols.filter(c => {
+
+  const name = c.column_name.toLowerCase();
+
+  // REMOVE ONLY PURE amount COLUMN
+  // KEEP total_amount_aed
+  return (
+    name !== "amount" &&
+    name !== "currency"
+  );
+
+});
+
+  
+  const currencyCols = currencies.map(cur => ({
+    column_name: `amount_${cur.toLowerCase()}`,
+    display_name: `AMOUNT (${cur.toUpperCase()})`,
+    currency: cur,
+    isDynamicCurrency: true
+  }));
+
+  // =====================================================
+  // FINAL COLUMNS
+  // =====================================================
+  const sortedCols = sortColumns([
+    ...normalCols,
+    ...currencyCols
+  ]);
+
+  // =====================================================
+  // TOTALS
+  // =====================================================
+  const totals = {};
+
+  sortedCols.forEach(col => {
+
+  // ONLY TOTAL COLUMNS
+  if (isTotalColumn(col)) {
+
+    totals[col.column_name] = finalRows.reduce((sum, row) => {
+      return sum + toNumber(row[col.column_name]);
+    }, 0);
+
+  }
+
+});
+
+  // =====================================================
+  // HTML
+  // =====================================================
+  return `
+
+    <div style="text-align:center; margin-bottom:10px;">
+
+      ${
+        company
+          ? `
+            <h1 style="font-size:24px; margin-bottom:5px;">
+              ${company}
+            </h1>
+          `
+          : ``
+      }
+
+      <h2 style="margin-bottom:10px;">
+        ${printModuleName?.trim() || module?.display_name}
+      </h2>
+
     </div>
 
-    <table>
+    <table
+      border="1"
+      cellspacing="0"
+      cellpadding="5"
+      style="width:100%; border-collapse:collapse;"
+    >
+
+      <!-- ================= HEADER ================= -->
+
       <thead>
+
         <tr>
+
           <th>S.No</th>
-          ${cols.map(c => `<th>${c.display_name}</th>`).join("")}
+
+          ${sortedCols.map(col => `
+            <th>${col.display_name}</th>
+          `).join("")}
+
         </tr>
+
       </thead>
+
+      <!-- ================= BODY ================= -->
 
       <tbody>
 
         ${finalRows.map((row, index) => `
+
           <tr>
-            <td class="text-center">${index + 1}</td>
 
-            ${cols.map((col, i) => {
-            const value = formatCard(row[col.column_name], col.column_name) ?? "-";
+            <td style="text-align:center">
+              ${index + 1}
+            </td>
 
-            // 1️⃣ First column → LEFT
-            if (i === 0) {
-                return `<td class="text-left">${value}</td>`;
-            }
+            ${sortedCols.map(col => {
 
-            // 2️⃣ Amount columns → RIGHT
-            if (
-                col.column_name.toLowerCase().includes("amount") ||
-                col.column_name.toLowerCase().includes("amt") ||
-                col.column_name.toLowerCase().includes("price") ||
-                col.column_name.toLowerCase().includes("total")
-            ) {
-                return `<td class="text-right">${value}</td>`;
-            }
+              let value = "";
 
-            // 3️⃣ Others → CENTER
-            return `<td class="text-center">${value}</td>`;
-        }).join("")}
+              // =========================================
+              // DYNAMIC CURRENCY COLUMN
+              // =========================================
+              if (col.isDynamicCurrency) {
+
+                if (row.currency === col.currency) {
+                  value = row.amount;
+                } else {
+                  value = "";
+                }
+
+              }
+
+              // =========================================
+              // NORMAL COLUMN
+              // =========================================
+              else {
+
+                const raw = row[col.column_name];
+
+                value =
+                  typeof raw === "object"
+                    ? raw?.value ?? ""
+                    : raw ?? "";
+
+              }
+
+              // =========================================
+              // DATE
+              // =========================================
+              if (
+                col.data_type?.toLowerCase().includes("date")
+              ) {
+
+                return `
+                  <td style="text-align:center">
+                    ${formatDate(value)}
+                  </td>
+                `;
+              }
+
+              // =========================================
+              // CREDIT CARD
+              // =========================================
+              if (col.master === "credit_card") {
+
+                const str = String(value);
+                const last4 = str.slice(-4);
+
+                return `
+                  <td style="text-align:center">
+                    **** **** **** ${last4}
+                  </td>
+                `;
+              }
+
+              // =========================================
+              // NUMBER / AMOUNT
+              // =========================================
+              if (
+                isNumericColumn(col) ||
+                col.isDynamicCurrency
+              ) {
+
+                return `
+                  <td style="text-align:right">
+                    ${
+                      value !== ""
+                        ? formatNumber(value)
+                        : ""
+                    }
+                  </td>
+                `;
+              }
+
+              // =========================================
+              // DEFAULT
+              // =========================================
+              return `
+                <td style="text-align:center">
+                  ${value || "-"}
+                </td>
+              `;
+
+            }).join("")}
 
           </tr>
+
         `).join("")}
 
         <!-- ================= TOTAL ROW ================= -->
+
         <tr style="font-weight:bold; background:#f5f5f5;">
-          <td class="text-center"></td>
 
-          ${cols.map((col, i) => {
-            const key = col.column_name;
+          <td style="text-align:center">
+            Total
+          </td>
 
-            // First column → "Total"
-            if (i === 0) {
-                return `<td class="text-left">Total</td>`;
-            }
+       ${sortedCols.map(col => {
 
-            // Numeric columns → show total
-            if (totals[key] !== undefined) {
-                return `<td class="text-right">
-                ${totals[key].toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
-                })}
-              </td>`;
-            }
+  // ONLY SHOW TOTAL FOR total COLUMNS
+  if (!isTotalColumn(col)) {
+    return `<td></td>`;
+  }
 
-            // Others → empty
-            return `<td></td>`;
-        }).join("")}
+  return `
+    <td style="text-align:right">
+      ${formatNumber(
+        totals[col.column_name] || 0
+      )}
+    </td>
+  `;
+
+}).join("")}
 
         </tr>
 
       </tbody>
+
     </table>
+
   `;
-    };
+};
     
 const dateColumns = visibleColumns.filter(col =>
   col.data_type?.toLowerCase().includes("date")
@@ -601,14 +853,37 @@ const dateColumns = visibleColumns.filter(col =>
 };
     // ================= SEARCH FILTER =================
     const finalRows = rows;
+   
+   const normalizedRows = rows.map(row => {
 
-    const normalizedRows = finalRows.map(row => {
-  const currency = (row.currency || "").toLowerCase();
+  const currency =
+    (row.currency || "").toLowerCase();
 
-  return {
-    ...row,
-    [`amount_${currency}`]: row.amount
+  const updatedRow = {
+    ...row
   };
+
+  columns.forEach(col => {
+
+    const name = col.column_name.toLowerCase();
+
+    const isCurrencyColumn =
+      (
+        name.includes("amount") ||
+        name.includes("cost") ||
+        name.includes("price")
+      ) &&
+      !name.includes("total");
+
+    if (isCurrencyColumn) {
+
+      updatedRow[
+  `${col.column_name}_${currency}`
+] = row[col.column_name] ?? "";
+    }
+  });
+
+  return updatedRow;
 });
 
     // console.log("ROWS:", rows.length);
@@ -1011,6 +1286,7 @@ const dateColumns = visibleColumns.filter(col =>
       const isMaster = !!col.master;
       const editKey = `edit-${row.id}-${col.column_name}`;
       const isDate = col.data_type?.toLowerCase().includes("date");
+      const isAmount = col.data_type?.toLowerCase().includes("decimal") 
 
       // ✅ normalize row value (CRITICAL FIX)
       const rawValue = row?.[col.column_name];
@@ -1068,21 +1344,57 @@ const dateColumns = visibleColumns.filter(col =>
 
             </div>
           ) : (
-            (() => {
+          (() => {
 
-              if (isDate) return formatDate(value);
+  const safeNumber = (val) => {
+    const num = Number(val);
+    return isNaN(num) ? null : num;
+  };
 
-              if (col.column_name === "total_amount_aed") {
-                return value ? Number(value).toFixed(2) : "-";
-              }
+  // ================= DATE =================
+  if (isDate) return formatDate(value);
 
-               if (col.column_name.toLowerCase().includes("amount")) {
-                return value ? Number(value).toLocaleString() : "-";
-              }
+  // ================= TOTAL =================
+  if (col.column_name === "total_amount_aed") {
+    const num = safeNumber(value);
+    return num !== null ? num.toFixed(2) : "-";
+  }
 
-              return typeof value === "object" ? value.value : value;
+  // ================= DECIMAL =================
+  if (col.data_type?.toLowerCase().includes("decimal")) {
+    const num = safeNumber(value);
 
-            })()
+    return num !== null
+      ? num.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        })
+      : "-";
+  }
+
+  // ================= AMOUNT FIELDS =================
+  if (col.column_name.toLowerCase().includes("amount")) {
+    const num = safeNumber(value);
+    return num !== null ? num.toLocaleString() : "-";
+  }
+
+  // ================= CREDIT CARD =================
+  if (col.master === "credit_card") {
+    const raw = String(value ?? "");
+    if (!raw) return "-";
+
+    const last4 = raw.slice(-4);
+    return `**** **** **** ${last4}`;
+  }
+
+  // ================= OBJECT HANDLING =================
+  if (typeof value === "object" && value !== null) {
+    return value.value ?? "-";
+  }
+
+  return value ?? "-";
+
+})()
           )}
 
         </td>
@@ -1187,7 +1499,7 @@ const dateColumns = visibleColumns.filter(col =>
                                     onClick={() => setShowPrintOptions(true)}
                                     className="btn btn-green flex-1"
                                 >
-                                    Add Logo
+                                  Header
                                 </button>
 
                             </div>
@@ -1221,7 +1533,12 @@ const dateColumns = visibleColumns.filter(col =>
                                 >
                                     Customize
                                 </button>
-
+                                <button
+                                    onClick={() => setShowPrintOptions(true)}
+                                    className="btn btn-green flex-1"
+                                >
+                                     Header
+                                </button>
                             </div>
 
                         </Modal>
@@ -1253,6 +1570,12 @@ const dateColumns = visibleColumns.filter(col =>
                                     className="btn btn-green flex-1"
                                 >
                                     Customize
+                                </button>
+                                <button
+                                    onClick={() => setShowPrintOptions(true)}
+                                    className="btn btn-green flex-1"
+                                >
+                                     Header
                                 </button>
 
                             </div>
@@ -1396,6 +1719,19 @@ const dateColumns = visibleColumns.filter(col =>
                                             </option>
                                         ))}
                                     </select>
+                                    <div className="mt-3">
+                                    <label className="block text-sm font-medium mb-1">
+                                        Module Name
+                                    </label>
+
+                                    <input
+                                        type="text"
+                                        className="w-full border p-2 rounded"
+                                        placeholder="Enter module name (optional)"
+                                        value={printModuleName}
+                                        onChange={(e) => setPrintModuleName(e.target.value)}
+                                    />
+                                    </div>
                                 </div>
 
                                 <div className="flex justify-end gap-2 mt-4">

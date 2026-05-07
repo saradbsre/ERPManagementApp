@@ -52,13 +52,14 @@ export default function MasterTablePage() {
     const [validationMessage, setValidationMessage] = useState("");
     const [validationType, setValidationType] = useState("success"); // success, error, warning
     const [showPlansModal, setShowPlansModal] = useState(false);
-const [selectedProvider, setSelectedProvider] = useState(null);
-const [allPlans, setAllPlans] = useState([]);
-const [selectedPlans, setSelectedPlans] = useState([]);
-const [newPlanName, setNewPlanName] = useState("");
-const [editingPlanId, setEditingPlanId] = useState(null);
-const [editingPlanName, setEditingPlanName] = useState("");
-
+    const [selectedProvider, setSelectedProvider] = useState(null);
+    const [allPlans, setAllPlans] = useState([]);
+    const [selectedPlans, setSelectedPlans] = useState([]);
+    const [newPlanName, setNewPlanName] = useState("");
+    const [editingPlanId, setEditingPlanId] = useState(null);
+    const [editingPlanName, setEditingPlanName] = useState("");
+    const [servicesList, setServicesList] = useState([]);
+    const [providersList, setProvidersList] = useState([]);
     const formatCard = (value, columnName) => {
   if (!value) return "";
 
@@ -218,6 +219,36 @@ const handleSavePlans = async () => {
     .toLowerCase()
     .includes(search.toLowerCase());
 });
+
+useEffect(() => {
+  const loadServices = async () => {
+    try {
+      const res = await getMasterData("services", activeUserEmail);
+
+      setServicesList(res?.data ||  []);
+      console.log("Loaded services:", res.data|| []);
+    } catch (err) {
+      console.error("Error loading services:", err);
+    }
+  };
+
+  loadServices();
+}, [activeUserEmail]);
+
+useEffect(() => {
+  const loadProviders = async () => {
+    try {
+      const res = await getMasterData("providers", activeUserEmail);
+
+      setProvidersList(res?.data ||  []);
+      console.log("Loaded providers:", res.data|| []);
+    } catch (err) {
+      console.error("Error loading providers:", err);
+    }
+  };
+
+  loadProviders();
+}, [activeUserEmail]);
 
 const handleSave = async () => {
   try {
@@ -456,7 +487,7 @@ useEffect(() => {
                                         </th>
                                     ))}
                                     {masterName === "service_providers" && (
-  <th className="px-4 py-3 text-center">Plans</th>
+  <th className="px-4 py-3 text-center">Plans / Providers</th>
 )}
                                     <th className="px-4 py-3 text-right">Actions</th>
                                 </tr>
@@ -496,7 +527,28 @@ useEffect(() => {
                   ${newRow[col.key] ? "translate-x-6" : ""}`}
               />
             </button>
-          ) : (
+          ) : isServiceMaster ? (
+  // SERVICES MASTER DROPDOWN
+  <div className="relative">
+    <select
+      className="border px-2 py-1 rounded w-full"
+      value={newRow[col.key] || ""}
+      onChange={e =>
+        setNewRow(prev => ({
+          ...prev,
+          [col.key]: e.target.value
+        }))
+      }
+    >
+      <option value="">Select Service</option>
+      {(servicesList || []).map((s, i) => (
+  <option key={i} value={s.id}>
+    {s.service_name}
+  </option>
+))}
+    </select>
+  </div>
+) : (
             <input
               type={isDate ? inputType : "text"}
               className={`border px-2 py-1 rounded w-full ${getAlignClass(col.key)}`}
@@ -566,13 +618,16 @@ useEffect(() => {
   return (
     <tr key={rowKey} className="border-b hover:bg-gray-50">
 
+      {/* ================= S.NO ================= */}
       <td className="px-4 py-3">
         {(page - 1) * pageSize + i + 1}
       </td>
 
+      {/* ================= DYNAMIC COLUMNS ================= */}
       {columns.map(col => {
         const isDate = isDateColumn(col);
         const isToggle = col.key.toLowerCase() === "is_active";
+        const isService = col.key.toLowerCase() === "services";
         const inputType = "date";
 
         return (
@@ -580,7 +635,32 @@ useEffect(() => {
 
             {/* ================= EDIT MODE ================= */}
             {editRowId === rowKey ? (
-              isToggle ? (
+
+              isService ? (
+
+                /* ===== SERVICES DROPDOWN ===== */
+                <select
+                  className="border px-2 py-1 rounded w-full"
+                  value={editRow[col.key] || ""}
+                  onChange={(e) =>
+                    setEditRow(prev => ({
+                      ...prev,
+                      [col.key]: e.target.value
+                    }))
+                  }
+                >
+                  <option value="">Select Service</option>
+
+                  {servicesList.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.service_name}
+                    </option>
+                  ))}
+                </select>
+
+              ) : isToggle ? (
+
+                /* ===== TOGGLE ===== */
                 <button
                   onClick={() =>
                     setEditRow(prev => ({
@@ -596,7 +676,10 @@ useEffect(() => {
                       ${editRow[col.key] ? "translate-x-6" : ""}`}
                   />
                 </button>
+
               ) : (
+
+                /* ===== INPUT ===== */
                 <input
                   type={isDate ? inputType : "text"}
                   className={`border px-2 py-1 rounded w-full ${getAlignClass(col.key)}`}
@@ -619,55 +702,101 @@ useEffect(() => {
                   }}
                 />
               )
+
             ) : (
+
               /* ================= VIEW MODE ================= */
               isToggle ? (
-                <span
-                  className={`px-2 py-1 text-xs rounded-full 
-                    ${row[col.key] ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-600"}`}
-                >
+                <span className={`px-2 py-1 text-xs rounded-full 
+                  ${row[col.key] ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-600"}`}>
                   {row[col.key] ? "Active" : "Inactive"}
                 </span>
+
               ) : isDate ? (
                 formatDate(row[col.key])
+
+              ) : isService ? (
+                servicesList.find(s => s.id == row[col.key])?.service_name || "-"
+
               ) : (
                 formatCard(row[col.key], col.key) || "-"
               )
+
             )}
 
           </td>
         );
       })}
 
-      {/* PLANS BUTTON */}
+      {/* ================= SERVICE ACTION COLUMN ================= */}
       {masterName === "service_providers" && (
         <td className="px-4 py-3 text-center">
-          <button
-            onClick={() => openPlansModal(row)}
-            className="px-2 py-1 text-xs rounded border border-blue-300 hover:bg-blue-100"
-          >
-            Manage
-          </button>
+
+          {/* ================= EDIT MODE ================= */}
+          {editRowId === rowKey ? (
+
+            <select
+              className="border px-2 py-1 text-xs rounded w-full"
+              value={editRow.providers || ""}
+              onChange={(e) =>
+                setEditRow(prev => ({
+                  ...prev,
+                  providers: e.target.value
+                }))
+              }
+            >
+              <option value="">Select Provider</option>
+
+              {providersList.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.provider_name}
+                </option>
+              ))}
+            </select>
+
+          ) : (
+
+            /* ================= VIEW MODE ================= */
+            <>
+              {Number(row.services) === 1 ? (
+
+                /* ===== MANAGE PLANS ===== */
+                <button
+                  onClick={() => openPlansModal(row)}
+                  className="px-2 py-1 text-xs rounded border border-blue-300 hover:bg-blue-100"
+                >
+                  Manage Plans
+                </button>
+
+              ) : (
+
+                /* ===== PROVIDER DISPLAY ===== */
+                <span className="text-sm text-black-700">
+                  {providersList.find(p => p.id == row.providers)?.provider_name || "-"}
+                </span>
+
+              )}
+            </>
+          )}
+
         </td>
       )}
 
-      {/* ACTIONS */}
+      {/* ================= ACTIONS ================= */}
       <td className="px-4 py-3 flex justify-end gap-2">
 
         {editRowId === rowKey ? (
           <>
             <button
               onClick={handleSaveEdit}
-              className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-              hover:bg-blue-100 hover:border-blue-500 transition"
+              className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white hover:bg-blue-100"
             >
               Save
             </button>
 
             <button
               onClick={handleCancelEdit}
-              className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-              hover:bg-red-100 hover:border-red-500 transition"
+              className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white hover:bg-red-100"
             >
               Cancel
             </button>
@@ -682,8 +811,7 @@ useEffect(() => {
                 setEditRow(row);
                 setOriginalRow(row);
               }}
-              className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-              hover:bg-blue-100 hover:border-blue-500 transition"
+              className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white hover:bg-blue-100"
             >
               Edit
             </PermissionButton>
@@ -692,8 +820,7 @@ useEffect(() => {
               user={activeUser}
               permission="delete"
               onClick={() => handleDelete(row)}
-              className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-              hover:bg-red-100 hover:border-red-500 transition"
+              className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white hover:bg-red-100"
             >
               Delete
             </PermissionButton>

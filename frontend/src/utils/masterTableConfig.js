@@ -19,7 +19,7 @@ const masterTableConfig = {
     columns: [
       { key: "provider_name", label: "Name", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
-      // { key: "services", label: "Services", data_type: "string" },
+      { key: "services", label: "Services", data_type: "string" },
     ]
   },
 

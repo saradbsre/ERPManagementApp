@@ -291,3 +291,10 @@ export const upsertReportCustomizedColumns = (reportId, userId, columns, moduleI
     columns
   });
 };
+
+export const addMasterData = (masterName,value) => {
+  return API.post(`/masters/${masterName}/add`, {
+    master_name: masterName,
+    value
+  });
+}

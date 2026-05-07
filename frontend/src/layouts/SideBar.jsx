@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { act, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { fetchSections, fetchMasters, getReportsName } from "../api/api";
 import {
@@ -45,7 +45,8 @@ export default function Sidebar() {
 
   const loadReportFilters = async () => {
     try {
-      const res = await getReportsName();
+      const activeUserEmail = User?.email || "";
+      const res = await getReportsName(activeUserEmail);
       setReports(res.data || []);
     } catch (err) {
       console.error(err);
