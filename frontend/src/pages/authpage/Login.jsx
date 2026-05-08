@@ -166,7 +166,7 @@ export default function Login() {
                 <div className="bg-white/20 backdrop-blur-xl p-8 rounded-xl shadow-xl w-full max-w-122 font-[Times_New_Roman]">
                     <div className="flex flex-col items-center mb-6">
                         {/* <img src={logo} alt="Logo" className="h-40 mb-4 rounded-xl" /> */}
-                        <h2 className="text-2xl font-bold text-black-900 font-[Libre_Baskerville]">{isSignup ? "SIGN UP" : "LOGIN"}</h2>
+                        <h2 className="text-xl font-bold text-white font-[Libre_Baskerville]">{isSignup ? "SIGN UP" : "LOGIN"}</h2>
                     </div>
 
                     <form
@@ -187,6 +187,7 @@ export default function Login() {
                                     <input
                                         type="email"
                                         value={username}
+                                        placeholder="Enter Email"
                                         onChange={(e) => setUsername(e.target.value)}
                                         className="w-full px-4 py-3 rounded bg-white text-gray-900"
                                     />
@@ -197,6 +198,7 @@ export default function Login() {
                                     <input
                                         type="password"
                                         value={password}
+                                        placeholder="Enter Password"
                                         onChange={(e) => setPassword(e.target.value)}
                                         className="w-full px-4 py-3 rounded bg-white text-gray-900"
                                     />

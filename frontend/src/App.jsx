@@ -11,6 +11,7 @@ import MasterTablePage from "./components/masters/MasterTable";
 import Approvals from "./components/admin/Approvals";
 import ForgotPassword from "./pages/authpage/ForgotPassword";
 import ReportPage from "./components/reports/ReportTable";
+import PaymentReqForm from "./pages/PaymentReqForm";
 
 import { useUser } from "./components/UserContext";
 
@@ -52,6 +53,7 @@ function App() {
             <Route path="/masters/:masterName" element={<MasterTablePage />} />
             <Route path="/admin/approvals" element={<Approvals />} />
             <Route path="/reports/:id" element={<ReportPage />} />
+            <Route path="/payment-req-form" element={<PaymentReqForm />} />
           </Route>
         </Route>
 

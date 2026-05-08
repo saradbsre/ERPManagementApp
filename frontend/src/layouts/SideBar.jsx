@@ -8,7 +8,9 @@ import {
   BookOpen,
   FolderKanban,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  FileBarChart2,   // ✅ Reports
+  FileText         // ✅ Forms
 } from "lucide-react";
 
 export default function Sidebar({
@@ -110,7 +112,7 @@ export default function Sidebar({
 
     {
       name: "Reports",
-      icon: <FolderKanban size={18} />,
+      icon: <FileBarChart2 size={18} />,
       children: reports.map((report) => ({
         key: `${report.id}_${report.filter_name}`,
         id: report.id,
@@ -119,6 +121,11 @@ export default function Sidebar({
         path: `/reports/${report.id}`,
       })),
     },
+    // {
+    //   name: "Payment Request Form",
+    //   icon: <FileText size={18} />,
+    //   path: "/payment-req-form",
+    // },
 
   ].filter(Boolean);
 
