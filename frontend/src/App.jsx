@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from "react-router-dom";
+
 import "./App.css";
 
 import Login from "./pages/authpage/Login";
@@ -12,68 +12,25 @@ import Approvals from "./components/admin/Approvals";
 import ForgotPassword from "./pages/authpage/ForgotPassword";
 import ReportPage from "./components/reports/ReportTable";
 
+import { useUser } from "./components/UserContext";
+
 function App() {
-  const [isAuth, setIsAuth] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  // check auth once on load
-useEffect(() => {
-  const userStr = localStorage.getItem("user");
-
-  try {
-    const user = JSON.parse(userStr);
-
-    // valid user check
-    const isValidUser =
-      user &&
-      typeof user === "object" &&
-      Object.keys(user).length > 0 &&
-      user.email;
-
-    setIsAuth(!!isValidUser);
-  } catch (err) {
-    setIsAuth(false);
-  }
-
-  setLoading(false);
-}, []);
-
-  // optional: auto sync when localStorage changes (logout/login in other tabs)
-  useEffect(() => {
-    const syncAuth = () => {
-      const userStr = localStorage.getItem("user");
-
-      try {
-        const user = JSON.parse(userStr);
-
-        // valid user check
-        const isValidUser =
-          user &&
-          typeof user === "object" &&
-          Object.keys(user).length > 0 &&
-          user.email;
-
-        setIsAuth(!!isValidUser);
-      } catch (err) {
-        setIsAuth(false);
-      }
-    };
-
-    window.addEventListener("storage", syncAuth);
-    return () => window.removeEventListener("storage", syncAuth);
-  }, []);
-
-  if (loading) return null; // or loader
+  // ✅ SINGLE SOURCE OF TRUTH
+  const { user } = useUser();
 
   return (
     <Router>
       <Routes>
 
-        {/* PUBLIC ROUTES */}
+        {/* ================= PUBLIC ROUTES ================= */}
         <Route
           path="/"
           element={
-            isAuth ? <Navigate to="/dashboard" replace /> : <Login />
+            user ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <Login />
+            )
           }
         />
 
@@ -82,10 +39,10 @@ useEffect(() => {
           element={<ForgotPassword />}
         />
 
-        {/* PROTECTED ROUTES */}
+        {/* ================= PROTECTED ROUTES ================= */}
         <Route
           element={
-            isAuth ? <Outlet /> : <Navigate to="/" replace />
+            user ? <Outlet /> : <Navigate to="/" replace />
           }
         >
           <Route element={<Layout />}>

@@ -542,6 +542,10 @@ const normalCols = cols.filter(c => {
     ...currencyCols
   ]);
 
+  const firstTotalIndex = sortedCols.findIndex(col =>
+  isTotalColumn(col)
+);
+
   // =====================================================
   // TOTALS
   // =====================================================
@@ -712,32 +716,36 @@ const normalCols = cols.filter(c => {
 
         `).join("")}
 
-        <!-- ================= TOTAL ROW ================= -->
+      <!-- ================= TOTAL ROW ================= -->
 
-        <tr style="font-weight:bold; background:#f5f5f5;">
+<tr style="font-weight:bold; background:#f5f5f5;">
 
-          <td style="text-align:center">
-            Total
-          </td>
+  <!-- S.No column -->
+  <td></td>
 
-       ${sortedCols.map(col => {
+  <!-- TOTAL LABEL (spans all non-total columns) -->
+  <td
+    colspan="${firstTotalIndex > 0 ? firstTotalIndex : 1}"
+    style="text-align:right"
+  >
+    TOTAL
+  </td>
 
-  // ONLY SHOW TOTAL FOR total COLUMNS
-  if (!isTotalColumn(col)) {
-    return `<td></td>`;
-  }
+  <!-- TOTAL VALUES -->
+  ${sortedCols.slice(firstTotalIndex).map(col => {
 
-  return `
-    <td style="text-align:right">
-      ${formatNumber(
-        totals[col.column_name] || 0
-      )}
-    </td>
-  `;
+    if (!isTotalColumn(col)) {
+      return `<td></td>`;
+    }
 
-}).join("")}
+    return `
+      <td style="text-align:right">
+        ${formatNumber(totals[col.column_name] || 0)}
+      </td>
+    `;
+  }).join("")}
 
-        </tr>
+</tr>
 
       </tbody>
 
@@ -750,15 +758,88 @@ const dateColumns = visibleColumns.filter(col =>
   col.data_type?.toLowerCase().includes("date")
 );
 
+const getExcelColumns = (mode) => {
+  const cols = getColumnsToUse(mode);
+
+  const currencies = [
+    ...new Set(finalRows.map(r => r.currency).filter(Boolean))
+  ];
+
+  // remove base amount + currency columns
+  const normalCols = cols.filter(c => {
+    const name = c.column_name.toLowerCase();
+    return name !== "amount" && name !== "currency";
+  });
+
+  const currencyCols = currencies.map(cur => ({
+    column_name: `amount_${cur.toLowerCase()}`,
+    display_name: `AMOUNT (${cur.toUpperCase()})`,
+    currency: cur,
+    isDynamicCurrency: true
+  }));
+
+  let finalCols = [...normalCols, ...currencyCols];
+
+  // sort total last
+  finalCols = sortColumns(finalCols);
+
+  return finalCols;
+};
 
 
+      const handleExcel = (mode) => {
+  const cols = getExcelColumns(mode);
 
-    const handleExcel = (mode) => {
-        const cols = getColumnsToUse(mode);
+  const company = localStorage.getItem("print_company") || "";
+  const moduleName =
+    printModuleName ||
+    localStorage.getItem("print_module_name") ||
+    module?.display_name;
 
-        exportToExcel(finalRows, cols, module?.display_name);
-       // console.log("display name:", module?.display_name);
+  const formattedRows = finalRows.map((row, index) => {
+    const newRow = {
+      SNo: index + 1
     };
+
+    cols.forEach(col => {
+
+      let value = "";
+
+      if (col.isDynamicCurrency) {
+        value =
+          row.currency === col.currency
+            ? row.amount
+            : "";
+      } else {
+        const raw = row[col.column_name];
+
+        value =
+          typeof raw === "object"
+            ? raw?.value ?? ""
+            : raw ?? "";
+      }
+
+      if (col.master === "credit_card") {
+        const str = String(value || "");
+        value = str ? `**** **** **** ${str.slice(-4)}` : "";
+      }
+
+      if (col.data_type?.toLowerCase().includes("date")) {
+        value = value ? new Date(value).toLocaleDateString() : "";
+      }
+
+      newRow[col.display_name] = value;
+    });
+
+    return newRow;
+  });
+
+  exportToExcel(
+    formattedRows,
+    cols.map(c => c.display_name),
+    `${moduleName}` // 👈 IMPORTANT
+  );
+};
 
     const handleExport = async () => {
         try {
@@ -897,22 +978,37 @@ const dateColumns = visibleColumns.filter(col =>
         page * pageSize
     );
 
-    const handlePdf = async (mode) => {
-        const cols = getColumnsToUse(mode);
+     const handlePdf = async (mode, customCols = null) => {
+        let cols;
+
+        if (customCols && Array.isArray(customCols)) {
+            cols = columns.filter(col =>
+                customCols.includes(col.column_name)
+            );
+        } else {
+            cols = getColumnsToUse(mode);
+        }
+
+        // ✅ GET PRINT SETTINGS
+        const company = selectedCompany || localStorage.getItem("print_company") || "";
+        const moduleTitle = printModuleName || module?.display_name;
 
         try {
             const res = await exportPdf({
                 rows: normalizedRows,
                 columns: cols,
-                userName: localStorage.getItem("username"),
-                moduleName: module?.display_name,
+                userName: activeUser?.email || "User",
+
+                // ✅ SEND BOTH TO BACKEND
+                moduleName: moduleTitle,
+                companyName: company,
             });
 
             const url = window.URL.createObjectURL(new Blob([res.data]));
 
             const link = document.createElement("a");
             link.href = url;
-            link.download = `${module?.display_name || "report"}.pdf`;
+            link.download = `${moduleTitle || "report"}.pdf`;
 
             document.body.appendChild(link);
             link.click();
@@ -926,6 +1022,24 @@ const dateColumns = visibleColumns.filter(col =>
         }
     };
 
+
+    const numericColumns = visibleColumns.filter(col =>
+  col.column_name.toLowerCase().includes("total")
+);
+
+console.log("Numeric columns for totals:", numericColumns.map(c => c.column_name));
+
+const totals = {};
+
+numericColumns.forEach(col => {
+  totals[col.column_name] = paginatedRows.reduce((sum, row) => {
+    const raw = row?.[col.column_name];
+    const val = typeof raw === "object" ? raw?.value : raw;
+
+    const num = Number(String(val || 0).replace(/,/g, ""));
+    return sum + (isNaN(num) ? 0 : num);
+  }, 0);
+});
      
 
 
@@ -1404,7 +1518,46 @@ const dateColumns = visibleColumns.filter(col =>
   
 
   </tr>
+  
 ))}
+{/* ================= TOTAL ROW ================= */}
+<tr className="bg-gray-100 font-semibold">
+
+  {/* S.No column */}
+  <td className="px-4 py-3 whitespace-nowrap text-right">
+    TOTAL
+  </td>
+
+  {visibleColumns.map((col, idx) => {
+    const key = col.column_name.toLowerCase();
+
+    // const isNumeric =
+    //   key.includes("amount") ||
+    //   col.data_type?.toLowerCase().includes("decimal") ||
+    //   key.includes("total");
+
+    const isNumeric = key.includes("total");
+
+    if (!isNumeric) {
+      return <td key={idx}></td>;
+    }
+
+    const total = totals[col.column_name] || 0;
+
+    return (
+      <td
+        key={idx}
+        className={`px-4 py-3 whitespace-nowrap text-right`}
+      >
+        {total.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        })}
+      </td>
+    );
+  })}
+
+</tr>
 </tbody>
 
                     </table>

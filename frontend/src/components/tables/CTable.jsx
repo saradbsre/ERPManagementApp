@@ -460,6 +460,7 @@ const sortColumns = (cols) => {
   return [...normal, ...total];
 };
 
+
 const generateTableHTML = (cols = columns) => {
 
   const company = localStorage.getItem("print_company");
@@ -508,6 +509,10 @@ const normalCols = cols.filter(c => {
     ...normalCols,
     ...currencyCols
   ]);
+
+  const firstTotalIndex = sortedCols.findIndex(col =>
+  isTotalColumn(col)
+);
 
   // =====================================================
   // TOTALS
@@ -679,38 +684,70 @@ const normalCols = cols.filter(c => {
 
         `).join("")}
 
-        <!-- ================= TOTAL ROW ================= -->
+      <!-- ================= TOTAL ROW ================= -->
 
-        <tr style="font-weight:bold; background:#f5f5f5;">
+<tr style="font-weight:bold; background:#f5f5f5;">
 
-          <td style="text-align:center">
-            Total
-          </td>
+  <!-- S.No column -->
+  <td></td>
 
-       ${sortedCols.map(col => {
+  <!-- TOTAL LABEL (spans all non-total columns) -->
+  <td
+    colspan="${firstTotalIndex > 0 ? firstTotalIndex : 1}"
+    style="text-align:right"
+  >
+    TOTAL
+  </td>
 
-  // ONLY SHOW TOTAL FOR total COLUMNS
-  if (!isTotalColumn(col)) {
-    return `<td></td>`;
-  }
+  <!-- TOTAL VALUES -->
+  ${sortedCols.slice(firstTotalIndex).map(col => {
 
-  return `
-    <td style="text-align:right">
-      ${formatNumber(
-        totals[col.column_name] || 0
-      )}
-    </td>
-  `;
+    if (!isTotalColumn(col)) {
+      return `<td></td>`;
+    }
 
-}).join("")}
+    return `
+      <td style="text-align:right">
+        ${formatNumber(totals[col.column_name] || 0)}
+      </td>
+    `;
+  }).join("")}
 
-        </tr>
+</tr>
 
       </tbody>
 
     </table>
 
   `;
+};
+
+const getExcelColumns = (mode) => {
+  const cols = getColumnsToUse(mode);
+
+  const currencies = [
+    ...new Set(finalRows.map(r => r.currency).filter(Boolean))
+  ];
+
+  // remove base amount + currency columns
+  const normalCols = cols.filter(c => {
+    const name = c.column_name.toLowerCase();
+    return name !== "amount" && name !== "currency";
+  });
+
+  const currencyCols = currencies.map(cur => ({
+    column_name: `amount_${cur.toLowerCase()}`,
+    display_name: `AMOUNT (${cur.toUpperCase()})`,
+    currency: cur,
+    isDynamicCurrency: true
+  }));
+
+  let finalCols = [...normalCols, ...currencyCols];
+
+  // sort total last
+  finalCols = sortColumns(finalCols);
+
+  return finalCols;
 };
     
 const dateColumns = visibleColumns.filter(col =>
@@ -1206,12 +1243,60 @@ useEffect(() => {
         }
     };
 
-    const handleExcel = (mode) => {
-        const cols = getColumnsToUse(mode);
+   const handleExcel = (mode) => {
+  const cols = getExcelColumns(mode);
 
-        exportToExcel(finalRows, cols, module?.display_name);
-       // console.log("display name:", module?.display_name);
+  const company = localStorage.getItem("print_company") || "";
+  const moduleName =
+    printModuleName ||
+    localStorage.getItem("print_module_name") ||
+    module?.display_name;
+
+  const formattedRows = finalRows.map((row, index) => {
+    const newRow = {
+      SNo: index + 1
     };
+
+    cols.forEach(col => {
+
+      let value = "";
+
+      if (col.isDynamicCurrency) {
+        value =
+          row.currency === col.currency
+            ? row.amount
+            : "";
+      } else {
+        const raw = row[col.column_name];
+
+        value =
+          typeof raw === "object"
+            ? raw?.value ?? ""
+            : raw ?? "";
+      }
+
+      if (col.master === "credit_card") {
+        const str = String(value || "");
+        value = str ? `**** **** **** ${str.slice(-4)}` : "";
+      }
+
+      if (col.data_type?.toLowerCase().includes("date")) {
+        value = value ? new Date(value).toLocaleDateString() : "";
+      }
+
+      newRow[col.display_name] = value;
+    });
+
+    return newRow;
+  });
+
+  exportToExcel(
+    formattedRows,
+    cols.map(c => c.display_name),
+    `${moduleName}` // 👈 IMPORTANT
+  );
+};
+
 
     const handleExport = async () => {
         try {
@@ -1358,22 +1443,37 @@ useEffect(() => {
         page * pageSize
     );
 
-    const handlePdf = async (mode) => {
-        const cols = getColumnsToUse(mode);
+    const handlePdf = async (mode, customCols = null) => {
+        let cols;
+
+        if (customCols && Array.isArray(customCols)) {
+            cols = columns.filter(col =>
+                customCols.includes(col.column_name)
+            );
+        } else {
+            cols = getColumnsToUse(mode);
+        }
+
+        // ✅ GET PRINT SETTINGS
+        const company = selectedCompany || localStorage.getItem("print_company") || "";
+        const moduleTitle = printModuleName || module?.display_name;
 
         try {
             const res = await exportPdf({
                 rows: normalizedRows,
                 columns: cols,
-                userName: localStorage.getItem("username"),
-                moduleName: module?.display_name,
+                userName: activeUser?.email || "User",
+
+                // ✅ SEND BOTH TO BACKEND
+                moduleName: moduleTitle,
+                companyName: company,
             });
 
             const url = window.URL.createObjectURL(new Blob([res.data]));
 
             const link = document.createElement("a");
             link.href = url;
-            link.download = `${module?.display_name || "report"}.pdf`;
+            link.download = `${moduleTitle || "report"}.pdf`;
 
             document.body.appendChild(link);
             link.click();
@@ -1387,70 +1487,67 @@ useEffect(() => {
         }
     };
 
-       const disableOthers = hasAnyAmountValue(newRow, visibleColumns);
-       //console.log("Disable Others check for new row:", newRow, disableOthers);
-    const disableEditOthers = hasAnyAmountValue(editRow, visibleColumns);
 
-useEffect(() => {
-  if (!isCreating) return;
+    useEffect(() => {
+    if (!isCreating) return;
 
-  visibleColumns.forEach((col) => {
-    if (!col.master) return;
+    visibleColumns.forEach((col) => {
+        if (!col.master) return;
 
-    const key = col.column_name;
+        const key = col.column_name;
 
-    if (autoFilledFields[key]) return;
+        if (autoFilledFields[key]) return;
 
-    const options = getMasterOptions(col, newRow[key] || "");
+        const options = getMasterOptions(col, newRow[key] || "");
 
-    if (options.length === 1) {
-      const val =
-        typeof options[0] === "object"
-          ? options[0].value
-          : options[0];
+        if (options.length === 1) {
+        const val =
+            typeof options[0] === "object"
+            ? options[0].value
+            : options[0];
 
-      setNewRow((prev) => ({
-        ...prev,
-        [key]: val
-      }));
+        setNewRow((prev) => ({
+            ...prev,
+            [key]: val
+        }));
 
-      setAutoFilledFields((prev) => ({
-        ...prev,
-        [key]: true
-      }));
-    }
-  });
-}, [isCreating, visibleColumns, masterDataMap]);
-useEffect(() => {
-  if (!editRowId) return;
+        setAutoFilledFields((prev) => ({
+            ...prev,
+            [key]: true
+        }));
+        }
+    });
+    }, [isCreating, visibleColumns, masterDataMap]);
+    useEffect(() => {
+    if (!editRowId) return;
 
-  visibleColumns.forEach((col) => {
-    if (!col.master) return;
+    visibleColumns.forEach((col) => {
+        if (!col.master) return;
 
-    const key = col.column_name;
+        const key = col.column_name;
 
-    const options = getMasterOptions(
-      col,
-      editRow?.[key] || ""
-    );
+        const options = getMasterOptions(
+        col,
+        editRow?.[key] || ""
+        );
 
-    if (options.length === 1) {
-      const val =
-        typeof options[0] === "object"
-          ? options[0].value
-          : options[0];
+        if (options.length === 1) {
+        const val =
+            typeof options[0] === "object"
+            ? options[0].value
+            : options[0];
 
-      setEditRow((prev) => {
-        if (prev[key] === val) return prev;
+        setEditRow((prev) => {
+            if (prev[key] === val) return prev;
 
-        return {
-          ...prev,
-          [key]: val
-        };
-      });
-    }
-  });
-}, [editRowId, visibleColumns, masterDataMap]);
+            return {
+            ...prev,
+            [key]: val
+            };
+        });
+        }
+    });
+    }, [editRowId, visibleColumns, masterDataMap]);
     return (
         <div className="h-full flex flex-col">
 
@@ -2362,7 +2459,10 @@ if (col.master === "credit_card" && value) {
                                 </button>
 
                                 <button
-                                    onClick={() => handlePdf("saved")}
+                                   onClick={async () => {
+                                        const savedCols = await fetchCustomizedColumns();
+                                        handlePdf("saved", savedCols);
+                                    }}
                                     className="btn btn-blue flex-1"
                                 >
                                     Saved

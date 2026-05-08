@@ -1,15 +1,12 @@
-export const formatDate = (dateStr) => {
-  if (!dateStr) return "";
+export const formatDate = (value) => {
+  if (!value) return "-";
 
-  const date = new Date(dateStr);
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return value;
 
   const day = String(date.getDate()).padStart(2, "0");
-  const monthNames = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-  ];
-  const month = monthNames[date.getMonth()];
+  const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = date.getFullYear();
 
-  return `${day} ${month} ${year}`;
+  return `${day}/${month}/${year}`;
 };

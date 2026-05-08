@@ -1,15 +1,18 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import logo from "../../assets/headerlogo.jpeg"; // adjust path
+import logo from "../../assets/headerlogo.jpeg";
 import binshabib1 from '../../assets/binshabib1.png';
-import { loginUser, registerUser } from "../../api/api";
 
+import { loginUser, registerUser } from "../../api/api";
+import { useUser } from "../../components/UserContext";
 
 
 export default function Login() {
     const navigate = useNavigate();
+    //const { setUser } = useUser();
 
     // form state
+    const { user, setUser } = useUser();
     const [username, setUsername] = useState(() => localStorage.getItem("username") || "");
     const [password, setPassword] = useState(() => localStorage.getItem("password") || "");
     const [error, setError] = useState(null);
@@ -30,37 +33,46 @@ export default function Login() {
 
 
     const handleLogin = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        setError(null);
+    e.preventDefault();
 
-        try {
-            const res = await loginUser({
-                email: username,
-                password: password,
-                withCredentials: true,
-            });
+    setLoading(true);
+    setError(null);
 
-            // save token
-            //localStorage.setItem("token", res.data.token);
+    try {
+        const res = await loginUser({
+            email: username,
+            password: password,
+            withCredentials: true,
+        });
 
-            // save username for future autocomplete
-             if (res.data.user) {
-            localStorage.setItem("user", JSON.stringify(res.data.user));
-            window.dispatchEvent(new Event("storage"));
-             }
-             console.log("Logged in user:", res.data.user);
-             console.log("going to dashboard...");
-            // optional navigation
-            navigate("/dashboard");
+        console.log("API RESPONSE:", res.data);
 
-        } catch (err) {
-            setError(err.response?.data?.message || "Login failed");
-        } finally {
-            setLoading(false);
+        const loggedInUser = res?.data?.user;
+
+        if (!loggedInUser) {
+            setError("Invalid login response");
+            return;
         }
-    };
 
+        // update context
+        setUser(loggedInUser);
+
+        console.log("Logged in user:", loggedInUser);
+
+        // 🚀 NAVIGATE HERE (ONLY ONCE)
+        navigate("/dashboard");
+
+    } catch (err) {
+        setError(
+            err.response?.data?.message ||
+            "Login failed"
+        );
+    } finally {
+        setLoading(false);
+    }
+};
+
+  
     const validateSignup = (data) => {
     const errors = {};
 
