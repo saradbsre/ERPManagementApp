@@ -428,7 +428,7 @@ const formatNumber = (val) => {
 };
 
 const isNumericColumn = (col) => {
-  const name = col.column_name.toLowerCase();
+  const name = (col.column_name || "").toLowerCase();
    console.log("Checking columns from raw data:", name);
   return (
     name.includes("amount") ||
