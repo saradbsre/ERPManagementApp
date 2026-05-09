@@ -82,38 +82,16 @@ export default function DynamicTablePage() {
     const [printModuleName, setPrintModuleName] = useState("");
     const [showPlanProviderPopup, setShowPlanProviderPopup] = useState(false);
     const [pendingColumn, setPendingColumn] = useState(null);
+    const [sortConfig, setSortConfig] = useState({
+      key: null,
+      direction: "asc",
+    });
 
 
 const isFilterActive =
   search ||
   filters?.length > 0 
- // Object.keys(dateFilters || {}).length > 0;
 
-//console.log("is filter active?", isFilterActive, { search, filters, dateFilters });
-
-//const [newRow, setNewRow] = useState({});
-const formatCard = (value, columnName) => {
-  if (!value) return "-";
-
-  const name = (columnName || "").toLowerCase();
-
-  const isCard =
-    name.includes("card") ||
-    name.includes("credit_card") ||
-    name.includes("card_number") ||
-    name.includes("cardno") ||
-    name.includes("card_no");
-
-  if (!isCard) return value;
-
-  const digits = value.toString().replace(/\D/g, ""); // remove spaces/dashes
-
-  if (digits.length < 4) return "****";
-
-  const last4 = digits.slice(-4);
-
-  return `**** **** **** ${last4}`;
-};
 
 const normalize = (val) => {
   if (typeof val === "object") return val?.value ?? "";
@@ -130,6 +108,22 @@ const getCurrentMonthRange = () => {
     start: start.toISOString(),
     end: end.toISOString(),
   };
+};
+
+const handleSort = (columnName) => {
+  let direction = "asc";
+
+  if (
+    sortConfig.key === columnName &&
+    sortConfig.direction === "asc"
+  ) {
+    direction = "desc";
+  }
+
+  setSortConfig({
+    key: columnName,
+    direction,
+  });
 };
 
 
@@ -1438,7 +1432,38 @@ useEffect(() => {
 
     // ================= PAGINATION =================
     const totalPages = Math.ceil(normalizedRows.length / pageSize);
-    const paginatedRows = normalizedRows.slice(
+
+    const sortedRows = [...rows].sort((a, b) => {
+  if (!sortConfig.key) return 0;
+
+  let aValue = a[sortConfig.key];
+  let bValue = b[sortConfig.key];
+
+  // normalize object values
+  aValue =
+    typeof aValue === "object"
+      ? aValue?.value ?? ""
+      : aValue ?? "";
+
+  bValue =
+    typeof bValue === "object"
+      ? bValue?.value ?? ""
+      : bValue ?? "";
+
+  // numeric sort
+  if (!isNaN(aValue) && !isNaN(bValue)) {
+    return sortConfig.direction === "asc"
+      ? Number(aValue) - Number(bValue)
+      : Number(bValue) - Number(aValue);
+  }
+
+  // string sort
+  return sortConfig.direction === "asc"
+    ? String(aValue).localeCompare(String(bValue))
+    : String(bValue).localeCompare(String(aValue));
+});
+
+    const paginatedRows = sortedRows.slice(
         (page - 1) * pageSize,
         page * pageSize
     );
@@ -1775,7 +1800,6 @@ onClick={handleCreate}
 )}
 
             {/* ACTIVE FILTER CHIPS */}
-            {/* ACTIVE FILTERS (2nd ROW UI) */}
             <div className="flex flex-wrap gap-2 mt-0 mb-4">
 
   {filters.map((f, i) => {
@@ -1910,13 +1934,27 @@ onClick={handleCreate}
                                 <th className="px-4 py-3 border-b text-left">S.No</th> {/* ✅ ADD THIS */}
 
                                 {visibleColumns.map(col => (
-                                    <th
-                                        key={col.column_id}
-                                        className={`${getAlignClass(col.display_name)} px-4 py-3 whitespace-nowrap border-b`}
-                                    >
+                                   <th
+  key={col.column_id}
+  onClick={() => handleSort(col.column_name)}
+  className={`${getAlignClass(
+    col.display_name
+  )} px-4 py-3 whitespace-nowrap border-b cursor-pointer select-none hover:bg-gray-200`}
+>
+  <div className="flex items-center gap-1">
+    <span>{col.display_name}</span>
 
-                                        {col.display_name}
-                                    </th>
+    {sortConfig.key === col.column_name ? (
+      sortConfig.direction === "asc" ? (
+        <span>▲</span>
+      ) : (
+        <span>▼</span>
+      )
+    ) : (
+      <span className="text-gray-400">↕</span>
+    )}
+  </div>
+</th>
                                 ))}
 
                                 <th className="px-4 py-3 border-b text-right">Actions</th>

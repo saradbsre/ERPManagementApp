@@ -121,11 +121,11 @@ export default function Sidebar({
         path: `/reports/${report.id}`,
       })),
     },
-    // {
-    //   name: "Payment Request Form",
-    //   icon: <FileText size={18} />,
-    //   path: "/payment-req-form",
-    // },
+    {
+      name: "Payment Request Form",
+      icon: <FileText size={18} />,
+      path: "/payment-req-form",
+    },
 
   ].filter(Boolean);
 

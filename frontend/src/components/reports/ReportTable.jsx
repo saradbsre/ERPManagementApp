@@ -75,6 +75,10 @@ export default function ReportPage() {
     const filter_name = report?.filter_name || "Custom Filter";
     const [isInitialized, setIsInitialized] = useState(false);
     const [printModuleName, setPrintModuleName] = useState("");
+    const [sortConfig, setSortConfig] = useState({
+      key: null,
+      direction: "asc",
+    });
     const masterList = [
         ...new Set(columns.map(c => c.master).filter(Boolean))
     ];
@@ -82,6 +86,22 @@ export default function ReportPage() {
     Boolean(search) ||
     (filters?.length > 0) ||
     (Object.keys(dateFilters || {}).length > 0);
+
+    const handleSort = (columnName) => {
+  let direction = "asc";
+
+  if (
+    sortConfig.key === columnName &&
+    sortConfig.direction === "asc"
+  ) {
+    direction = "desc";
+  }
+
+  setSortConfig({
+    key: columnName,
+    direction,
+  });
+};
 
 
 
@@ -973,7 +993,36 @@ const getExcelColumns = (mode) => {
 
     // ================= PAGINATION =================
     const totalPages = Math.ceil(normalizedRows.length / pageSize);
-    const paginatedRows = normalizedRows.slice(
+    const sortedRows = [...rows].sort((a, b) => {
+  if (!sortConfig.key) return 0;
+
+  let aValue = a[sortConfig.key];
+  let bValue = b[sortConfig.key];
+
+  // normalize object values
+  aValue =
+    typeof aValue === "object"
+      ? aValue?.value ?? ""
+      : aValue ?? "";
+
+  bValue =
+    typeof bValue === "object"
+      ? bValue?.value ?? ""
+      : bValue ?? "";
+
+  // numeric sort
+  if (!isNaN(aValue) && !isNaN(bValue)) {
+    return sortConfig.direction === "asc"
+      ? Number(aValue) - Number(bValue)
+      : Number(bValue) - Number(aValue);
+  }
+
+  // string sort
+  return sortConfig.direction === "asc"
+    ? String(aValue).localeCompare(String(bValue))
+    : String(bValue).localeCompare(String(aValue));
+});
+    const paginatedRows = sortedRows.slice(
         (page - 1) * pageSize,
         page * pageSize
     );
@@ -1373,13 +1422,27 @@ numericColumns.forEach(col => {
                                 <th className="px-4 py-3 border-b text-left">S.No</th> {/* ✅ ADD THIS */}
 
                                 {visibleColumns.map(col => (
-                                    <th
-                                        key={col.column_id}
-                                        className={`${getAlignClass(col.display_name)} px-4 py-3 whitespace-nowrap border-b`}
-                                    >
+                                   <th
+  key={col.column_id}
+  onClick={() => handleSort(col.column_name)}
+  className={`${getAlignClass(
+    col.display_name
+  )} px-4 py-3 whitespace-nowrap border-b cursor-pointer select-none hover:bg-gray-200`}
+>
+  <div className="flex items-center gap-1">
+    <span>{col.display_name}</span>
 
-                                        {col.display_name}
-                                    </th>
+    {sortConfig.key === col.column_name ? (
+      sortConfig.direction === "asc" ? (
+        <span>▲</span>
+      ) : (
+        <span>▼</span>
+      )
+    ) : (
+      <span className="text-gray-400">↕</span>
+    )}
+  </div>
+</th>
                                 ))}
 
                                 {/* <th className="px-4 py-3 border-b text-right">Actions</th> */}

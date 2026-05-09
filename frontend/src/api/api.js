@@ -298,3 +298,15 @@ export const addMasterData = (masterName,value) => {
     value
   });
 }
+
+export const createPaymentRequest = (data, activeUserEmail) => {
+  return API.post("/payment-requests", data, {
+    params: { activeUserEmail }
+  });
+}
+
+export const getPaymentRequests = (activeUserEmail) => {
+  return API.get("/payment-requests", {
+    params: { activeUserEmail }
+  });
+}

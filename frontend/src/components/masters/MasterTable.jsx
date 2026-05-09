@@ -60,6 +60,10 @@ export default function MasterTablePage() {
     const [editingPlanName, setEditingPlanName] = useState("");
     const [servicesList, setServicesList] = useState([]);
     const [providersList, setProvidersList] = useState([]);
+    const [sortConfig, setSortConfig] = useState({
+      key: null,
+      direction: "asc",
+    });
     const formatCard = (value, columnName) => {
   if (!value) return "";
 
@@ -131,6 +135,22 @@ const handleUpdatePlan = async (id) => {
   } catch (err) {
     console.error("UPDATE PLAN ERROR:", err);
   }
+};
+
+const handleSort = (columnName) => {
+  let direction = "asc";
+
+  if (
+    sortConfig.key === columnName &&
+    sortConfig.direction === "asc"
+  ) {
+    direction = "desc";
+  }
+
+  setSortConfig({
+    key: columnName,
+    direction,
+  });
 };
 
 const openPlansModal = async (provider) => {
@@ -341,11 +361,41 @@ const handleCancelEdit = () => {
   setEditRow({});
 };
 
-const paginatedRows = filteredRows.slice(startIndex, endIndex);
+const sortedRows = [...rows].sort((a, b) => {
+  if (!sortConfig.key) return 0;
+
+  let aValue = a[sortConfig.key];
+  let bValue = b[sortConfig.key];
+
+  // normalize object values
+  aValue =
+    typeof aValue === "object"
+      ? aValue?.value ?? ""
+      : aValue ?? "";
+
+  bValue =
+    typeof bValue === "object"
+      ? bValue?.value ?? ""
+      : bValue ?? "";
+
+  // numeric sort
+  if (!isNaN(aValue) && !isNaN(bValue)) {
+    return sortConfig.direction === "asc"
+      ? Number(aValue) - Number(bValue)
+      : Number(bValue) - Number(aValue);
+  }
+
+  // string sort
+  return sortConfig.direction === "asc"
+    ? String(aValue).localeCompare(String(bValue))
+    : String(bValue).localeCompare(String(aValue));
+});
+
+const paginatedRows = sortedRows.slice(startIndex, endIndex);
 
 useEffect(() => {
-  setTotalPages(Math.ceil(filteredRows.length / pageSize));
-}, [filteredRows]);
+  setTotalPages(Math.ceil(sortedRows.length / pageSize));
+}, [sortedRows]);
 
     return (
         <div className="h-full flex flex-col">
@@ -482,8 +532,23 @@ useEffect(() => {
   <tr>
     <th className="px-4 py-3 text-left">S.No</th>
                                     {columns.map(col => (
-                                        <th key={col.key} className={`p-2 ${getAlignClass(col.key)}`}>
-                                            {col.label}
+                                        <th
+                                            key={col.key}
+                                            onClick={() => handleSort(col.key)}
+                                            className={`p-2 ${getAlignClass(col.key)} cursor-pointer select-none hover:bg-gray-200`}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>{col.label}</span>
+                                                {sortConfig.key === col.key ? (
+                                                    sortConfig.direction === "asc" ? (
+                                                        <span>▲</span>
+                                                    ) : (
+                                                        <span>▼</span>
+                                                    )
+                                                ) : (
+                                                    <span className="text-gray-400">↕</span>
+                                                )}
+                                            </div>
                                         </th>
                                     ))}
                                     {masterName === "service_providers" && (
