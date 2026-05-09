@@ -85,6 +85,7 @@ export default function DynamicTablePage() {
     const [pendingColumn, setPendingColumn] = useState(null);
     const [inputValues, setInputValues] = useState({});
     const [activeField, setActiveField] = useState(null);
+    const isInitialLoading = loading || columns.length === 0;
     const [sortConfig, setSortConfig] = useState({
       key: null,
       direction: "asc",
@@ -1957,7 +1958,7 @@ onClick={handleCreate}
             {/* ================= TABLE WRAPPER ================= */}
             <div className="bg-white rounded-xl shadow flex-1 flex flex-col overflow-hidden">
                 <div className="flex-1 w-full overflow-auto">
-                  {loading ? (
+                  {isInitialLoading ? (
                     <div className="flex justify-center items-center h-80">
                       <Loader type="orbit" />
                     </div>
