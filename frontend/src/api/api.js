@@ -120,6 +120,19 @@ export const deleteModuleRow = (moduleId, rowId, activeUserEmail) => {
   });
 }
 
+export const cancelModuleRow = (moduleId, rowId, activeUserEmail) => {
+  return API.delete(`/module-data/${moduleId}/${rowId}/cancel`, {
+    params: { activeUserEmail }
+  });
+}
+
+export const undoCancelModuleRow = (moduleId, rowId, activeUserEmail) => {
+  return API.post(`/module-data/${moduleId}/${rowId}/undo-cancel`, {}, {
+    params: { activeUserEmail }
+  });
+}
+
+
 export const exportColumnNames = (moduleId) => {
   return API.get(`/export-columns/${moduleId}`, {
     responseType: "blob"

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, act } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData  } from "../../api/api";
+import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow  } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -15,6 +15,7 @@ import { formatDate } from "../../utils/formatDate";
 import { Currency } from "lucide-react";
 import DateTimeRangeFilter from "../DateRangeFilter";
 import DateOnlyFilter from "../DateOnlyFilter";
+import Loader from "../Loader";
 
 
 const Modal = ({ title, children, onClose }) => (
@@ -82,6 +83,8 @@ export default function DynamicTablePage() {
     const [printModuleName, setPrintModuleName] = useState("");
     const [showPlanProviderPopup, setShowPlanProviderPopup] = useState(false);
     const [pendingColumn, setPendingColumn] = useState(null);
+    const [inputValues, setInputValues] = useState({});
+    const [activeField, setActiveField] = useState(null);
     const [sortConfig, setSortConfig] = useState({
       key: null,
       direction: "asc",
@@ -1106,7 +1109,7 @@ const handleNewRowChange = async (key, value, masterName) => {
         item => String(item.id) === String(providerId)
       );
 
-      providerLabel = selectedProvider?.value || '';
+      //providerLabel = selectedProvider?.value || '';
 
       console.log("🔥 Resolved Provider:", selectedProvider);
 
@@ -1119,7 +1122,7 @@ const handleNewRowChange = async (key, value, masterName) => {
     // =========================
     setNewRow(prev => ({
       ...prev,
-      plan_provider: providerLabel
+     // plan_provider: providerLabel
     }));
 
     // =========================
@@ -1146,7 +1149,7 @@ useEffect(() => {
     console.log("Auto-selecting plan:", firstPlan);
     setNewRow(prev => ({
       ...prev,
-      plan_provider: firstPlan.value
+     // plan_provider: firstPlan.value
     }));
   }
 
@@ -1172,12 +1175,17 @@ useEffect(() => {
 
         // Optionally remove the original 'amount' field if not needed
         // delete payload.amount;
-
+        console.log("Creating row with payload:", payload);
         await createModuleRow(id, payload, activeUserEmail);
 
         setIsCreating(false);
-        setNewRow({});
-        loadData(); // refresh table
+
+setNewRow({});
+setInputValues({});
+setActiveDropdown(null);
+setAutoFilledFields({});
+
+await loadData();
     } catch (err) {
         console.error(err);
     }
@@ -1237,6 +1245,27 @@ useEffect(() => {
         }
     };
 
+    const handleCancelRow = async (row) => {
+        if (!window.confirm("Cancel this record?")) return;
+
+        try {
+            await cancelModuleRow(id, row.id, activeUserEmail);
+            loadData();
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleUndoCancelRow = async (row) => {
+        if (!window.confirm("Undo cancel this record?")) return;
+
+        try {
+            await undoCancelModuleRow(id, row.id, activeUserEmail);
+            loadData();
+        } catch (err) {
+            console.error(err);
+        }
+    };
    const handleExcel = (mode) => {
   const cols = getExcelColumns(mode);
 
@@ -1525,22 +1554,22 @@ useEffect(() => {
 
         const options = getMasterOptions(col, newRow[key] || "");
 
-        if (options.length === 1) {
-        const val =
-            typeof options[0] === "object"
-            ? options[0].value
-            : options[0];
+        // if (options.length === 1) {
+        // const val =
+        //     typeof options[0] === "object"
+        //     ? options[0].value
+        //     : options[0];
 
-        setNewRow((prev) => ({
-            ...prev,
-            [key]: val
-        }));
+        // setNewRow((prev) => ({
+        //     ...prev,
+        //     [key]: val
+        // }));
 
-        setAutoFilledFields((prev) => ({
-            ...prev,
-            [key]: true
-        }));
-        }
+        // setAutoFilledFields((prev) => ({
+        //     ...prev,
+        //     [key]: true
+        // }));
+        // }
     });
     }, [isCreating, visibleColumns, masterDataMap]);
     useEffect(() => {
@@ -1928,6 +1957,11 @@ onClick={handleCreate}
             {/* ================= TABLE WRAPPER ================= */}
             <div className="bg-white rounded-xl shadow flex-1 flex flex-col overflow-hidden">
                 <div className="flex-1 w-full overflow-auto">
+                  {loading ? (
+                    <div className="flex justify-center items-center h-80">
+                      <Loader type="orbit" />
+                    </div>
+                  ) : (
                     <table className="min-w-max w-full text-sm">
                         <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
                             <tr>
@@ -1995,124 +2029,216 @@ if (col.master === "credit_card" && value) {
         >
           <div className="relative">
 
-            <input
-              type={isDate ? "date" : "text"}
-              className="border px-2 py-1 rounded w-full"
-              value={
-                col.column_name === "total_amount_aed"
-                  ? newRow.total_amount_aed || ""
-                  : isDate
-                  ? formatForInput(value)
-                  : value
-              }
-              disabled={col.column_name === "total_amount_aed"} // ✅ readonly
-              onChange={(e) => {
-                let val = e.target.value;
+          <input
+  autoComplete="off"
+  type={isDate ? "date" : "text"}
+  className="
+    w-full
+    rounded-xl
+    border border-gray-300
+    bg-white
+    px-3 py-2
+    text-sm
+    outline-none
+    transition-all duration-200
 
-                if (isNumericColumn(col.column_name)) {
-                  val = handleNumericInput(val);
-                }
+    focus:border-blue-500
+    focus:ring-4
+    focus:ring-blue-100
+  "
+  value={
+    inputValues[col.column_name] ??
+    (
+      col.column_name === "total_amount_aed"
+        ? newRow.total_amount_aed || ""
+        : isDate
+        ? formatForInput(value)
+        : value
+    )
+  }
+  disabled={col.column_name === "total_amount_aed"}
 
-                handleNewRowChange(col.column_name, val, col.master);
+  onChange={(e) => {
+    let val = e.target.value;
+
+    if (isNumericColumn(col.column_name)) {
+      val = handleNumericInput(val);
+    }
+
+    console.log("⌨️ Typing", {
+      column: col.column_name,
+      typed: val
+    });
+
+    if (isMaster) {
+      setInputValues(prev => ({
+        ...prev,
+        [col.column_name]: val
+      }));
+
+      setActiveField(col.column_name);
+    } else {
+      handleNewRowChange(
+        col.column_name,
+        val,
+        col.master
+      );
+    }
+  }}
+
+  onFocus={() => {
+    if (!isMaster) return;
+
+    setActiveField(col.column_name);
+  }}
+
+  onBlur={(e) => {
+    if (isAmount && e.target.value !== "") {
+      handleNewRowChange(
+        col.column_name,
+        Number(e.target.value).toFixed(2),
+        col.master
+      );
+    }
+
+    setActiveField(null);
+  }}
+/>
+
+            {/* MASTER DROPDOWN */}
+          {/* ================= MASTER DROPDOWN ================= */}
+{isMaster &&
+  activeField === col.column_name &&
+  (() => {
+
+    const typedValue =
+      inputValues[col.column_name] || "";
+
+    const rawOptions = getMasterOptions(
+      col,
+      typedValue,
+      newRow
+    ).slice(0, 20);
+
+    const filteredOptions = rawOptions.filter((val) => {
+
+      const raw =
+        typeof val === "object"
+          ? val.value
+          : val;
+
+      return String(raw || "")
+        .toLowerCase()
+        .includes(typedValue.toLowerCase());
+    });
+
+    const showAdd =
+      typedValue &&
+      filteredOptions.length === 0;
+
+    return (
+      <div className="
+        absolute z-50 mt-2 w-full overflow-hidden
+        rounded-2xl border border-gray-200
+        bg-white/95 backdrop-blur-xl
+        shadow-[0_10px_35px_rgba(0,0,0,0.12)]
+        max-h-64 overflow-y-auto
+      ">
+
+        {/* OPTIONS */}
+        {filteredOptions.map((val, i) => {
+
+          let display =
+            typeof val === "object"
+              ? val.value
+              : val;
+
+          // CREDIT CARD MASKING (DISPLAY ONLY)
+          if (col.column_name === "credit_card" && display) {
+            const raw = String(display).replace(/\D/g, "");
+            const last4 = raw.slice(-4);
+            display = `**** **** **** ${last4}`;
+          }
+
+          const rawValue =
+            typeof val === "object"
+              ? val.value
+              : val;
+
+          return (
+            <div
+              key={i}
+              className="
+                flex items-center justify-between
+                px-4 py-3
+                text-sm text-gray-700
+                cursor-pointer
+                hover:bg-blue-50
+                transition-all duration-150
+                border-b border-gray-100 last:border-0
+              "
+              onMouseDown={() => {
+
+                setInputValues(prev => ({
+                  ...prev,
+                  [col.column_name]: display
+                }));
+
+                handleNewRowChange(
+                  col.column_name,
+                  rawValue,
+                  col.master
+                );
 
                 setAutoFilledFields(prev => ({
                   ...prev,
                   [col.column_name]: true
                 }));
 
-                if (col.column_name === "plans") {
-                  setPlanManuallyChanged(true);
-                }
-
-                setActiveDropdown(`create-${col.column_name}`);
-              }}
-              onFocus={() => {
-                if (!isMaster) return;
-
-                if (col.column_name === "plan_provider") {
-                    setPendingColumn(col);
-                    setShowPlanProviderPopup(true);
-                    return;
-                }
-
-                setActiveDropdown(`create-${col.column_name}`);
-                }}
-              onBlur={(e) => {
-
-                if (isAmount && e.target.value !== "") {
-                    handleNewRowChange(
-                    col.column_name,
-                    Number(e.target.value).toFixed(2),
-                    col.master
-                    );
-                }
-
-                setTimeout(() => setActiveDropdown(null), 150);
-                }}
-            />
-
-            {/* MASTER DROPDOWN */}
-           {isMaster &&
-  activeDropdown === `create-${col.column_name}` && (() => {
-
-    const rawOptions = getMasterOptions(col, value, newRow).slice(0, 20);
-
-    const filteredOptions = rawOptions.filter((val) => {
-      const display = typeof val === "object" ? val.value : val;
-
-      return display
-        ?.toLowerCase()
-        .includes((value || "").toLowerCase());
-    });
-
-    const showAdd =
-      value &&
-      filteredOptions.length === 0;
-
-    return (
-      <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
-
-        {/* EXISTING OPTIONS */}
-        {filteredOptions.map((val, i) => {
-          const display = typeof val === "object" ? val.value : val;
-
-          return (
-            <div
-              key={i}
-              className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
-              onMouseDown={() => {
-                handleNewRowChange(
-                  col.column_name,
-                  display,
-                  col.master
-                );
-
-                setAutoFilledFields((prev) => ({
-                  ...prev,
-                  [col.column_name]: true
-                }));
-
-                if (col.column_name === "plans") {
-                  setPlanManuallyChanged(true);
-                }
-
-                setActiveDropdown(null);
+                setActiveField(null);
               }}
             >
-              {display}
+              <span className="truncate">
+                {display}
+              </span>
             </div>
           );
         })}
 
-        {/* ➕ ADD NEW VALUE */}
+        {/* EMPTY */}
+        {filteredOptions.length === 0 && !showAdd && (
+          <div className="px-4 py-3 text-sm text-gray-400 text-center">
+            No results found
+          </div>
+        )}
+
+        {/* ADD NEW */}
         {showAdd && (
           <div
-            className="px-3 py-2 text-green-600 hover:bg-green-50 cursor-pointer border-t font-medium"
+            className="
+              sticky bottom-0
+              bg-green-50
+              border-t border-green-200
+              px-4 py-3
+              text-sm font-medium text-green-700
+              cursor-pointer
+              hover:bg-green-100
+              transition
+            "
             onMouseDown={async () => {
-              const newValue = value;
 
-              // 🔥 CALL API TO ADD MASTER
-              await addMasterValue(col.master, newValue);
+              const newValue =
+                inputValues[col.column_name];
+
+              await addMasterValue(
+                col.master,
+                newValue
+              );
+
+              setInputValues(prev => ({
+                ...prev,
+                [col.column_name]: newValue
+              }));
 
               handleNewRowChange(
                 col.column_name,
@@ -2120,15 +2246,15 @@ if (col.master === "credit_card" && value) {
                 col.master
               );
 
-              setAutoFilledFields((prev) => ({
+              setAutoFilledFields(prev => ({
                 ...prev,
                 [col.column_name]: true
               }));
 
-              setActiveDropdown(null);
+              setActiveField(null);
             }}
           >
-            ➕ Add
+            + Add "{typedValue}"
           </div>
         )}
 
@@ -2191,7 +2317,20 @@ if (col.master === "credit_card" && value) {
 
               <input
                 type={isDate ? "date" : "text"}
-                className="border px-2 py-1 rounded w-full"
+                 className="
+    w-full
+    rounded-xl
+    border border-gray-300
+    bg-white
+    px-3 py-2
+    text-sm
+    outline-none
+    transition-all duration-200
+
+    focus:border-blue-500
+    focus:ring-4
+    focus:ring-blue-100
+  "
                 value={
                   col.column_name === "total_amount_aed"
                     ? editRow.total_amount_aed || ""
@@ -2234,33 +2373,131 @@ if (col.master === "credit_card" && value) {
               />
 
               {/* DROPDOWN */}
-              {isMaster && activeDropdown === editKey && (
-                <div className="absolute z-50 bg-white border w-full max-h-48 overflow-auto shadow-lg rounded mt-1">
+              {isMaster &&
+  activeDropdown === editKey &&
+  (() => {
 
-                  {getMasterOptions(col, editRow[col.column_name] || "", editRow)
-                    .slice(0, 20)
-                    .map((val, i) => {
-                      const display =
-                        typeof val === "object" ? val.value : val;
+    const rawOptions = getMasterOptions(
+      col,
+      editRow[col.column_name] || "",
+      editRow
+    ).slice(0, 20);
 
-                      return (
-                        <div
-                          key={i}
-                          className="px-3 py-2 hover:bg-blue-100 cursor-pointer"
-                          onMouseDown={() =>
-                            setEditRow({
-                              ...editRow,
-                              [col.column_name]: display,
-                            })
-                          }
-                        >
-                          {display}
-                        </div>
-                      );
-                    })}
+    const currentValue =
+      typeof editRow[col.column_name] === "object"
+        ? editRow[col.column_name]?.value || ""
+        : editRow[col.column_name] || "";
 
-                </div>
-              )}
+    const filteredOptions = rawOptions.filter((val) => {
+
+      const display =
+        typeof val === "object"
+          ? val.value
+          : val;
+
+      return display
+        ?.toLowerCase()
+        .includes(currentValue.toLowerCase());
+    });
+
+    const showAdd =
+      currentValue &&
+      filteredOptions.length === 0;
+
+    return (
+      <div
+        className="
+          absolute z-50 mt-2 w-full overflow-hidden
+          rounded-2xl border border-gray-200
+          bg-white/95 backdrop-blur-xl
+          shadow-[0_10px_35px_rgba(0,0,0,0.12)]
+          max-h-64 overflow-y-auto
+        "
+      >
+
+        {/* OPTIONS */}
+        {filteredOptions.map((val, i) => {
+
+          const display =
+            typeof val === "object"
+              ? val.value
+              : val;
+
+          return (
+            <div
+              key={i}
+              className="
+                flex items-center justify-between
+                px-4 py-3
+                text-sm text-gray-700
+                cursor-pointer
+                hover:bg-blue-50
+                transition-all duration-150
+                border-b border-gray-100 last:border-0
+              "
+              onMouseDown={() => {
+
+                setEditRow({
+                  ...editRow,
+                  [col.column_name]: display,
+                });
+
+                setActiveDropdown(null);
+              }}
+            >
+
+              <span className="truncate">
+                {display}
+              </span>
+
+             
+
+            </div>
+          );
+        })}
+
+        {/* EMPTY */}
+        {filteredOptions.length === 0 && !showAdd && (
+          <div className="px-4 py-3 text-sm text-gray-400 text-center">
+            No results found
+          </div>
+        )}
+
+        {/* ADD NEW */}
+        {showAdd && (
+          <div
+            className="
+              sticky bottom-0
+              bg-green-50
+              border-t border-green-200
+              px-4 py-3
+              text-sm font-medium text-green-700
+              cursor-pointer
+              hover:bg-green-100
+              transition
+            "
+            onMouseDown={async () => {
+
+              await addMasterValue(
+                col.master,
+                currentValue
+              );
+
+              setEditRow({
+                ...editRow,
+                [col.column_name]: currentValue,
+              });
+
+              setActiveDropdown(null);
+            }}
+          >
+            + Add "{currentValue}"
+          </div>
+        )}
+
+      </div>
+    );
+  })()}
 
             </div>
           ) : (
@@ -2303,50 +2540,91 @@ if (col.master === "credit_card" && value) {
     })}
 
     {/* ACTIONS */}
-    <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
+<td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
 
-      {editRowId === row.id ? (
-        <>
-          <button onClick={handleSaveEdit} className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-              hover:bg-blue-100 hover:border-blue-500 transition">Save</button>
-          <button onClick={handleCancelEdit} className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-              hover:bg-red-100 hover:border-red-500 transition">Cancel</button>
-        </>
+  {editRowId === row.id ? (
+    <>
+      <button
+        onClick={handleSaveEdit}
+        className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
+        hover:bg-blue-100 hover:border-blue-500 transition"
+      >
+        Save
+      </button>
+
+      <button
+        onClick={handleCancelEdit}
+        className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
+        hover:bg-red-100 hover:border-red-500 transition"
+      >
+        Cancel
+      </button>
+
+      {/* ✅ ONLY WHEN EDITING + INACTIVE */}
+      {!row.is_active && (
+        <PermissionButton
+          user={activeUser}
+          permission="modify"
+          onClick={() => handleUndoCancelRow(row)}
+          className="px-3 py-1.5 text-sm rounded-md border border-gray-400 bg-gray-100 
+          hover:bg-gray-200 hover:border-gray-500 transition"
+        >
+          Undo Cancel
+        </PermissionButton>
+      )}
+    </>
+  ) : (
+    <>
+      <PermissionButton
+        user={activeUser}
+        permission="modify"
+        onClick={() => {
+          setEditRowId(row.id);
+          setEditRow(row);
+          setOriginalRow(row);
+        }}
+        className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
+        hover:bg-blue-100 hover:border-blue-500 transition"
+      >
+        Edit
+      </PermissionButton>
+
+      {/* ✅ NORMAL VIEW */}
+      {row.is_active ? (
+        <PermissionButton
+          user={activeUser}
+          permission="delete"
+          onClick={() => handleCancelRow(row)}
+          className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
+          hover:bg-red-100 hover:border-red-500 transition"
+        >
+          Cancel
+        </PermissionButton>
       ) : (
-        <>
-          <PermissionButton
-            user={activeUser}
-            permission="modify"
-            onClick={() => {
-              setEditRowId(row.id);
-              setEditRow(row);
-              setOriginalRow(row);
-            }}
-            className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-              hover:bg-blue-100 hover:border-blue-500 transition"
-          >
-            Edit
-          </PermissionButton>
-
-          <PermissionButton
-            user={activeUser}
-            permission="delete"
-            onClick={() => handleDelete(row)}
-           className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-              hover:bg-red-100 hover:border-red-500 transition"
-          >
-            Delete
-          </PermissionButton>
-        </>
+        <span className="px-3 py-1.5 text-sm rounded-md bg-gray-100 text-gray-500">
+          Cancelled
+        </span>
       )}
 
-    </td>
+      <PermissionButton
+        user={activeUser}
+        permission="delete"
+        onClick={() => handleDelete(row)}
+        className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
+        hover:bg-red-100 hover:border-red-500 transition"
+      >
+        Delete
+      </PermissionButton>
+    </>
+  )}
+</td>
 
   </tr>
 ))}
 </tbody>
 
                     </table>
+                  )}
                     {showImportModal && (
                         <Modal title="Import Data" onClose={() => setShowImportModal(false)}>
 

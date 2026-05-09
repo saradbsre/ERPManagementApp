@@ -13,6 +13,8 @@ import { Currency } from "lucide-react";
 import DateOnlyFilter from "../components/DateOnlyFilter";
 import PaymentRequestEntryForm from "../components/paymentreqform/PaymentRequestEntryForm";
 import { getPaymentRequests } from "../api/api";
+//import PaymentRequestPreview from "../components/paymentreqform/PaymentRequestPreview";
+
 
 
 
@@ -37,6 +39,9 @@ export default function PaymentReqForm() {
     const [dateFilters, setDateFilters] = useState({});
     const [activeDateFilter, setActiveDateFilter] = useState(null);
     const [showForm, setShowForm] = useState(false);
+    const [showPreview, setShowPreview] = useState(false);
+    const [isSaved, setIsSaved] = useState(false);
+    const [previewData, setPreviewData] = useState(null);
     const [sortConfig, setSortConfig] = useState({
     key: null,
     direction: "asc",
