@@ -394,9 +394,16 @@ useEffect(() => {
   if (!value) return "";
   return value.split("T")[0]; // removes time safely
 };
+    // const masterList = [
+    //     ...new Set(columns.map(c => c.master).filter(Boolean))
+    // ];
     const masterList = [
-        ...new Set(columns.map(c => c.master).filter(Boolean))
-    ];
+  ...new Set(
+    columns
+      .flatMap((c) => [c.master, c.master1]) // 👈 include both
+      .filter(Boolean)
+  )
+];
     const [showTableColumnModal, setShowTableColumnModal] = useState(false);
     const [tableColumnMode, setTableColumnMode] = useState("default");
     // default | saved | custom
@@ -1649,40 +1656,37 @@ const finalRows = filtered.filter(row => {
     // ================= PAGINATION =================
     const totalPages = Math.ceil(normalizedRows.length / pageSize);
 
-    const sortedRows = [...rows].sort((a, b) => {
-  if (!sortConfig.key) return 0;
+//     const sortedRows = [...rows].sort((a, b) => {
+//   if (!sortConfig.key) return 0;
 
-  let aValue = a[sortConfig.key];
-  let bValue = b[sortConfig.key];
+//   let aValue = a[sortConfig.key];
+//   let bValue = b[sortConfig.key];
 
-  // normalize object values
-  aValue =
-    typeof aValue === "object"
-      ? aValue?.value ?? ""
-      : aValue ?? "";
+//   // normalize object values
+//   aValue =
+//     typeof aValue === "object"
+//       ? aValue?.value ?? ""
+//       : aValue ?? "";
 
-  bValue =
-    typeof bValue === "object"
-      ? bValue?.value ?? ""
-      : bValue ?? "";
+//   bValue =
+//     typeof bValue === "object"
+//       ? bValue?.value ?? ""
+//       : bValue ?? "";
 
-  // numeric sort
-  if (!isNaN(aValue) && !isNaN(bValue)) {
-    return sortConfig.direction === "asc"
-      ? Number(aValue) - Number(bValue)
-      : Number(bValue) - Number(aValue);
-  }
+//   // numeric sort
+//   if (!isNaN(aValue) && !isNaN(bValue)) {
+//     return sortConfig.direction === "asc"
+//       ? Number(aValue) - Number(bValue)
+//       : Number(bValue) - Number(aValue);
+//   }
 
-  // string sort
-  return sortConfig.direction === "asc"
-    ? String(aValue).localeCompare(String(bValue))
-    : String(bValue).localeCompare(String(aValue));
-});
+//   // string sort
+//   return sortConfig.direction === "asc"
+//     ? String(aValue).localeCompare(String(bValue))
+//     : String(bValue).localeCompare(String(aValue));
+// });
 
-    const paginatedRows = sortedRows.slice(
-        (page - 1) * pageSize,
-        page * pageSize
-    );
+  
 
     const handlePdf = async (mode, customCols = null) => {
         let cols;
@@ -1812,6 +1816,93 @@ const finalRows = filtered.filter(row => {
 //   });
 // });
 
+// const filteredRows = rows.filter((row, rowIndex) => {
+
+//   console.log(`\n================ ROW ${rowIndex} ================`);
+//   console.log("ROW DATA:", row);
+
+//   // =========================
+//   // 1. FILTER CHIPS
+//   // =========================
+// const passesFilters = filters.every((filter) => {
+
+//   const selectedValues =
+//     (filter.values || []).map(normalize);
+
+//   if (selectedValues.length === 0) return true;
+
+//   // ✅ MASTER → COLUMN_NAME
+//   const fieldKey =
+//     columns.find(c => c.master === filter.master)
+//       ?.column_name || filter.master;
+
+//   const rawValue = row?.[fieldKey];
+
+//   const rowValue = normalize(
+//     typeof rawValue === "object"
+//       ? rawValue?.value
+//       : rawValue
+//   );
+
+//   console.log("Master:", filter.master);
+//   console.log("FieldKey:", fieldKey);
+//   console.log("Selected:", selectedValues);
+//   console.log("Raw Row Value:", rawValue);
+//   console.log("Normalized Row Value:", rowValue);
+
+//   return selectedValues.includes(rowValue);
+// });
+
+//   console.log("➡️ passesFilters FINAL:", passesFilters);
+
+//   if (!passesFilters) {
+//     console.log("❌ ROW REJECTED BY FILTERS");
+//     return false;
+//   }
+
+//   // =========================
+//   // 2. SEARCH FILTER
+//   // =========================
+//   if (!search) {
+//     console.log("No search → ROW PASSED");
+//     return true;
+//   }
+
+//   const searchNorm = normalizeString(search);
+
+//   console.log("🔍 SEARCH TERM:", searchNorm);
+
+//   const searchMatch = visibleColumns.some((col, cIndex) => {
+
+//     const val = row[col.column_name];
+
+//     const cellNorm = normalizeString(
+//       typeof val === "object"
+//         ? val?.value ?? ""
+//         : val ?? ""
+//     );
+
+//     const match = cellNorm.includes(searchNorm);
+
+//     console.log(
+//       `Column ${cIndex} (${col.column_name}) →`,
+//       cellNorm,
+//       "MATCH:",
+//       match
+//     );
+
+//     return match;
+//   });
+
+//   console.log("🔎 SEARCH FINAL RESULT:", searchMatch);
+
+//   return searchMatch;
+// });
+
+// ======================================================
+// FILTER + SEARCH
+// ======================================================
+
 const filteredRows = rows.filter((row, rowIndex) => {
 
   console.log(`\n================ ROW ${rowIndex} ================`);
@@ -1820,81 +1911,198 @@ const filteredRows = rows.filter((row, rowIndex) => {
   // =========================
   // 1. FILTER CHIPS
   // =========================
-const passesFilters = filters.every((filter) => {
 
-  const selectedValues =
-    (filter.values || []).map(normalize);
+  const passesFilters = filters.every((filter) => {
 
-  if (selectedValues.length === 0) return true;
+    const selectedValues =
+      (filter.values || []).map(normalize);
 
-  // ✅ MASTER → COLUMN_NAME
-  const fieldKey =
-    columns.find(c => c.master === filter.master)
-      ?.column_name || filter.master;
+    if (selectedValues.length === 0) return true;
 
-  const rawValue = row?.[fieldKey];
+    // ✅ MASTER → COLUMN_NAME
+const fieldKey =
+  columns.find(
+    (c) =>
+      c.master === filter.master ||
+      c.master1 === filter.master
+  )?.column_name || filter.master;
 
-  const rowValue = normalize(
-    typeof rawValue === "object"
-      ? rawValue?.value
-      : rawValue
+    const rawValue = row?.[fieldKey];
+
+    const rowValue = normalize(
+      typeof rawValue === "object"
+        ? rawValue?.value
+        : rawValue
+    );
+
+    console.log("Master:", filter.master);
+    console.log("FieldKey:", fieldKey);
+    console.log("Selected:", selectedValues);
+    console.log("Raw Row Value:", rawValue);
+    console.log(
+      "Normalized Row Value:",
+      rowValue
+    );
+
+    return selectedValues.includes(rowValue);
+  });
+
+  console.log(
+    "➡️ passesFilters FINAL:",
+    passesFilters
   );
 
-  console.log("Master:", filter.master);
-  console.log("FieldKey:", fieldKey);
-  console.log("Selected:", selectedValues);
-  console.log("Raw Row Value:", rawValue);
-  console.log("Normalized Row Value:", rowValue);
-
-  return selectedValues.includes(rowValue);
-});
-
-  console.log("➡️ passesFilters FINAL:", passesFilters);
-
   if (!passesFilters) {
-    console.log("❌ ROW REJECTED BY FILTERS");
+
+    console.log(
+      "❌ ROW REJECTED BY FILTERS"
+    );
+
     return false;
   }
 
   // =========================
   // 2. SEARCH FILTER
   // =========================
+
   if (!search) {
-    console.log("No search → ROW PASSED");
+
+    console.log(
+      "No search → ROW PASSED"
+    );
+
     return true;
   }
 
-  const searchNorm = normalizeString(search);
+  const searchNorm =
+    normalizeString(search);
 
-  console.log("🔍 SEARCH TERM:", searchNorm);
+  console.log(
+    "🔍 SEARCH TERM:",
+    searchNorm
+  );
 
-  const searchMatch = visibleColumns.some((col, cIndex) => {
+  const searchMatch =
+    visibleColumns.some(
+      (col, cIndex) => {
 
-    const val = row[col.column_name];
+        const val =
+          row[col.column_name];
 
-    const cellNorm = normalizeString(
-      typeof val === "object"
-        ? val?.value ?? ""
-        : val ?? ""
+        const cellNorm =
+          normalizeString(
+            typeof val === "object"
+              ? val?.value ?? ""
+              : val ?? ""
+          );
+
+        const match =
+          cellNorm.includes(searchNorm);
+
+        console.log(
+          `Column ${cIndex} (${col.column_name}) →`,
+          cellNorm,
+          "MATCH:",
+          match
+        );
+
+        return match;
+      }
     );
 
-    const match = cellNorm.includes(searchNorm);
-
-    console.log(
-      `Column ${cIndex} (${col.column_name}) →`,
-      cellNorm,
-      "MATCH:",
-      match
-    );
-
-    return match;
-  });
-
-  console.log("🔎 SEARCH FINAL RESULT:", searchMatch);
+  console.log(
+    "🔎 SEARCH FINAL RESULT:",
+    searchMatch
+  );
 
   return searchMatch;
 });
 
+
+// ======================================================
+// SORT FILTERED ROWS
+// ======================================================
+
+const sortedRows = [...filteredRows].sort(
+  (a, b) => {
+
+    if (!sortConfig.key) return 0;
+
+    let aValue =
+      a[sortConfig.key];
+
+    let bValue =
+      b[sortConfig.key];
+
+    // =========================
+    // OBJECT VALUE NORMALIZE
+    // =========================
+
+    aValue =
+      typeof aValue === "object"
+        ? aValue?.value ?? ""
+        : aValue ?? "";
+
+    bValue =
+      typeof bValue === "object"
+        ? bValue?.value ?? ""
+        : bValue ?? "";
+
+    console.log(
+      "SORTING:",
+      aValue,
+      bValue
+    );
+
+    // =========================
+    // NUMERIC SORT
+    // =========================
+
+    if (
+      !isNaN(aValue) &&
+      !isNaN(bValue)
+    ) {
+
+      return sortConfig.direction === "asc"
+        ? Number(aValue) -
+            Number(bValue)
+        : Number(bValue) -
+            Number(aValue);
+    }
+
+    // =========================
+    // STRING SORT
+    // =========================
+
+    return sortConfig.direction ===
+      "asc"
+      ? String(aValue).localeCompare(
+          String(bValue)
+        )
+      : String(bValue).localeCompare(
+          String(aValue)
+        );
+  }
+);
+
+
+
+// ======================================================
+// FINAL DATA
+// ======================================================
+
+// use this in table
+// sortedRows.map(...)
+
+console.log(
+  "✅ FINAL SORTED ROWS:",
+  sortedRows
+);
+
+  const paginatedRows = sortedRows.slice(
+        (page - 1) * pageSize,
+        page * pageSize
+    );
     return (
         <div className="h-full flex flex-col">
 
@@ -2643,7 +2851,7 @@ if (col.master === "credit_card" && value) {
 )}
 
 {/* ================= DATA ROWS ================= */}
-{filteredRows.map((row, i) => (
+{sortedRows.map((row, i) => (
   <tr
     key={row.id ?? i}
     className="hover:bg-gray-50 transition-colors"
