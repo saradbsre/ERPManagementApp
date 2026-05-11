@@ -38,7 +38,7 @@ export const applyFilters = (rows, filters, columns = []) => {
 
       // ================= NORMAL FILTER =================
       const column = columns.find(c => c.master === filter.master);
-
+      
       if (!column) return true;
 
       const cellValue = String(row[column.column_name] || "")

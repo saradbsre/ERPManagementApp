@@ -212,6 +212,18 @@ else if (column.masterName === "amount") {
 
   const baseCurCode = baseCur?.currency_code?.toLowerCase();
 
+    const currencyCol = `currency`;
+
+  if (!columns.some(c => c.name === currencyCol)) {
+    newCols.push({
+      ...column,
+      name: currencyCol,
+      displayName: `Currency`,
+      masterName: "currency",
+      defaultValue: baseCurCode // 🔥 base currency auto assign
+    });
+  }
+
   // ================= 1. DISPLAY VALUE COLUMN =================
   const displayCol = `${base}`;
 
@@ -225,29 +237,7 @@ else if (column.masterName === "amount") {
   }
 
   // ================= 2. CURRENCY COLUMN =================
-  const currencyCol = `currency`;
 
-  if (!columns.some(c => c.name === currencyCol)) {
-    newCols.push({
-      ...column,
-      name: currencyCol,
-      displayName: `Currency`,
-      masterName: "currency",
-      defaultValue: baseCurCode // 🔥 base currency auto assign
-    });
-  }
-
-  // ================= 3. FCAMT COLUMN =================
-  // const fcamtCol = `fcamt`;
-
-  // if (!columns.some(c => c.name === fcamtCol)) {
-  //   newCols.push({
-  //     ...column,
-  //     name: fcamtCol,
-  //     displayName: `FC Amount`,
-  //     masterName: ""
-  //   });
-  // }
 
   // ================= 4. TOTAL COLUMN =================
   const totalCol = `${base}_in_${baseCurCode}`;

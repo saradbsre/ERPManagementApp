@@ -53,6 +53,7 @@ export default function DynamicTablePage() {
     const [file, setFile] = useState(null);
     const printRef = useRef();
     const pageSize = 10;
+    const [columnSearch, setColumnSearch] = useState("");
     const [showColumnSelector, setShowColumnSelector] = useState(false);
     const [selectedColumns, setSelectedColumns] = useState([]);
     const [showImportModal, setShowImportModal] = useState(false);
@@ -74,7 +75,7 @@ export default function DynamicTablePage() {
     const [providerPlans, setProviderPlans] = useState([]);
     const [autoFilledFields, setAutoFilledFields] = useState({});
     const [planManuallyChanged, setPlanManuallyChanged] = useState(false);
-    const [dateFilters, setDateFilters] = useState({});
+   
     const [activeDateFilter, setActiveDateFilter] = useState(null);
     const [showSaveFilter, setShowSaveFilter] = useState(false);
     const [saveFilterName, setSaveFilterName] = useState("");
@@ -86,17 +87,106 @@ export default function DynamicTablePage() {
     const [inputValues, setInputValues] = useState({});
     const [activeField, setActiveField] = useState(null);
     const isInitialLoading = loading || columns.length === 0;
+    const [tempSelectedColumns, setTempSelectedColumns] = useState([]);
+    //const [selectedColumns, setSelectedColumns] = useState([]);
     const [sortConfig, setSortConfig] = useState({
       key: null,
       direction: "asc",
     });
 
+    useEffect(() => {
+  if (!columns.length) return;
 
-const isFilterActive =
-  search ||
-  filters?.length > 0 
+  setSelectedColumns(prev => {
+    if (prev && prev.length > 0) return prev;
 
+    return columns.map(c => c.column_name);
+  });
+}, [columns]);
 
+const getCurrentMonth = () => {
+  const now = new Date();
+
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+  const format = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+
+    return `${y}-${m}-${d}`;
+  };
+
+  return {
+    startDate: format(start),
+    endDate: format(end),
+  };
+};
+
+const [dateFilters, setDateFilters] = useState(getCurrentMonth());
+
+const isFilterActive = search || filters?.length > 0 
+
+const openColumnSelector = () => {
+  const defaultCols = columns.map(c => c.column_name);
+
+  setTempSelectedColumns(
+    selectedColumns?.length ? selectedColumns : defaultCols
+  );
+
+  setShowColumnSelector(true);
+};
+
+const toggleTempColumn = (colName) => {
+  setTempSelectedColumns(prev =>
+    prev.includes(colName)
+      ? prev.filter(c => c !== colName)
+      : [...prev, colName]
+  );
+};
+
+const saveColumnSelection = async () => {
+  try {
+
+    // 1️⃣ Save to DB (use TEMP state)
+    await upsertCustomizedColumns(
+      currentModule?.module_id,
+      activeUserEmail,
+      tempSelectedColumns
+    );
+
+    // 2️⃣ Commit TEMP → LIVE
+    setSelectedColumns(tempSelectedColumns);
+    setSavedTableColumns(tempSelectedColumns);
+
+    // 3️⃣ UI updates
+    setShowColumnSelector(false);
+    setTableColumnMode("custom");
+
+  } catch (err) {
+    console.error("Failed to save customized columns:", err);
+  }
+};
+
+const onInputChange = (e) => {
+  const { name, value } = e.target;
+
+  setDateFilters((prev) => ({
+    ...prev,
+    [name]: value,
+  }));
+};
+useEffect(() => {
+  if (!columns.length) return;
+
+  setSelectedColumns(prev => {
+    // only set default ONCE (when empty)
+    if (prev.length) return prev;
+
+    return columns.map(col => col.column_name);
+  });
+}, [columns]);
 const normalize = (val) => {
   if (typeof val === "object") return val?.value ?? "";
   return val ?? "";
@@ -130,35 +220,56 @@ const handleSort = (columnName) => {
   });
 };
 
+const applyDateFilter = async () => {
+  try {
+    setLoading(true);
 
+    const payload = {
+      search,
+      filters: JSON.stringify(filters || []),
+      dateFilters: JSON.stringify({
+        date: {
+          startDate: dateFilters.startDate || dateFilters.start,
+          endDate: dateFilters.endDate || dateFilters.end,
+        },
+      }),
+    };
 
-useEffect(() => {
-  if (!dateColumns.length) return;
+    console.log("Applying date filter:", payload);
 
-  const defaultRange = getCurrentMonthRange();
+    const res = await getModuleData(id, activeUserEmail, payload);
 
-  const initialFilters = {};
+    setRows(res.data || []);
 
-  dateColumns.forEach(col => {
-    initialFilters[col.column_name] = defaultRange;
-  });
+  } catch (err) {
+    console.error(err);
+    setRows([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
-  setDateFilters(initialFilters);
-}, [columns]);
+// useEffect(() => {
+//   if (!dateColumns.length) return;
 
-const buildDatePayload = (df = dateFilters) => {
-  const payload = {};
+//   const defaultRange = getCurrentMonthRange();
 
-  Object.entries(df || {}).forEach(([key, range]) => {
-    if (range?.start && range?.end) {
-      payload[key] = {
-        start: range.start,
-        end: range.end
-      };
-    }
-  });
+//   const initialFilters = {};
 
-  return payload;
+//   dateColumns.forEach(col => {
+//     initialFilters[col.column_name] = defaultRange;
+//   });
+
+//   setDateFilters(initialFilters);
+// }, [columns]);
+
+const buildDatePayload = (df) => {
+  return {
+    date: {
+      startDate: df.startDate,
+      endDate: df.endDate,
+    },
+  };
 };
 
 const fetchCustomizedColumns = async () => {
@@ -227,15 +338,28 @@ const applyTermMultiplier = (value, term) => {
 };
 
 useEffect(() => {
-  if (!newRow.amount || !newRow.currency) return;
+  const amount = Number(newRow.amount);
+
+  const currency =
+    typeof newRow.currency === "object"
+      ? newRow.currency?.value
+      : newRow.currency;
+
+  if (isNaN(amount) || !currency) return;
+
+  console.log("Calculating cost for new row:", {
+    amount,
+    currency,
+    term: newRow.term
+  });
 
   const calc = calculateCost(
-    newRow.amount,
-    newRow.currency,
+    amount,
+    currency,
     newRow.term
   );
 
-  if (calc === null) return;
+  if (calc == null || isNaN(calc)) return;
 
   setNewRow(prev => ({
     ...prev,
@@ -247,7 +371,7 @@ useEffect(() => {
 useEffect(() => {
   if (!editRowId) return;
   if (!editRow.amount || !editRow.currency) return;
-
+  console.log("e")
   const calc = calculateCost(
     editRow.amount,
     editRow.currency,
@@ -349,11 +473,13 @@ const loadProviderPlans = async (providerId) => {
     );
   }
 
-  if (tableColumnMode === "custom") {
-    cols = cols.filter(c =>
-      selectedColumns.includes(c.column_name)
-    );
-  }
+ if (tableColumnMode === "custom") {
+  cols = cols.filter(c =>
+    selectedColumns?.length
+      ? selectedColumns.includes(c.column_name)
+      : true   // 🔥 fallback
+  );
+}
 
   return cols;
 };
@@ -829,55 +955,60 @@ const transformColumns = (mod, dataRows = []) => {
 };
 
     // ================= LOAD MODULE =================
-   const loadModule = async () => {
+const loadModule = async (
+  overrideDateFilters = dateFilters
+) => {
   try {
     const res = await fetchSections();
-    const mod = res.data.find(m => m.module_id == id);
-    // console.log("Matched module:", mod);
+    const mod = res.data.find(
+      (m) => m.module_id == id
+    );
+
     if (mod) {
       setModule(mod);
 
-      const dataRes = await getModuleData(id, activeUserEmail);
+      const payload = {
+        // search,
+        filters: JSON.stringify(filters || []),
+        dateFilters: JSON.stringify({
+          date: {
+            startDate:
+              overrideDateFilters.startDate,
+            endDate:
+              overrideDateFilters.endDate,
+          },
+        }),
+      };
 
-      const rowsData = dataRes.data || [];
-      setRows(rowsData);
+      console.log(
+        "Loading module data with payload:",
+        payload
+      );
+
+      const dataRes = await getModuleData(
+        id,
+        activeUserEmail,
+        payload
+      );
+
+      setRows(dataRes.data || []);
 
       setColumns(
-  (mod?.columns || []).filter(c => c.is_active !== false)
-);// ✅ PASS ROWS HERE
-      //console.log("Module loaded:", rowsData);
+        (mod?.columns || []).filter(
+          (c) => c.is_active !== false
+        )
+      );
     }
-
   } catch (err) {
     console.error(err);
   }
 };
 
-    // ================= LOAD DATA =================
-const loadData = async (overrideDateFilters) => {
-  setLoading(true);
 
-  const df = dateFilters;
-
-  const payload = {
-    search,
-    filters: JSON.stringify(filters || []),
-    dateFilters: JSON.stringify(buildDatePayload(df))
-  };
-
-  try {
-    const res = await getModuleData(id, activeUserEmail, payload);
-    setRows(res.data || []);
-  } catch (err) {
-    setRows([]);
-  } finally {
-    setLoading(false);
-  }
-};
 
 useEffect(() => {
-  loadData();
-}, [dateFilters, filters, search]);
+  loadModule();
+}, [ filters, search]);
 
     const loadCurrencies = async () => {
         try {
@@ -889,39 +1020,61 @@ useEffect(() => {
     };
 
    useEffect(() => {
-        loadModule();
-        loadData();
+       // loadModule();
         loadCurrencies();
 
     }, [id]);
  
 
 
-   useEffect(() => {
-  if (!columns.length) return;
+//    useEffect(() => {
+//   if (!columns.length) return;
 
-  const uniqueMasters = new Set();
+//   const uniqueMasters = new Set();
 
-  columns.forEach(c => {
-    if (c.master) uniqueMasters.add(c.master);
-    if (c.master1) uniqueMasters.add(c.master1);
-  });
-  //console.log("Unique masters to fetch:", uniqueMasters);
-  uniqueMasters.forEach(async (master) => {
-    try {
-      const res = await getMasterValues(master);
+//   columns.forEach(c => {
+//     if (c.master) uniqueMasters.add(c.master);
+//     if (c.master1) uniqueMasters.add(c.master1);
+//   });
+//   //console.log("Unique masters to fetch:", uniqueMasters);
+//   uniqueMasters.forEach(async (master) => {
+//     try {
+//       const res = await getMasterValues(master);
 
-      setMasterDataMap(prev => ({
-        ...prev,
-        [master]: res.data.data || []
-      }));
-     // console.log(`Master data for ${master}:`, res.data.data || []);
-    } catch (err) {
-      console.error("Master fetch failed:", master, err);
-    }
-  });
+//       setMasterDataMap(prev => ({
+//         ...prev,
+//         [master]: res.data.data || []
+//       }));
+//      // console.log(`Master data for ${master}:`, res.data.data || []);
+//     } catch (err) {
+//       console.error("Master fetch failed:", master, err);
+//     }
+//   });
 
-}, [columns]);
+// }, [columns]);
+
+
+
+const fetchMasterDataForColumn = async (master) => {
+  if (!master) return;
+
+  if (masterDataMap[master]?.length) return; // already loaded
+
+  try {
+    const res = await getMasterValues(master);
+
+    setMasterDataMap(prev => ({
+      ...prev,
+      [master]: res?.data?.data || []
+    }));
+
+  } catch (err) {
+    setMasterDataMap(prev => ({
+      ...prev,
+      [master]: []
+    }));
+  }
+};
 
 const getMasterOptions = (col, searchText = "") => {
 
@@ -991,14 +1144,14 @@ const getMasterOptions = (col, searchText = "") => {
 
   // ================= 5️⃣ SEARCH FILTER =================
   if (!searchText) return options;
-
+  
   const search = searchText.toString().toLowerCase();
-
+  console.log("Filtering options with search:", search, options);
   return options.filter(v => {
 
     const valStr =
       typeof v === "object"
-        ? (v.value || v.provider_name || "")
+        ? (v.value || "")
         : v;
 
     return valStr
@@ -1013,8 +1166,10 @@ const getMasterOptions = (col, searchText = "") => {
   const currency = list.find(
     c => c.currency_code === currencyCode
   );
+
   // If your rates are "1 AED = X currency", invert for non-AED
   if (currencyCode === "AED") return 1;
+  console.log("Exchange rate for", currencyCode, ":", currency?.exchange_rate);
   if (currency?.exchange_rate) return 1 / Number(currency.exchange_rate);
   return 1;
 };
@@ -1035,102 +1190,48 @@ const calculateCost = (amount, currencyCode, term) => {
 
 const handleNewRowChange = async (key, value, masterName) => {
 
+  // normalize object values
+  let normalized =
+    typeof value === "object"
+      ? value?.value ?? ""
+      : value;
+
+  // ONLY parse numeric columns
+  if (isNumericColumn(key)) {
+
+    const parsed = parseFloat(normalized);
+
+    normalized = isNaN(parsed)
+      ? ""
+      : parsed;
+  }
+
+  console.log("NEW ROW UPDATE", {
+    key,
+    original: value,
+    normalized
+  });
+
   setNewRow(prev => {
     const updated = {
       ...prev,
-      [key]: value
+      [key]: normalized
     };
 
     if (masterName === "billing_cycle") {
-      sessionStorage.setItem("billing_cycle", value);
-      updated.term = value;
+      sessionStorage.setItem("billing_cycle", normalized);
+      updated.term = normalized;
     }
 
     return updated;
   });
 
-  // =========================
-  // PROVIDER HANDLING
-  // =========================
+  // use normalized below too
   if (key === "service_providers") {
 
-    const providerValue =
-      typeof value === "object" ? value.value : value;
+    const providerValue = normalized;
 
-    let masterList = [];
-
-    try {
-      const res = await getMasterData(
-        "service_providers",
-        activeUserEmail
-      );
-
-      masterList = Array.isArray(res?.data)
-        ? res.data
-        : res?.data?.data || [];
-
-    } catch (err) {
-      masterList = masterDataMap?.[masterName] || [];
-    }
-
-    if (!masterList.length) {
-      masterList = masterDataMap?.[masterName] || [];
-    }
-
-    // =========================
-    // 1️⃣ GET PROVIDER ID
-    // =========================
-    const matched = masterList.find(item =>
-      (item.provider_name || item.value || "")
-        .toLowerCase()
-        .trim() === providerValue.toLowerCase().trim()
-    );
-
-    const providerId = matched?.providers || matched?.id;
-
-    console.log("✅ Provider ID:", providerId);
-
-    if (!providerId) return;
-
-    // =========================
-    // 2️⃣ IF: RESOLVE MASTER VALUE FIRST
-    // =========================
-    let providerLabel = '';
-
-    try {
-      const providerRes = await getMasterValues("providers");
-
-      const providerMaster =
-        providerRes?.data?.data ||
-        providerRes?.data ||
-        providerRes ||
-        [];
-
-      const selectedProvider = providerMaster.find(
-        item => String(item.id) === String(providerId)
-      );
-
-      //providerLabel = selectedProvider?.value || '';
-
-      console.log("🔥 Resolved Provider:", selectedProvider);
-
-    } catch (err) {
-      console.error("Provider master fetch failed:", err);
-    }
-
-    // =========================
-    // 3️⃣ UPDATE UI (AFTER IF)
-    // =========================
-    setNewRow(prev => ({
-      ...prev,
-     // plan_provider: providerLabel
-    }));
-
-    // =========================
-    // 4️⃣ FINAL STEP (ELSE LOGIC)
-    // =========================
-    setPlanManuallyChanged(false);
-    loadProviderPlans(providerId);
+    // rest of your code...
   }
 };
 useEffect(() => {
@@ -1186,7 +1287,7 @@ setInputValues({});
 setActiveDropdown(null);
 setAutoFilledFields({});
 
-await loadData();
+loadModule();
     } catch (err) {
         console.error(err);
     }
@@ -1224,7 +1325,7 @@ await loadData();
             setEditRow({});
             setOriginalRow({});
 
-            loadData();
+            loadModule();
         } catch (err) {
             console.error(err);
         }
@@ -1240,7 +1341,7 @@ await loadData();
 
         try {
             await deleteModuleRow(id, row.id, activeUserEmail);
-            loadData();
+            loadModule();
         } catch (err) {
             console.error(err);
         }
@@ -1251,7 +1352,7 @@ await loadData();
 
         try {
             await cancelModuleRow(id, row.id, activeUserEmail);
-            loadData();
+            loadModule();
         } catch (err) {
             console.error(err);
         }
@@ -1262,7 +1363,7 @@ await loadData();
 
         try {
             await undoCancelModuleRow(id, row.id, activeUserEmail);
-            loadData();
+            loadModule();
         } catch (err) {
             console.error(err);
         }
@@ -1357,13 +1458,41 @@ await loadData();
             await importTable(id, file, activeUserEmail); // your API function
             alert("Imported successfully ✅");
             setFile(null);
-            loadData(); // refresh table after import
+            loadModule(); // refresh table after import
         } catch (err) {
             console.error(err);
             alert("Import failed ❌");
         }
     };
+     
+const handleClear = async () => {
+  const defaults = getCurrentMonth();
 
+  setDateFilters(defaults);
+
+  const payload = {
+    search,
+    filters: JSON.stringify(filters || []),
+    dateFilters: JSON.stringify(buildDatePayload(defaults)),
+  };
+
+  try {
+    setLoading(true);
+
+    const res = await getModuleData(
+      id,
+      activeUserEmail,
+      payload
+    );
+
+    setRows(res.data || []);
+  } catch (err) {
+    console.error(err);
+    setRows([]);
+  } finally {
+    setLoading(false);
+  }
+};
     useEffect(() => {
         const close = () => setOpenIndex(null);
         window.addEventListener("click", close);
@@ -1400,30 +1529,30 @@ await loadData();
         );
     };
 
-   const saveColumnSelection = async () => {
-  try {
-    // 1️⃣ Save locally (optional but fast UX)
-    // localStorage.setItem(
-    //   `table_columns_${id}`,
-    //   JSON.stringify(selectedColumns)
-    // );
+//    const saveColumnSelection = async () => {
+//   try {
+//     // 1️⃣ Save locally (optional but fast UX)
+//     // localStorage.setItem(
+//     //   `table_columns_${id}`,
+//     //   JSON.stringify(selectedColumns)
+//     // );
 
-    // 2️⃣ Save to DB
-    await upsertCustomizedColumns(
-      currentModule?.module_id,
-      activeUserEmail,
-      selectedColumns
-    );
+//     // 2️⃣ Save to DB
+//     await upsertCustomizedColumns(
+//       currentModule?.module_id,
+//       activeUserEmail,
+//       selectedColumns
+//     );
 
-    // 3️⃣ Update state
-    setSavedTableColumns(selectedColumns);
-    setShowColumnSelector(false);
-    setTableColumnMode("custom");
+//     // 3️⃣ Update state
+//     setSavedTableColumns(selectedColumns);
+//     setShowColumnSelector(false);
+//     setTableColumnMode("custom");
 
-  } catch (err) {
-    console.error("Failed to save customized columns:", err);
-  }
-};
+//   } catch (err) {
+//     console.error("Failed to save customized columns:", err);
+//   }
+// };
 
    const getColumnsToUse = (mode, savedCols = []) => {
   if (mode === "saved") {
@@ -1439,13 +1568,23 @@ await loadData();
     // ================= SEARCH FILTER =================
     const filtered = applyFilters(rows, filters, columns);
 
-    const finalRows = filtered.filter(row =>
-        columns.some(col =>
-            String(row[col.column_name] || "")
-                .toLowerCase()
-                .includes(search.toLowerCase())
-        )
+   const normalizeString = (str) =>
+  String(str).toLowerCase().replace(/\s+/g, "");
+
+const finalRows = filtered.filter(row => {
+  const searchNorm = normalizeString(search);
+  console.log("Filtering row with search:", searchNorm);
+  return visibleColumns.some(col => {
+    const val = row[col.column_name];
+    console.log(`Checking column "${col.column_name}" with value:`, val);
+    const cellNorm = normalizeString(
+      typeof val === "object" ? val?.value ?? "" : val ?? ""
     );
+    const searchresult = cellNorm.includes(searchNorm);
+    console.log("Search result for column", col.column_name, ":", searchresult);
+    return searchresult;
+  });
+});
 
     const normalizedRows = finalRows.map(row => {
   const currency = (row.currency || "").toLowerCase();
@@ -1456,9 +1595,6 @@ await loadData();
   };
 });
 
-    // console.log("ROWS:", rows.length);
-    // console.log("FILTERED:", filtered.length);
-    // console.log("FINAL:", finalRows.length);
 
     // ================= PAGINATION =================
     const totalPages = Math.ceil(normalizedRows.length / pageSize);
@@ -1603,6 +1739,60 @@ await loadData();
         }
     });
     }, [editRowId, visibleColumns, masterDataMap]);
+
+//     const filteredRows = rows.filter((row) => {
+//   return filters.every((filter) => {
+//     const masterName = normalize(filter.master);
+
+//     const selectedValues = (filter.values || []).map(normalize);
+
+//     // no selected values → skip filter
+//     if (selectedValues.length === 0) return true;
+
+//     // row value
+//     const rawValue = row?.[masterName];
+
+//     const rowValue = normalize(
+//       typeof rawValue === "object"
+//         ? rawValue?.value
+//         : rawValue
+//     );
+
+//     return selectedValues.includes(rowValue);
+//   });
+// });
+
+const filteredRows = rows.filter((row) => {
+  // 1. Apply filter chips (master/column filters)
+  const passesFilters = filters.every((filter) => {
+    const masterName = normalize(filter.master);
+    const selectedValues = (filter.values || []).map(normalize);
+
+    if (selectedValues.length === 0) return true;
+
+    const rawValue = row?.[masterName];
+    const rowValue = normalize(
+      typeof rawValue === "object" ? rawValue?.value : rawValue
+    );
+
+    return selectedValues.includes(rowValue);
+  });
+
+  if (!passesFilters) return false;
+
+  // 2. Apply search bar (across all visible columns)
+  if (!search) return true; // No search term, include row
+
+  const searchNorm = normalizeString(search);
+  return visibleColumns.some((col) => {
+    const val = row[col.column_name];
+    const cellNorm = normalizeString(
+      typeof val === "object" ? val?.value ?? "" : val ?? ""
+    );
+    return cellNorm.includes(searchNorm);
+  });
+});
+
     return (
         <div className="h-full flex flex-col">
 
@@ -1679,6 +1869,13 @@ onClick={handleCreate}
   >
     PDF
   </PermissionButton>
+   <button
+                    onClick={() => setShowTableColumnModal(true)}
+                      className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
+               hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
+                >
+                    Customize
+                </button>
 
 </div>
 
@@ -1699,10 +1896,12 @@ onClick={handleCreate}
 
                 {/* FILTER BUTTON */}
                 <TableFilters
-                    masterList={masterList}
-                    filters={filters}
-                    setFilters={setFilters}
-                    currencies={currencies}
+                  masterList={masterList}
+                  filters={filters}
+                  setFilters={setFilters}
+                  currencies={currencies}
+                  masterDataMap={masterDataMap}
+                  setMasterDataMap={setMasterDataMap}
                 />
                 {isFilterActive && (
   <div className="flex items-center gap-2 ml-2 bg-gray-50 px-3 py-2 rounded-lg border">
@@ -1732,7 +1931,7 @@ onClick={handleCreate}
   </div>
 )}
                  {/* ✅ DATE FILTER BUTTONS */}
- {dateColumns.map((col, i) => {
+ {/* {dateColumns.map((col, i) => {
   const filter = dateFilters?.[col.column_name];
 
   const format = (date) =>
@@ -1763,13 +1962,68 @@ onClick={handleCreate}
       </div>
     </button>
   );
-})}
-                <button
-                    onClick={() => setShowTableColumnModal(true)}
-                    className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
-                >
-                    Customize Columns
-                </button>
+})} */}
+<div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+  <input
+    type="date"
+    name="startDate"
+    value={dateFilters.startDate}
+    onChange={onInputChange}
+    style={{
+      padding: "8px 12px",
+      borderRadius: 6,
+      border: "1px solid #ccc",
+      fontSize: 14,
+      minWidth: 150,
+      maxWidth: 180,
+      background: "#f8fafc",
+      textAlign: "center",
+    }}
+  />
+
+  <span style={{ fontSize: 14, color: "#666" }}>to</span>
+
+  <input
+    type="date"
+    name="endDate"
+    value={dateFilters.endDate}
+    onChange={onInputChange}
+    style={{
+      padding: "8px 12px",
+      borderRadius: 6,
+      border: "1px solid #ccc",
+      fontSize: 14,
+      minWidth: 150,
+      maxWidth: 180,
+      background: "#f8fafc",
+      textAlign: "center",
+    }}
+  />
+</div>
+<button
+  onClick={applyDateFilter}
+  className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
+>
+  Apply
+</button>
+<button
+    onClick={handleClear}
+  className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
+>
+  Clear
+</button>
+               <button
+  onClick={() =>
+    setActiveDateFilter(
+      activeDateFilter === "custom" ? null : "custom"
+    )
+  }
+  className={`px-3 py-2 border rounded-lg text-sm hover:bg-gray-100 ${
+    activeDateFilter === "custom" ? "bg-gray-100" : ""
+  }`}
+>
+  Custom Range
+</button>
                
 
                 {/* PAGINATION (LEFT SIDE LIKE YOU WANTED) */}
@@ -1811,19 +2065,15 @@ onClick={handleCreate}
     if (!range?.start || !range?.end) return;
 
     const updatedFilters = {
-      ...dateFilters,
-      [activeDateFilter]: {
-        start: range.start,
-        end: range.end,
-        source: "picker"
-      }
+      startDate: range.start,
+      endDate: range.end,
     };
 
     setDateFilters(updatedFilters);
     setActiveDateFilter(null);
 
-    // ✅ FORCE API CALL
-    loadData(updatedFilters);
+    // ✅ pass latest filters directly
+    loadModule(updatedFilters);
   }}
 />
   </div>
@@ -1864,14 +2114,18 @@ onClick={handleCreate}
               {val}
               <button
                 onClick={() => {
-                  const updated = [...filters];
+               setFilters(prev =>
+                  prev.map((item, index) => {
+                    if (index !== i) return item;
 
-                  updated[i].values =
-                    updated[i].values
-                      .map(normalize)
-                      .filter(v => v !== val);
-
-                  setFilters(updated);
+                    return {
+                      ...item,
+                      values: (item.values || [])
+                        .map(normalize)
+                        .filter(v => v !== val),
+                    };
+                  })
+                );
                 }}
                 className="text-blue-500 hover:text-red-500"
               >
@@ -1914,19 +2168,21 @@ onClick={handleCreate}
                     type="checkbox"
                     checked={checked}
                     onChange={() => {
-                      const updated = [...filters];
+                     setFilters(prev =>
+                        prev.map((item, index) => {
+                          if (index !== i) return item;
 
-                      const current =
-                        (updated[i].values || []).map(normalize);
+                          const current =
+                            (item.values || []).map(normalize);
 
-                      if (checked) {
-                        updated[i].values =
-                          current.filter(v => v !== label);
-                      } else {
-                        updated[i].values = [...current, label];
-                      }
-
-                      setFilters(updated);
+                          return {
+                            ...item,
+                            values: checked
+                              ? current.filter(v => v !== label)
+                              : [...current, label],
+                          };
+                        })
+                      );
                     }}
                   />
 
@@ -2087,11 +2343,17 @@ if (col.master === "credit_card" && value) {
     }
   }}
 
-  onFocus={() => {
-    if (!isMaster) return;
+   onFocus={() => {
+  setActiveField(col.column_name);
 
-    setActiveField(col.column_name);
-  }}
+  if (col.master) {
+    fetchMasterDataForColumn(col.master);
+  }
+
+  if (col.master1) {
+    fetchMasterDataForColumn(col.master1);
+  }
+}}
 
   onBlur={(e) => {
     if (isAmount && e.target.value !== "") {
@@ -2279,7 +2541,7 @@ if (col.master === "credit_card" && value) {
 )}
 
 {/* ================= DATA ROWS ================= */}
-{paginatedRows.map((row, i) => (
+{filteredRows.map((row, i) => (
   <tr key={row.id ?? i} className="hover:bg-gray-50">
 
     <td className="px-4 py-3 whitespace-nowrap">
@@ -2813,7 +3075,7 @@ if (col.master === "credit_card" && value) {
       <button
         onClick={() => {
           setTableColumnMode("default");
-          setSelectedColumns([]); // reset
+          //setSelectedColumns([]); // reset
         }}
         className="btn btn-gray flex-1"
       >
@@ -2862,56 +3124,134 @@ if (col.master === "credit_card" && value) {
   </Modal>
 )}
 
-                    {showColumnSelector && (
-                        <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
+                  {showColumnSelector && (
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50">
 
-                            <div className="bg-white p-5 rounded-xl shadow-lg w-[420px]">
+    <div className="w-[500px] bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden">
 
-                                <h3 className="mb-4 text-lg font-semibold">
-                                    Select Columns
-                                </h3>
+      {/* Header */}
+      <div className="px-6 py-5 bg-gradient-to-r from-slate-50 to-blue-50 border-b">
 
-                                <div className="max-h-60 overflow-auto space-y-2 pr-2">
+        <h2 className="text-lg font-semibold text-gray-800">
+          Customize Columns
+        </h2>
 
-                                    {columns.map(col => (
-                                        <label
-                                            key={col.column_id}
-                                            className="flex items-center gap-2 p-2 rounded hover:bg-gray-100 cursor-pointer"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedColumns.includes(col.column_name)}
-                                                onChange={() => toggleColumn(col.column_name)}
-                                                className="accent-blue-600"
-                                            />
-                                            <span>{col.display_name}</span>
-                                        </label>
-                                    ))}
+        <p className="text-sm text-gray-500 mt-1">
+          Search and select fields to show in your table
+        </p>
 
-                                </div>
+        {/* SEARCH */}
+        <div className="mt-4 relative">
 
-                                <div className="flex justify-end gap-2 mt-4">
+          <input
+            type="text"
+            placeholder="Search columns..."
+            value={columnSearch}
+            onChange={(e) => setColumnSearch(e.target.value)}
+            className="w-full px-4 py-2 pl-10 text-sm rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 outline-none transition"
+          />
 
-                                    <button
-                                        onClick={() => setShowColumnSelector(false)}
-                                        className="btn btn-outline"
-                                    >
-                                        Cancel
-                                    </button>
+          <span className="absolute left-3 top-2.5 text-gray-400 text-sm">
+            🔍
+          </span>
 
-                                    <button
-                                        onClick={saveColumnSelection}
-                                        className="btn btn-blue"
-                                    >
-                                        💾 Save
-                                    </button>
+        </div>
 
-                                </div>
+      </div>
 
-                            </div>
+      {/* Quick actions */}
+      <div className="flex justify-between px-6 py-3 text-xs bg-gray-50 border-b">
 
-                        </div>
-                    )}
+        <button
+          onClick={() => setTempSelectedColumns(columns.map(c => c.column_name))}
+          className="text-blue-600 hover:underline font-medium"
+        >
+          Select All
+        </button>
+
+        <button
+          onClick={() => setTempSelectedColumns([])}
+          className="text-red-500 hover:underline font-medium"
+        >
+          Clear All
+        </button>
+
+      </div>
+
+      {/* List */}
+      <div className="max-h-72 overflow-auto p-4 space-y-2">
+
+        {columns
+          .filter(col =>
+            col.display_name
+              .toLowerCase()
+              .includes(columnSearch.toLowerCase())
+          )
+          .map(col => {
+
+            const checked = tempSelectedColumns.includes(col.column_name);
+
+            return (
+              <div
+                key={col.column_id}
+                onClick={() => toggleTempColumn(col.column_name)}
+                className={`
+                  flex items-center justify-between px-4 py-3 rounded-2xl border cursor-pointer transition
+                  ${checked
+                    ? "bg-blue-50 border-blue-300 shadow-sm"
+                    : "hover:bg-gray-50 border-gray-100"
+                  }
+                `}
+              >
+
+                <div className="flex items-center gap-3">
+
+                  {/* custom checkbox */}
+                  <div className={`
+                    w-5 h-5 flex items-center justify-center rounded-md border transition
+                    ${checked
+                      ? "bg-blue-600 border-blue-600 text-white"
+                      : "border-gray-300"
+                    }
+                  `}>
+                    {checked && "✓"}
+                  </div>
+
+                  <span className="text-sm text-gray-700">
+                    {col.display_name}
+                  </span>
+
+                </div>
+
+              </div>
+            );
+          })}
+
+      </div>
+
+      {/* Footer */}
+      <div className="flex justify-end gap-2 px-6 py-4 border-t bg-white">
+
+        <button
+          onClick={() => setShowColumnSelector(false)}
+          className="px-4 py-2 text-sm rounded-xl border hover:bg-gray-100 transition"
+        >
+          Cancel
+        </button>
+
+        <button
+          onClick={saveColumnSelection}
+          className="px-5 py-2 text-sm rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:opacity-90 shadow-md transition"
+        >
+          Apply Changes
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+)}
                     {showPrintOptions && (
                         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
 

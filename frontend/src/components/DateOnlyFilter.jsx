@@ -3,8 +3,12 @@ import { useState, useEffect } from "react";
 const PRESETS = [
   { label: "Today", value: "today" },
   { label: "Yesterday", value: "yesterday" },
+  { label: "Last 7 Days", value: "last_7_days" },
+  { label: "Last 30 Days", value: "last_30_days" },
   { label: "This Week", value: "week" },
+  { label: "Last Week", value: "last_week" },
   { label: "This Month", value: "month" },
+  { label: "Last Month", value: "last_month" },
 ];
 
 export default function ModernDateFilter({ onApply }) {
@@ -31,36 +35,56 @@ export default function ModernDateFilter({ onApply }) {
 
   // RANGE LOGIC
   const getRange = (val) => {
-    const today = new Date();
+  const today = new Date();
 
-    let start = new Date(today);
-    let end = new Date(today);
+  let start = new Date(today);
+  let end = new Date(today);
 
-    if (val === "today") {
-      // same day
+  if (val === "today") {
+    // same day
 
-    } else if (val === "yesterday") {
-      start.setDate(today.getDate() - 1);
-      end.setDate(today.getDate() - 1);
+  } else if (val === "yesterday") {
+    start.setDate(today.getDate() - 1);
+    end.setDate(today.getDate() - 1);
 
-    } else if (val === "week") {
-      const day = today.getDay(); // Sunday = 0
-      const diff = day === 0 ? -6 : 1 - day;
+  } else if (val === "last_7_days") {
+    start.setDate(today.getDate() - 6);
 
-      start.setDate(today.getDate() + diff);
-      end = new Date(start);
-      end.setDate(start.getDate() + 6);
+  } else if (val === "last_30_days") {
+    start.setDate(today.getDate() - 29);
 
-    } else if (val === "month") {
-      start = new Date(today.getFullYear(), today.getMonth(), 1);
-      end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    }
+  } else if (val === "week") {
+    const day = today.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
 
-    return {
-      start: formatDate(start),
-      end: formatDate(end),
-    };
+    start.setDate(today.getDate() + diff);
+    end = new Date(start);
+    end.setDate(start.getDate() + 6);
+
+  } else if (val === "last_week") {
+    const day = today.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+
+    start = new Date(today);
+    start.setDate(today.getDate() + diff - 7);
+
+    end = new Date(start);
+    end.setDate(start.getDate() + 6);
+
+  } else if (val === "month") {
+    start = new Date(today.getFullYear(), today.getMonth(), 1);
+    end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+  } else if (val === "last_month") {
+    start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    end = new Date(today.getFullYear(), today.getMonth(), 0);
+  }
+
+  return {
+    start: formatDate(start),
+    end: formatDate(end),
   };
+};
 
   // PRESET SELECT
   const selectPreset = (val) => {
@@ -113,7 +137,7 @@ export default function ModernDateFilter({ onApply }) {
                 onClick={() => selectPreset(p.value)}
                 style={{
                   ...chip,
-                  background: selected === p.value ? "#111827" : "#f3f4f6",
+                  background: selected === p.value ? "#7691d1" : "#f3f4f6",
                   color: selected === p.value ? "#fff" : "#111",
                 }}
               >
@@ -123,7 +147,7 @@ export default function ModernDateFilter({ onApply }) {
           </div>
 
           {/* DATE INPUTS */}
-          <div style={grid}>
+          {/* <div style={grid}>
             <div>
               <label style={label}>Start Date</label>
               <input
@@ -143,7 +167,7 @@ export default function ModernDateFilter({ onApply }) {
                 style={input}
               />
             </div>
-          </div>
+          </div> */}
 
           {/* APPLY */}
           <button onClick={apply} style={btn}>
@@ -179,7 +203,7 @@ const panel = {
   background: "#fff",
   borderRadius: 14,
   padding: 14,
-  boxShadow: "0 20px 40px rgba(0,0,0,0.08)",
+  boxShadow: "0 20px 40px rgba(0, 0, 0, 0.33)",
   border: "1px solid #eee",
   zIndex: 20,
 };
@@ -223,7 +247,7 @@ const btn = {
   marginTop: 10,
   padding: "8px",
   borderRadius: 10,
-  background: "#111827",
+  background: "#7691d1",
   color: "#fff",
   border: "none",
   cursor: "pointer",

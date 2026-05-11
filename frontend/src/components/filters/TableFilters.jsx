@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
+import { getMasterValues } from "../../api/api";
 
 export default function TableFilters({
   masterList = [],
   filters,
   setFilters,
-  currencies = []   // ✅ ADD THIS
+  currencies = [],   // ✅ ADD THIS
+  masterDataMap,
+  setMasterDataMap,
 }) {
   const [open, setOpen] = useState(false);
+ 
+
+
 
   // ================= MASTER LIST =================
   const masterList1 = [
@@ -14,29 +20,43 @@ export default function TableFilters({
   ];
 
   // ================= GET OPTIONS =================
-  const getOptions = (master) => {
-    if (master === "currency") {
-      // 👉 take from API
-      return currencies.map(c => c.currency_code);
-    }
+const getOptions = (master) => {
+  if (master === "currency") {
+    return currencies.map(c => c.currency_code);
+  }
 
-    return []; // later you can extend for other masters
-  };
+  return (masterDataMap[master] || []).map(item => item.value);
+};
 
   // ================= ADD FILTER =================
-  const addFilter = (master) => {
-    if (filters.some(f => f.master === master)) return;
+   const addFilter = async (master) => {
 
-    setFilters(prev => [
+  if (filters.some(f => f.master === master)) return;
+
+  setFilters(prev => [
+    ...prev,
+    {
+      master,
+      values: []
+    }
+  ]);
+
+  try {
+    const res = await getMasterValues(master);
+
+    const data = res?.data?.data || [];
+
+    setMasterDataMap(prev => ({
       ...prev,
-      {
-        master,
-        values: []
-      }
-    ]);
+      [master]: data
+    }));
 
-    setOpen(false);
-  };
+  } catch (err) {
+    console.error("Failed to load master:", master, err);
+  }
+
+  setOpen(false);
+};
 
   return (
     <div className="relative">
@@ -46,7 +66,7 @@ export default function TableFilters({
         onClick={() => setOpen(!open)}
         className="bg-gray-100 px-3 py-2 rounded-lg hover:bg-gray-200"
       >
-        🔍 Filters ({filters.length})
+         Filters ({filters.length})
       </button>
 
       {/* DROPDOWN */}
