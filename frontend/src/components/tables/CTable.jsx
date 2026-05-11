@@ -2598,7 +2598,7 @@ if (col.master === "credit_card" && value) {
 
           <input
   autoComplete="off"
-  type={isDate ? "date" : "text"}
+  type={isNumericColumn(col) ? "number" : isDate ? "date" : "text"}
   className="
     w-full
     rounded-xl
@@ -2677,7 +2677,12 @@ if (col.master === "credit_card" && value) {
     setActiveField(null);
   }}
 />
-
+    {isMaster &&
+                loadingMaster === col.master && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <Loader type="dots" />
+                  </div>
+              )}
             {/* MASTER DROPDOWN */}
           {/* ================= MASTER DROPDOWN ================= */}
 {isMaster &&
@@ -2717,6 +2722,13 @@ if (col.master === "credit_card" && value) {
         shadow-[0_10px_35px_rgba(0,0,0,0.12)]
         max-h-64 overflow-y-auto
       ">
+         {loadingMaster ===
+                        col.master && (
+                        <div className="flex items-center justify-center py-6">
+                          <Loader type="dots" />
+                        </div>
+                      )}
+
 
         {/* OPTIONS */}
         {filteredOptions.map((val, i) => {
@@ -2909,7 +2921,7 @@ if (col.master === "credit_card" && value) {
 
               {/* ================= INPUT ================= */}
               <input
-                type={isDate ? "date" : "text"}
+                type={isNumericColumn(col) ? "number" : isDate ? "date" : "text"}
                 disabled={
                   col.column_name === "total_amount_aed"
                 }
