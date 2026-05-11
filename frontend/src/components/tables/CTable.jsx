@@ -180,6 +180,7 @@ const onInputChange = (e) => {
     [name]: value,
   }));
 };
+
 useEffect(() => {
   if (!columns.length) return;
 
@@ -374,7 +375,6 @@ useEffect(() => {
 useEffect(() => {
   if (!editRowId) return;
   if (!editRow.amount || !editRow.currency) return;
-  console.log("e")
   const calc = calculateCost(
     editRow.amount,
     editRow.currency,
@@ -545,316 +545,7 @@ const normalizeCreateColumns = (cols) => {
 
   return [...rest,...ordered];
 };
-   const toNumber = (val) => {
-  if (val === null || val === undefined || val === "") return 0;
 
-  const n = Number(String(val).replace(/,/g, ""));
-  return isNaN(n) ? 0 : n;
-};
-
-const formatNumber = (val) => {
-  const num = toNumber(val);
-
-  return num.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-};
-
-const isNumericColumn = (col) => {
-  const name = (col.column_name || "").toLowerCase();
-   console.log("Checking columns from raw data:", name);
-  return (
-    name.includes("amount") ||
-    name.includes("cost") ||
-    name.includes("price") ||
-    name.includes("total")
-  );
-};
-
-const isTotalColumn = (col) => {
-  const name = col.column_name.toLowerCase();
-   console.log("Checking columns from raw data:", name);
-  return (
-    name.includes("total")
-  );
-};
-
-// SORT TOTAL LAST
-const sortColumns = (cols) => {
-    console.log("Sorting columns:", cols.map(c => c.column_name));
-  const normal = cols.filter(
-    c => !c.column_name.toLowerCase().includes("total")
-  );
-
-  const total = cols.filter(
-    c => c.column_name.toLowerCase().includes("total")
-  );
-
-  return [...normal, ...total];
-};
-
-
-const generateTableHTML = (cols = columns) => {
-
-  const company = localStorage.getItem("print_company");
-
-  // =====================================================
-  // DISTINCT CURRENCIES
-  // =====================================================
-  const currencies = [
-    ...new Set(
-      finalRows
-        .map(r => r.currency)
-        .filter(Boolean)
-    )
-  ];
-
-  // =====================================================
-  // REMOVE:
-  // 1. amount column
-  // 2. currency column
-  // =====================================================
-const normalCols = cols.filter(c => {
-
-  const name = c.column_name.toLowerCase();
-
-  // REMOVE ONLY PURE amount COLUMN
-  // KEEP total_amount_aed
-  return (
-    name !== "amount" &&
-    name !== "currency"
-  );
-
-});
-
-  
-  const currencyCols = currencies.map(cur => ({
-    column_name: `amount_${cur.toLowerCase()}`,
-    display_name: `AMOUNT (${cur.toUpperCase()})`,
-    currency: cur,
-    isDynamicCurrency: true
-  }));
-
-  // =====================================================
-  // FINAL COLUMNS
-  // =====================================================
-  const sortedCols = sortColumns([
-    ...normalCols,
-    ...currencyCols
-  ]);
-
-  const firstTotalIndex = sortedCols.findIndex(col =>
-  isTotalColumn(col)
-);
-
-  // =====================================================
-  // TOTALS
-  // =====================================================
-  const totals = {};
-
-  sortedCols.forEach(col => {
-
-  // ONLY TOTAL COLUMNS
-  if (isTotalColumn(col)) {
-
-    totals[col.column_name] = finalRows.reduce((sum, row) => {
-      return sum + toNumber(row[col.column_name]);
-    }, 0);
-
-  }
-
-});
-
-  // =====================================================
-  // HTML
-  // =====================================================
-  return `
-
-    <div style="text-align:center; margin-bottom:10px;">
-
-      ${
-        company
-          ? `
-            <h1 style="font-size:24px; margin-bottom:5px;">
-              ${company}
-            </h1>
-          `
-          : ``
-      }
-
-      <h2 style="margin-bottom:10px;">
-        ${printModuleName?.trim() || module?.display_name}
-      </h2>
-
-    </div>
-
-    <table
-      border="1"
-      cellspacing="0"
-      cellpadding="5"
-      style="width:100%; border-collapse:collapse;"
-    >
-
-      <!-- ================= HEADER ================= -->
-
-      <thead>
-
-        <tr>
-
-          <th>S.No</th>
-
-          ${sortedCols.map(col => `
-            <th>${col.display_name}</th>
-          `).join("")}
-
-        </tr>
-
-      </thead>
-
-      <!-- ================= BODY ================= -->
-
-      <tbody>
-
-        ${finalRows.map((row, index) => `
-
-          <tr>
-
-            <td style="text-align:center">
-              ${index + 1}
-            </td>
-
-            ${sortedCols.map(col => {
-
-              let value = "";
-
-              // =========================================
-              // DYNAMIC CURRENCY COLUMN
-              // =========================================
-              if (col.isDynamicCurrency) {
-
-                if (row.currency === col.currency) {
-                  value = row.amount;
-                } else {
-                  value = "";
-                }
-
-              }
-
-              // =========================================
-              // NORMAL COLUMN
-              // =========================================
-              else {
-
-                const raw = row[col.column_name];
-
-                value =
-                  typeof raw === "object"
-                    ? raw?.value ?? ""
-                    : raw ?? "";
-
-              }
-
-              // =========================================
-              // DATE
-              // =========================================
-              if (
-                col.data_type?.toLowerCase().includes("date")
-              ) {
-
-                return `
-                  <td style="text-align:center">
-                    ${formatDate(value)}
-                  </td>
-                `;
-              }
-
-              // =========================================
-              // CREDIT CARD
-              // =========================================
-              if (col.master === "credit_card") {
-
-                const str = String(value);
-                const last4 = str.slice(-4);
-
-                return `
-                  <td style="text-align:center">
-                    **** **** **** ${last4}
-                  </td>
-                `;
-              }
-
-              // =========================================
-              // NUMBER / AMOUNT
-              // =========================================
-              if (
-                isNumericColumn(col) ||
-                col.isDynamicCurrency
-              ) {
-
-                return `
-                  <td style="text-align:right">
-                    ${
-                      value !== ""
-                        ? formatNumber(value)
-                        : ""
-                    }
-                  </td>
-                `;
-              }
-
-              // =========================================
-              // DEFAULT
-              // =========================================
-              return `
-                <td style="text-align:center">
-                  ${value || "-"}
-                </td>
-              `;
-
-            }).join("")}
-
-          </tr>
-
-        `).join("")}
-
-      <!-- ================= TOTAL ROW ================= -->
-
-<tr style="font-weight:bold; background:#f5f5f5;">
-
-  <!-- S.No column -->
-  <td></td>
-
-  <!-- TOTAL LABEL (spans all non-total columns) -->
-  <td
-    colspan="${firstTotalIndex > 0 ? firstTotalIndex : 1}"
-    style="text-align:right"
-  >
-    TOTAL
-  </td>
-
-  <!-- TOTAL VALUES -->
-  ${sortedCols.slice(firstTotalIndex).map(col => {
-
-    if (!isTotalColumn(col)) {
-      return `<td></td>`;
-    }
-
-    return `
-      <td style="text-align:right">
-        ${formatNumber(totals[col.column_name] || 0)}
-      </td>
-    `;
-  }).join("")}
-
-</tr>
-
-      </tbody>
-
-    </table>
-
-  `;
-};
 
 const getExcelColumns = (mode) => {
   const cols = getColumnsToUse(mode);
@@ -2085,19 +1776,333 @@ const sortedRows = [...filteredRows].sort(
   }
 );
 
+const toNumber = (val) => {
+  if (val === null || val === undefined || val === "") return 0;
 
+  const n = Number(String(val).replace(/,/g, ""));
+  return isNaN(n) ? 0 : n;
+};
 
-// ======================================================
-// FINAL DATA
-// ======================================================
+const formatNumber = (val) => {
+  const num = toNumber(val);
 
-// use this in table
-// sortedRows.map(...)
+  return num.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
 
-console.log(
-  "✅ FINAL SORTED ROWS:",
-  sortedRows
+const isNumericColumn = (col) => {
+  const name = (col.column_name || "").toLowerCase();
+   console.log("Checking columns from raw data:", name);
+  return (
+    name.includes("amount") ||
+    name.includes("cost") ||
+    name.includes("price") ||
+    name.includes("total")
+  );
+};
+
+const isTotalColumn = (col) => {
+  const name = col.column_name.toLowerCase();
+   console.log("Checking columns from raw data:", name);
+  return (
+    name.includes("total")
+  );
+};
+
+// SORT TOTAL LAST
+const sortColumns = (cols) => {
+    console.log("Sorting columns:", cols.map(c => c.column_name));
+  const normal = cols.filter(
+    c => !c.column_name.toLowerCase().includes("total")
+  );
+
+  const total = cols.filter(
+    c => c.column_name.toLowerCase().includes("total")
+  );
+
+  return [...normal, ...total];
+};
+
+const groupedRows = finalRows.reduce((acc, row) => {
+
+  const key =
+    row.service_types?.value ||
+    row.service_types ||
+    "UNKNOWN";
+
+  if (!acc[key]) acc[key] = [];
+
+  acc[key].push(row);
+
+  return acc;
+
+}, {});
+
+const grandTotals = {};
+
+const generateTableHTML = (cols = columns) => {
+
+  const company = localStorage.getItem("print_company");
+
+  // =====================================================
+  // DISTINCT CURRENCIES
+  // =====================================================
+  const currencies = [
+    ...new Set(
+      finalRows
+        .map(r => r.currency)
+        .filter(Boolean)
+    )
+  ];
+
+  // =====================================================
+  // REMOVE:
+  // 1. amount column
+  // 2. currency column
+  // =====================================================
+const normalCols = cols.filter(c => {
+
+  const name = c.column_name.toLowerCase();
+
+  // REMOVE ONLY PURE amount COLUMN
+  // KEEP total_amount_aed
+  return (
+    name !== "amount" &&
+    name !== "currency"
+  );
+
+});
+
+  
+  const currencyCols = currencies.map(cur => ({
+    column_name: `amount_${cur.toLowerCase()}`,
+    display_name: `AMOUNT (${cur.toUpperCase()})`,
+    currency: cur,
+    isDynamicCurrency: true
+  }));
+
+  // =====================================================
+  // FINAL COLUMNS
+  // =====================================================
+  const sortedCols = sortColumns([
+    ...normalCols,
+    ...currencyCols
+  ]);
+
+  const firstTotalIndex = sortedCols.findIndex(col =>
+  isTotalColumn(col)
 );
+
+  // =====================================================
+  // TOTALS
+  // =====================================================
+  const totals = {};
+
+  sortedCols.forEach(col => {
+
+  // ONLY TOTAL COLUMNS
+  if (isTotalColumn(col)) {
+
+    totals[col.column_name] = finalRows.reduce((sum, row) => {
+      return sum + toNumber(row[col.column_name]);
+    }, 0);
+
+  }
+
+});
+
+
+  const isDateColumn = (col) => {
+  const data_type = (col.data_type || "").toLowerCase();
+  return data_type.includes("date");
+};
+  // =====================================================
+  // HTML
+  // =====================================================
+return `
+  <div style="text-align:center; margin-bottom:20px;">
+
+    ${
+      company
+        ? `<h1 style="font-size:24px; margin-bottom:5px;">${company}</h1>`
+        : ``
+    }
+
+    <h2>${printModuleName?.trim() || module?.display_name}</h2>
+
+  </div>
+
+  ${Object.entries(groupedRows).map(([serviceType, rows]) => {
+
+    // ================= GROUP TOTALS =================
+    const groupTotals = {};
+
+    sortedCols.forEach(col => {
+      if (isTotalColumn(col)) {
+        groupTotals[col.column_name] = rows.reduce((sum, row) => {
+          return sum + toNumber(row[col.column_name]);
+        }, 0);
+
+        // add to grand total
+        grandTotals[col.column_name] =
+          (grandTotals[col.column_name] || 0) +
+          groupTotals[col.column_name];
+      }
+    });
+
+    const firstTotalIndex = sortedCols.findIndex(isTotalColumn);
+
+    return `
+      <div style="margin-bottom:40px; text: 5px;">
+
+        <!-- GROUP TITLE -->
+        <h3 style="margin:10px 0; text-align:center;">
+          ${serviceType}
+        </h3>
+
+        <table border="1" cellspacing="0" cellpadding="5"
+          style="width:100%; border-collapse:collapse;">
+
+          <!-- HEADER -->
+          <thead>
+            <tr>
+              <th style="text-align:center">S.No</th>
+              ${sortedCols.map(col => `
+                <th>${col.display_name}</th>
+              `).join("")}
+            </tr>
+          </thead>
+
+          <!-- BODY -->
+          <tbody>
+
+            ${rows.map((row, index) => `
+              <tr>
+                <td style="text-align:center">${index + 1}</td>
+
+                ${sortedCols.map(col => {
+
+                  let value = "";
+
+                  if (col.isDynamicCurrency) {
+                    value =
+                      row.currency === col.currency
+                        ? row.amount
+                        : "";
+                  } else {
+                    const raw = row[col.column_name];
+                    value =
+                      typeof raw === "object"
+                        ? raw?.value ?? ""
+                        : raw ?? "";
+                  }
+
+                  if (col.master === "credit_card") {
+                    const str = String(value);
+                    const last4 = str.slice(-4);
+                    return `
+                      <td style="text-align:center">
+                        **** **** **** ${last4}
+                      </td>
+                    `;
+                  }
+
+                  if (isDateColumn(col)) {
+                    value = value
+                      ? formatDate(value)
+                      : "";
+                  }
+
+                  if (isNumericColumn(col) || col.isDynamicCurrency) {
+                    return `
+                      <td style="text-align:right">
+                        ${value !== "" ? formatNumber(value) : ""}
+                      </td>
+                    `;
+                  }
+
+                  return `
+                    <td style="text-align:center">
+                      ${value || "-"}
+                    </td>
+                  `;
+
+                }).join("")}
+              </tr>
+            `).join("")}
+
+            <!-- ================= GROUP TOTAL ROW ================= -->
+            <tr style="font-weight:bold; background:#f5f5f5;">
+
+              <td></td>
+
+              <!-- 🔥 TOTAL LABEL BEFORE FIRST TOTAL COLUMN -->
+              <td colspan="${firstTotalIndex > 0 ? firstTotalIndex : 1}" style="text-align:right;">
+                TOTAL
+              </td>
+
+              <!-- TOTAL VALUES -->
+              ${sortedCols.slice(firstTotalIndex).map(col => {
+
+                if (!isTotalColumn(col)) {
+                  return `<td></td>`;
+                }
+
+                return `
+                  <td style="text-align:right;">
+                    ${formatNumber(groupTotals[col.column_name] || 0)}
+                  </td>
+                `;
+              }).join("")}
+
+            </tr>
+
+          </tbody>
+
+        </table>
+
+      </div>
+    `;
+  }).join("")}
+
+ <!-- ================= GRAND TOTAL (INLINE STYLE) ================= -->
+
+<table border="1" cellspacing="0" cellpadding="5"
+  style="width:100%; margin-top:30px; border-collapse:collapse;">
+
+  <tbody>
+
+    <tr style="font-weight:bold; background:#ddd;">
+
+      <td></td>
+
+      <!-- LABEL BEFORE FIRST TOTAL COLUMN -->
+      <td colspan="${firstTotalIndex > 0 ? firstTotalIndex : 1}" style="text-align:right;">
+        GRAND TOTAL
+      </td>
+
+      ${sortedCols.slice(firstTotalIndex).map(col => {
+
+        if (!isTotalColumn(col)) {
+          return `<td></td>`;
+        }
+
+        return `
+          <td style="text-align:right;">
+            ${formatNumber(grandTotals[col.column_name] || 0)}
+          </td>
+        `;
+      }).join("")}
+
+    </tr>
+
+  </tbody>
+
+</table>
+`;
+};
 
   const paginatedRows = sortedRows.slice(
         (page - 1) * pageSize,
