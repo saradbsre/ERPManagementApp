@@ -18,8 +18,6 @@ const PrintableTable = ({
     String(v || "")
       .replace(/^service\s*types?:?\s*/i, "") // removes "Service Types:"
       .trim();
-  console.log("Row data for grouping:", row);
-  console.log("GroupBy value for this row:", groupBy);
   if (groupBy === "terms") {
     return normalize(
       row.term?.value ||

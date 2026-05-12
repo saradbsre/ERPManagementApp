@@ -240,7 +240,7 @@ const applyDateFilter = async () => {
       }),
     };
 
-    console.log("Applying date filter:", payload);
+    // console.log("Applying date filter:", payload);
 
     const res = await getModuleData(id, activeUserEmail, payload);
 
@@ -352,11 +352,7 @@ useEffect(() => {
 
   if (isNaN(amount) || !currency) return;
 
-  console.log("Calculating cost for new row:", {
-    amount,
-    currency,
-    term: newRow.term
-  });
+
 
   const calc = calculateCost(
     amount,
@@ -583,8 +579,7 @@ const transformColumns = (mod, dataRows = []) => {
 
   let cols = mod?.columns || [];
 
-  console.log("🔥 Columns:", cols);
-  console.log("🔥 Data rows:", dataRows);
+
 
   // ================= 1. EXTRACT CURRENCIES (FIXED) =================
   const currencies = new Set();
@@ -597,7 +592,7 @@ const transformColumns = (mod, dataRows = []) => {
 
   const currencyList = Array.from(currencies);
 
-  console.log("🔥 Final Currency List:", currencyList);
+  // console.log("🔥 Final Currency List:", currencyList);
 
   // ================= 2. CLEAN COLUMNS FIRST =================
   cols = cols.filter(col => {
@@ -653,7 +648,7 @@ const transformColumns = (mod, dataRows = []) => {
 
   setColumns(result);
 
-  console.log("🔥 Final Transformed Columns:", result);
+  // console.log("🔥 Final Transformed Columns:", result);
 };
 
     // ================= LOAD MODULE =================
@@ -1250,27 +1245,45 @@ const handleClear = async () => {
         return () => window.removeEventListener("click", close);
     }, []);
 
-    // const handlePrint = (mode, savedCols = []) => {
-    // const cols = getColumnsToUse(mode, savedCols);
+    const handlePrint = (mode, savedCols = []) => {
+    const cols = getColumnsToUse(mode, savedCols);
 
-    // openPrintWindow({
-    //     content: generateTableHTML(cols),
-    //     userName: activeUser?.email || "User",
-    // });
+    openPrintWindow({
+        content: generateTableHTML(cols),
+        userName: activeUser?.email || "User",
+    });
 
-    // setShowPrintModal(false);
-    // };
+    setShowPrintModal(false);
+    };
 
-const handlePrint = () => {
+// const handlePrint = (
+//   mode = "default",
+//   customCols = null
+// ) => {
 
-  if (!printRef.current) return;
+//   if (!printRef.current) return;
 
-  openPrintWindow({
-    content: printRef.current.innerHTML,
-    userName: activeUser?.email || "User",
-    groupBy
-  });
-};
+//   let cols;
+
+//   if (customCols && Array.isArray(customCols)) {
+
+//     cols = columns.filter(col =>
+//       customCols.includes(col.column_name)
+//     );
+
+//   } else {
+
+//     cols = getColumnsToUse(mode);
+
+//   }
+
+//   openPrintWindow({
+//     content: printRef.current.innerHTML,
+//     userName: activeUser?.email || "User",
+//     groupBy,
+//     columns: cols
+//   });
+// };
 
     useEffect(() => {
         const saved = localStorage.getItem(`print_columns_${id}`);
@@ -1315,6 +1328,7 @@ const handlePrint = () => {
 // };
 
    const getColumnsToUse = (mode, savedCols = []) => {
+   // console.log("Getting columns for mode:", savedCols);
   if (mode === "saved") {
     return columns.filter(c =>
       savedCols.includes(c.column_name)
@@ -1664,10 +1678,7 @@ const fieldKey =
   const searchNorm =
     normalizeString(search);
 
-  console.log(
-    "🔍 SEARCH TERM:",
-    searchNorm
-  );
+
 
   const searchMatch =
     visibleColumns.some(
@@ -1686,21 +1697,12 @@ const fieldKey =
         const match =
           cellNorm.includes(searchNorm);
 
-        console.log(
-          `Column ${cIndex} (${col.column_name}) →`,
-          cellNorm,
-          "MATCH:",
-          match
-        );
-
+   
         return match;
       }
     );
 
-  console.log(
-    "🔎 SEARCH FINAL RESULT:",
-    searchMatch
-  );
+
 
   return searchMatch;
 });
@@ -1735,11 +1737,7 @@ const sortedRows = [...filteredRows].sort(
         ? bValue?.value ?? ""
         : bValue ?? "";
 
-    console.log(
-      "SORTING:",
-      aValue,
-      bValue
-    );
+ 
 
     // =========================
     // NUMERIC SORT
@@ -1790,7 +1788,7 @@ const formatNumber = (val) => {
 
 const isNumericColumn = (col) => {
   const name = (col.column_name || "").toLowerCase();
-   console.log("Checking columns from raw data:", name);
+   //console.log("Checking columns from raw data:", name);
   return (
     name.includes("amount") ||
     name.includes("cost") ||
@@ -1801,7 +1799,7 @@ const isNumericColumn = (col) => {
 
 const isTotalColumn = (col) => {
   const name = col.column_name.toLowerCase();
-   console.log("Checking columns from raw data:", name);
+   //console.log("Checking columns from raw data:", name);
   return (
     name.includes("total")
   );
@@ -2653,10 +2651,7 @@ if (col.master === "credit_card" && value) {
       val = handleNumericInput(val);
     }
 
-    console.log("⌨️ Typing", {
-      column: col.column_name,
-      typed: val
-    });
+
 
     if (isMaster) {
       setInputValues(prev => ({
@@ -3721,27 +3716,37 @@ if (col.master === "credit_card" && value) {
 
       {/* SAVED (DB or localStorage fallback) */}
       <button
-        onClick={async () => {
-          try {
-            // preferred: API saved columns
-            const res = await getCustomizedColumns(currentModule?.module_id,
-      activeUserEmail);
+  onClick={async () => {
+    try {
 
-            if (res?.data?.data?.columns) {
-              setSavedTableColumns(res.data.data.columns);
-            } else {
-              setSavedTableColumns(saved);
-            }
+      const res = await getCustomizedColumns(
+        currentModule?.module_id,
+        activeUserEmail
+      );
 
-            setTableColumnMode("saved");
-          } catch (err) {
-            console.error(err);
-          }
-        }}
-        className="btn btn-blue flex-1"
-      >
-        Saved
-      </button>
+      let cols = [];
+
+      if (res?.data?.data?.columns) {
+        cols = res.data.data.columns;
+        setSavedTableColumns(cols);
+      } else {
+        cols = saved;
+        setSavedTableColumns(saved);
+      }
+
+      setTableColumnMode("saved");
+
+      // ✅ print using saved columns
+      handlePrint("saved", cols);
+
+    } catch (err) {
+      console.error(err);
+    }
+  }}
+  className="btn btn-blue flex-1"
+>
+  Saved
+</button>
 
       {/* CUSTOM */}
       <button
