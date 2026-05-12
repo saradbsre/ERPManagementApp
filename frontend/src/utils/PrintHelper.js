@@ -1,10 +1,14 @@
 // utils/printHelper.js
 
-export const openPrintWindow = ({ content, userName = "kumar", title = "PRINT" }) => {
-  const printWindow = window.open('', '', 'width=900,height=700');
+export const openPrintWindow = ({
+  content,
+  userName = "kumar",
+  title = "PRINT"
+}) => {
+  const printWindow = window.open("", "", "width=1200,height=800");
 
   if (!printWindow) {
-    alert("Popup blocked! Please allow popups for this site.");
+    alert("Popup blocked! Please allow popups.");
     return;
   }
 
@@ -24,39 +28,65 @@ export const openPrintWindow = ({ content, userName = "kumar", title = "PRINT" }
   const printedDate = `${day}/${month}/${year} ${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
 
   printWindow.document.write(`
-  <html>
-    <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-      <style>
-        body { font-family: 'Times New Roman', Times, serif; padding: 10px; font-size: 8px; margin: 0; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 10px; }
-        th, td { border: 1px solid black; padding: 6px; font-size: 9px; }
-        th { background-color: #f0f0f0; }
-        td.text-right { text-align: right; }
-        td.text-left { text-align: left; }
-        td.text-right { text-align: right; }
-        td.text-left { text-align: left; }
-        td.text-center { text-align: center; }
-        th { text-align: center; }
-        @page {
-        size: A4 landscape;
-          margin: 10mm;
-          counter-increment: page;
+    <html>
+      <head>
+        <title>${title}</title>
 
-        }
+        <style>
+          body {
+            font-family: "Times New Roman", serif;
+            font-size: 8px;
+            margin: 0;
+            padding: 5px;
+          }
 
-        @media print {
-          thead { display: table-header-group; }
-        }
-      </style>
-    </head>
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
 
-    <body>
+           td {
+            border: 1px solid #000;
+            padding: 5px;
+            font-size: 8px;
+          }
 
+         th {
+            background-color: #c5c5c7 !important;
+            color: black !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+             font-size: 7px;
+          }
 
-      ${content}
+          .center {
+            text-align: center;
+          }
 
-      <script>
+          .right {
+            text-align: right;
+          }
+
+          .title {
+            text-align: center;
+            margin-bottom: 10px;
+          }
+
+          @page {
+            size: A4 landscape;
+            margin: 10mm;
+          }
+
+          @media print {
+            thead { display: table-header-group; }
+          }
+        </style>
+      </head>
+
+      <body>
+        ${content}
+
+        <script>
         (function () {
           const style = document.createElement('style');
           style.textContent = \`
@@ -83,8 +113,8 @@ export const openPrintWindow = ({ content, userName = "kumar", title = "PRINT" }
           window.print();
         }
       </script>
-    </body>
-  </html>
+      </body>
+    </html>
   `);
 
   printWindow.document.close();

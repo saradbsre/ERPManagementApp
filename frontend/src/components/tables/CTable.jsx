@@ -17,11 +17,12 @@ import DateTimeRangeFilter from "../DateRangeFilter";
 import DateOnlyFilter from "../DateOnlyFilter";
 import Loader from "../Loader";
 import ConfirmModal from "../ConfirmationPopups";
+import PrintableTable from "../PrintableTable";
 
 
 const Modal = ({ title, children, onClose }) => (
     <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
-        <div className="bg-white p-5 rounded w-[400px] shadow">
+        <div className="bg-white p-5 rounded w-[500px] shadow">
 
             <h2 className="font-semibold mb-3">{title}</h2>
 
@@ -76,7 +77,7 @@ export default function DynamicTablePage() {
     const [providerPlans, setProviderPlans] = useState([]);
     const [autoFilledFields, setAutoFilledFields] = useState({});
     const [planManuallyChanged, setPlanManuallyChanged] = useState(false);
-   
+    const [groupBy, setGroupBy] = useState("service");
     const [activeDateFilter, setActiveDateFilter] = useState(null);
     const [showSaveFilter, setShowSaveFilter] = useState(false);
     const [saveFilterName, setSaveFilterName] = useState("");
@@ -1166,8 +1167,10 @@ loadModule();
   exportToExcel(
     formattedRows,
     cols.map(c => c.display_name),
-    `${moduleName}` // 👈 IMPORTANT
+    `${moduleName}` ,
+   // moduleName 
   );
+ // console.log("moduleName:", moduleName);
 };
 
 
@@ -1247,18 +1250,27 @@ const handleClear = async () => {
         return () => window.removeEventListener("click", close);
     }, []);
 
-    const handlePrint = (mode, savedCols = []) => {
-    const cols = getColumnsToUse(mode, savedCols);
+    // const handlePrint = (mode, savedCols = []) => {
+    // const cols = getColumnsToUse(mode, savedCols);
 
-    openPrintWindow({
-        content: generateTableHTML(cols),
-        userName: activeUser?.email || "User",
-    });
+    // openPrintWindow({
+    //     content: generateTableHTML(cols),
+    //     userName: activeUser?.email || "User",
+    // });
 
-    setShowPrintModal(false);
-    };
+    // setShowPrintModal(false);
+    // };
 
+const handlePrint = () => {
 
+  if (!printRef.current) return;
+
+  openPrintWindow({
+    content: printRef.current.innerHTML,
+    userName: activeUser?.email || "User",
+    groupBy
+  });
+};
 
     useEffect(() => {
         const saved = localStorage.getItem(`print_columns_${id}`);
@@ -1379,7 +1391,7 @@ const finalRows = filtered.filter(row => {
 
   
 
-    const handlePdf = async (mode, customCols = null) => {
+    const handlePdf = async (mode, customCols = null, groupBy= "service" ) => {
         let cols;
 
         if (customCols && Array.isArray(customCols)) {
@@ -1403,6 +1415,7 @@ const finalRows = filtered.filter(row => {
                 // ✅ SEND BOTH TO BACKEND
                 moduleName: moduleTitle,
                 companyName: company,
+                groupBy
             });
 
             const url = window.URL.createObjectURL(new Blob([res.data]));
@@ -1596,8 +1609,7 @@ const finalRows = filtered.filter(row => {
 
 const filteredRows = rows.filter((row, rowIndex) => {
 
-  console.log(`\n================ ROW ${rowIndex} ================`);
-  console.log("ROW DATA:", row);
+
 
   // =========================
   // 1. FILTER CHIPS
@@ -1626,28 +1638,16 @@ const fieldKey =
         : rawValue
     );
 
-    console.log("Master:", filter.master);
-    console.log("FieldKey:", fieldKey);
-    console.log("Selected:", selectedValues);
-    console.log("Raw Row Value:", rawValue);
-    console.log(
-      "Normalized Row Value:",
-      rowValue
-    );
+
 
     return selectedValues.includes(rowValue);
   });
 
-  console.log(
-    "➡️ passesFilters FINAL:",
-    passesFilters
-  );
+
 
   if (!passesFilters) {
 
-    console.log(
-      "❌ ROW REJECTED BY FILTERS"
-    );
+
 
     return false;
   }
@@ -1657,10 +1657,6 @@ const fieldKey =
   // =========================
 
   if (!search) {
-
-    console.log(
-      "No search → ROW PASSED"
-    );
 
     return true;
   }
@@ -1813,7 +1809,7 @@ const isTotalColumn = (col) => {
 
 // SORT TOTAL LAST
 const sortColumns = (cols) => {
-    console.log("Sorting columns:", cols.map(c => c.column_name));
+   // console.log("Sorting columns:", cols.map(c => c.column_name));
   const normal = cols.filter(
     c => !c.column_name.toLowerCase().includes("total")
   );
@@ -1825,12 +1821,32 @@ const sortColumns = (cols) => {
   return [...normal, ...total];
 };
 
-const groupedRows = finalRows.reduce((acc, row) => {
+const getGroupKey = (row, groupBy = "service") => {
 
-  const key =
+  const normalize = (v) =>
+    String(v || "")
+      .replace(/^service\s*types?:?\s*/i, "") // removes "Service Types:"
+      .trim();
+
+  if (groupBy === "terms") {
+    return normalize(
+      row.terms?.value ||
+      row.terms ||
+      "UNKNOWN"
+    );
+  }
+
+  // DEFAULT → SERVICE TYPES
+  return normalize(
     row.service_types?.value ||
     row.service_types ||
-    "UNKNOWN";
+    "UNKNOWN"
+  );
+};
+
+const groupedRows = finalRows.reduce((acc, row) => {
+
+  const key = getGroupKey(row, groupBy); // 👈 dynamic
 
   if (!acc[key]) acc[key] = [];
 
@@ -2715,9 +2731,10 @@ if (col.master === "credit_card" && value) {
         .includes(typedValue.toLowerCase());
     });
 
-    const showAdd =
-      typedValue &&
-      filteredOptions.length === 0;
+   const showAdd =
+    typedValue &&
+    filteredOptions.length === 0 &&
+    loadingMaster !== col.master;
 
     return (
       <div className="
@@ -2796,10 +2813,12 @@ if (col.master === "credit_card" && value) {
         })}
 
         {/* EMPTY */}
-        {filteredOptions.length === 0 && !showAdd && (
-          <div className="px-4 py-3 text-sm text-gray-400 text-center">
-            No results found
-          </div>
+        {loadingMaster !== col.master &&
+          filteredOptions.length === 0 &&
+          !showAdd && (
+            <div className="px-4 py-3 text-sm text-gray-400 text-center">
+              No results found
+            </div>
         )}
 
         {/* ADD NEW */}
@@ -3552,7 +3571,7 @@ if (col.master === "credit_card" && value) {
                             <div className="flex gap-3">
 
                                 <button
-                                    onClick={() => handlePrint("default")}
+                                    onClick={() => handlePrint("default",null,groupBy)}
                                     className="btn btn-gray flex-1"
                                 >
                                     Default
@@ -3562,7 +3581,7 @@ if (col.master === "credit_card" && value) {
                                     onClick={async () => {
                                     const savedCols = await fetchCustomizedColumns();
 
-                                    handlePrint("saved", savedCols); // ✅ pass directly
+                                    handlePrint("saved", savedCols, groupBy); // ✅ pass directly
                                     }}
                                     className="btn btn-blue flex-1"
                                 >
@@ -3581,6 +3600,15 @@ if (col.master === "credit_card" && value) {
                                 >
                                      Header
                                 </button>
+                                 <select
+                                    value={groupBy}
+                                    onChange={(e) => setGroupBy(e.target.value)}
+                                    className="border p-2 w-full rounded"
+                                  >
+                                    <option value="service">Service Types</option>
+                                    <option value="terms">Terms</option>
+                                  </select>
+                               
 
                             </div>
 
@@ -3621,6 +3649,7 @@ if (col.master === "credit_card" && value) {
                                      Header
                                 </button>
 
+
                             </div>
 
                         </Modal>
@@ -3631,7 +3660,7 @@ if (col.master === "credit_card" && value) {
                             <div className="flex gap-3">
 
                                 <button
-                                    onClick={() => handlePdf("default")}
+                                    onClick={() => handlePdf("default", null, groupBy)}
                                     className="btn btn-gray flex-1"
                                 >
                                     Default
@@ -3640,7 +3669,7 @@ if (col.master === "credit_card" && value) {
                                 <button
                                    onClick={async () => {
                                         const savedCols = await fetchCustomizedColumns();
-                                        handlePdf("saved", savedCols);
+                                        handlePdf("saved", savedCols, groupBy); // ✅ pass directly
                                     }}
                                     className="btn btn-blue flex-1"
                                 >
@@ -3659,6 +3688,14 @@ if (col.master === "credit_card" && value) {
                                 >
                                      Header
                                 </button>
+                                 <select
+                                    value={groupBy}
+                                    onChange={(e) => setGroupBy(e.target.value)}
+                                    className="border p-2 w-full rounded"
+                                  >
+                                    <option value="service">Service Types</option>
+                                    <option value="terms">Terms</option>
+                                  </select>
 
                             </div>
 
@@ -4035,7 +4072,15 @@ if (col.master === "credit_card" && value) {
 
                 </div>
             </div>
-
+         <div ref={printRef} className="hidden print:block">
+  <PrintableTable
+    columns={columns}
+    finalRows={finalRows}
+    printModuleName={printModuleName}
+    module={module}
+    groupBy={groupBy}
+  />
+</div>
 
 
         </div>
