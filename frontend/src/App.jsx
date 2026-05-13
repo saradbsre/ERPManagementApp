@@ -12,7 +12,7 @@ import Approvals from "./components/admin/Approvals";
 import ForgotPassword from "./pages/authpage/ForgotPassword";
 import ReportPage from "./components/reports/ReportTable";
 import PaymentReqForm from "./pages/PaymentReqForm";
-
+import Profile from "./pages/Profile";
 import { useUser } from "./components/UserContext";
 
 function App() {
@@ -54,6 +54,7 @@ function App() {
             <Route path="/admin/approvals" element={<Approvals />} />
             <Route path="/reports/:id" element={<ReportPage />} />
             <Route path="/payment-req-form" element={<PaymentReqForm />} />
+            <Route path="/profile" element={<Profile />} />
           </Route>
         </Route>
 

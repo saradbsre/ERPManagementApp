@@ -27,7 +27,7 @@ export function UserProvider({ children }) {
     }
   }, [user]);
 
-  console.log("CONTEXT USER:", user);
+ // console.log("CONTEXT USER:", user);
 
   return (
     <UserContext.Provider value={{ user, setUser }}>

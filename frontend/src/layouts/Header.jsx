@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { use, useState } from "react";
 import { FiLogOut, FiUser } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 
@@ -12,7 +12,7 @@ export default function Header() {
 
   const [open, setOpen] = useState(false);
 
-  console.log("Header component rendered with user:", user);
+ // console.log("Header component rendered with user:", user);
 
   // =========================
   // LOGOUT
@@ -37,7 +37,6 @@ export default function Header() {
   // =========================
   const name =
     user?.name ||
-    user?.email ||
     "User";
 
   const initial =
@@ -72,7 +71,7 @@ export default function Header() {
             {/* USER INFO */}
             <div className="p-4 border-b bg-gray-50">
               <p className="text-sm font-semibold text-gray-800">
-                {name}
+                {user?.email || "User"}
               </p>
 
               <p className="text-xs text-gray-500">

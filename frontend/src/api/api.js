@@ -323,3 +323,17 @@ export const getPaymentRequests = (activeUserEmail) => {
     params: { activeUserEmail }
   });
 }
+
+export const getUserbyemail = (email) => {
+  return API.get(`/users/profile/${email}`);
+};
+
+export const changePassword = (data, activeUserEmail) => {
+  return API.post("/users/profile/change-password", data, {
+    params: { activeUserEmail }
+  });
+}
+
+export const updateUserProfile = (email, data) => {
+  return API.put(`/users/profile/${email}`, data);
+};

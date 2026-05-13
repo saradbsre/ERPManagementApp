@@ -14,11 +14,13 @@ import { formatDateTime } from "../../utils/formatDateTime";
 import { formatDate } from "../../utils/formatDate";
 import { Currency } from "lucide-react";
 import DateOnlyFilter from "../DateOnlyFilter";
+import PrintableTable from "../PrintableTable";
+import Loader from "../Loader";
 
 
 const Modal = ({ title, children, onClose }) => (
     <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
-        <div className="bg-white p-5 rounded w-[400px] shadow">
+        <div className="bg-white p-5 rounded w-[500px] shadow">
 
             <h2 className="font-semibold mb-3">{title}</h2>
 
@@ -37,6 +39,7 @@ export default function ReportPage() {
     const { id } = useParams();
     const location = useLocation();
     const report = location.state?.report;
+   // console.log("Report from state:", report);
     const [editRowId, setEditRowId] = useState(null);
     const [editRow, setEditRow] = useState({});
     const [module, setModule] = useState(location.state?.module || null);
@@ -66,7 +69,7 @@ export default function ReportPage() {
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email;
     const [autoFilledFields, setAutoFilledFields] = useState({});
-    const [dateFilters, setDateFilters] = useState({});
+    const [groupBy, setGroupBy] = useState("service");
     const [activeDateFilter, setActiveDateFilter] = useState(null);
     const [showSaveFilter, setShowSaveFilter] = useState(false);
     const [saveFilterName, setSaveFilterName] = useState("");
@@ -75,6 +78,14 @@ export default function ReportPage() {
     const filter_name = report?.filter_name || "Custom Filter";
     const [isInitialized, setIsInitialized] = useState(false);
     const [printModuleName, setPrintModuleName] = useState("");
+    const [showPlanProviderPopup, setShowPlanProviderPopup] = useState(false);
+    const [pendingColumn, setPendingColumn] = useState(null);
+    const [inputValues, setInputValues] = useState({});
+    const [activeField, setActiveField] = useState(null);
+    const isInitialLoading = loading || columns.length === 0;
+    const [loadingMaster, setLoadingMaster] = useState(null);
+    const [tempSelectedColumns, setTempSelectedColumns] = useState([]);
+    const [columnSearch, setColumnSearch] = useState(""); 
     const [sortConfig, setSortConfig] = useState({
       key: null,
       direction: "asc",
@@ -82,10 +93,7 @@ export default function ReportPage() {
     const masterList = [
         ...new Set(columns.map(c => c.master).filter(Boolean))
     ];
-    const isFilterActive =
-    Boolean(search) ||
-    (filters?.length > 0) ||
-    (Object.keys(dateFilters || {}).length > 0);
+
 
     const handleSort = (columnName) => {
   let direction = "asc";
@@ -102,15 +110,125 @@ export default function ReportPage() {
     direction,
   });
 };
+   useEffect(() => {
+  if (!columns.length) return;
 
+  setSelectedColumns(prev => {
+    if (prev && prev.length > 0) return prev;
 
+    return columns.map(c => c.column_name);
+  });
+}, [columns]);
+
+const getCurrentMonth = () => {
+  const now = new Date();
+
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+  const format = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+
+    return `${y}-${m}-${d}`;
+  };
+
+  return {
+    startDate: format(start),
+    endDate: format(end),
+  };
+};
+
+const [dateFilters, setDateFilters] = useState(getCurrentMonth());
+const [pendingDateFilters, setPendingDateFilters] = useState(dateFilters);
+const isFilterActive = search || filters?.length > 0 || Object.keys(dateFilters || {}).length > 0;
+
+const openColumnSelector = () => {
+  const defaultCols = columns.map(c => c.column_name);
+
+  setTempSelectedColumns(
+    selectedColumns?.length ? selectedColumns : defaultCols
+  );
+
+  setShowColumnSelector(true);
+};
+
+const toggleTempColumn = (colName) => {
+  setTempSelectedColumns(prev =>
+    prev.includes(colName)
+      ? prev.filter(c => c !== colName)
+      : [...prev, colName]
+  );
+};
+
+const saveColumnSelection = async () => {
+  try {
+
+    // 1️⃣ Save to DB (use TEMP state)
+    await upsertReportCustomizedColumns(
+      report.id,
+      activeUserEmail,
+      tempSelectedColumns
+    );
+
+    // 2️⃣ Commit TEMP → LIVE
+    setSelectedColumns(tempSelectedColumns);
+    setSavedTableColumns(tempSelectedColumns);
+
+    // 3️⃣ UI updates
+    setShowColumnSelector(false);
+    setTableColumnMode("custom");
+
+  } catch (err) {
+    console.error("Failed to save customized columns:", err);
+  }
+};
+
+const applyDateFilter = async () => {
+  try {
+    setLoading(true);
+
+    const payload = {
+      search,
+      filters: JSON.stringify(filters || []),
+      dateFilters: JSON.stringify({
+        date: {
+          startDate: dateFilters.startDate || dateFilters.start,
+          endDate: dateFilters.endDate || dateFilters.end,
+        },
+      }),
+    };
+
+    // console.log("Applying date filter:", payload);
+    console.log("module_id for date filter:", report?.module_id);
+    const res = await getModuleData(report?.module_id, activeUserEmail, payload);
+    
+    setRows(res.data || []);
+
+  } catch (err) {
+    console.error(err);
+    setRows([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+const buildDatePayload = (df) => {
+  return {
+    date: {
+      startDate: df.startDate,
+      endDate: df.endDate,
+    },
+  };
+};
 
 // LOAD MODULE & DATA
 const loadModule = async () => {
   try {
     const sectionRes = await fetchSections();
 
-    console.log("RAW RESPONSE:", sectionRes);
+    //console.log("RAW RESPONSE:", sectionRes);
 
     const modules =
       sectionRes?.data?.data ||
@@ -144,14 +262,15 @@ const loadModule = async () => {
   const loadReportData = async () => {
   try {
     if (!report) return;
-
+    setLoading(true)
+      //console.log("modle_id for report data load:", report.module_id);
     const res = await getFilteredReports({
       module_id: report.module_id,
       filters: filters || [],
       search: search || "",
       dateFilters: dateFilters || {}
     });
-
+    setLoading(false)
     setRows(res.data || []);
   } catch (err) {
     console.error("loadReportData error:", err);
@@ -180,42 +299,81 @@ useEffect(() => {
    useEffect(() => {
         loadModule();
     }, [id]);
-    console.log("id:", id);
+   // console.log("id:", id);
 
     useEffect(() => {
   const active = isFilterActive;
   
-  console.log("isFilterActive:", isFilterActive);
-  console.log("saveFilterName:", saveFilterName);
+  // console.log("isFilterActive:", isFilterActive);
+  // console.log("saveFilterName:", saveFilterName);
 
   setShowSaveFilter(active);
 }, [search, filters, dateFilters]);
 
-       useEffect(() => {
-      if (!columns.length) return;
+    //    useEffect(() => {
+    //   if (!columns.length) return;
     
-      const uniqueMasters = new Set();
+    //   const uniqueMasters = new Set();
     
-      columns.forEach(c => {
-        if (c.master) uniqueMasters.add(c.master);
-        if (c.master1) uniqueMasters.add(c.master1);
-      });
+    //   columns.forEach(c => {
+    //     if (c.master) uniqueMasters.add(c.master);
+    //     if (c.master1) uniqueMasters.add(c.master1);
+    //   });
     
-      uniqueMasters.forEach(async (master) => {
-        try {
-          const res = await getMasterValues(master);
+    //   uniqueMasters.forEach(async (master) => {
+    //     try {
+    //       const res = await getMasterValues(master);
     
-          setMasterDataMap(prev => ({
-            ...prev,
-            [master]: res.data.data || []
-          }));
-        } catch (err) {
-          console.error("Master fetch failed:", master, err);
-        }
-      });
+    //       setMasterDataMap(prev => ({
+    //         ...prev,
+    //         [master]: res.data.data || []
+    //       }));
+    //     } catch (err) {
+    //       console.error("Master fetch failed:", master, err);
+    //     }
+    //   });
     
-    }, [columns]);
+    // }, [columns]);
 
+    const fetchMasterDataForColumn = async (master) => {
+  if (!master) return;
+  if (masterDataMap[master]?.length) return; // already loaded
+
+  setLoadingMaster(master); // start loading
+
+  try {
+    const res = await getMasterValues(master);
+    setMasterDataMap(prev => ({
+      ...prev,
+      [master]: res.data.data || []
+    }));
+  } catch (err) {
+    console.error("Master fetch failed:", master, err);
+  } finally {
+    setLoadingMaster(null); // stop loading
+  }
+};
+useEffect(() => {
+  if (!report?.filters) return;
+
+  try {
+    const parsed = JSON.parse(report.filters);
+
+    setFilters(parsed.filters || []);
+    setSearch(parsed.search || "");
+    setDateFilters(parsed.dateFilters || {});
+
+    // Trigger master data fetch for all pre-selected filters
+    (parsed.filters || []).forEach(f => {
+      if (f.master) {
+        fetchMasterDataForColumn(f.master);
+      }
+    });
+
+  } catch (err) {
+    console.error("Invalid report filters JSON:", err);
+  }
+}, [report]);
     useEffect(() => {
   if (report?.filter_name) {
     setSaveFilterName(report.filter_name);
@@ -237,30 +395,7 @@ const fetchCustomizedColumns = async () => {
   }
 };
 
-const saveColumnSelection = async () => {
-  try {
-    // 1️⃣ Save locally (optional but fast UX)
-    // localStorage.setItem(
-    //   `table_columns_${id}`,
-    //   JSON.stringify(selectedColumns)
-    // );
 
-    // 2️⃣ Save to DB
-    await upsertReportCustomizedColumns(
-      report.id,
-      activeUserEmail,
-      selectedColumns
-    );
-
-    // 3️⃣ Update state
-    setSavedTableColumns(selectedColumns);
-    setShowColumnSelector(false);
-    setTableColumnMode("custom");
-
-  } catch (err) {
-    console.error("Failed to save customized columns:", err);
-  }
-};
 
 useEffect(() => {
   if (!report?.filters) return;
@@ -327,7 +462,7 @@ useEffect(() => {
     }
   };
 
-  console.log("Saving filter:", payload);
+ // console.log("Saving filter:", payload);
 
   await upsertSavedFilter(payload);
 
@@ -464,352 +599,61 @@ const getVisibleColumns = () => {
     const visibleColumns = getVisibleColumns();
 
 
-   const toNumber = (val) => {
-  if (val === null || val === undefined || val === "") return 0;
 
-  const n = Number(String(val).replace(/,/g, ""));
-  return isNaN(n) ? 0 : n;
-};
-
-const formatNumber = (val) => {
-  const num = toNumber(val);
-
-  return num.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-};
-
-const isNumericColumn = (col) => {
-  const name = col.column_name.toLowerCase();
-   console.log("Checking columns from raw data:", name);
-  return (
-    name.includes("amount") ||
-    name.includes("cost") ||
-    name.includes("price") ||
-    name.includes("total")
-  );
-};
-
-const isTotalColumn = (col) => {
-  const name = col.column_name.toLowerCase();
-   console.log("Checking columns from raw data:", name);
-  return (
-    name.includes("total")
-  );
-};
-
-// SORT TOTAL LAST
-const sortColumns = (cols) => {
-    console.log("Sorting columns:", cols.map(c => c.column_name));
-  const normal = cols.filter(
-    c => !c.column_name.toLowerCase().includes("total")
-  );
-
-  const total = cols.filter(
-    c => c.column_name.toLowerCase().includes("total")
-  );
-
-  return [...normal, ...total];
-};
-
-const generateTableHTML = (cols = columns) => {
-
-  const company = localStorage.getItem("print_company");
-
-  // =====================================================
-  // DISTINCT CURRENCIES
-  // =====================================================
-  const currencies = [
-    ...new Set(
-      finalRows
-        .map(r => r.currency)
-        .filter(Boolean)
-    )
-  ];
-
-  // =====================================================
-  // REMOVE:
-  // 1. amount column
-  // 2. currency column
-  // =====================================================
-const normalCols = cols.filter(c => {
-
-  const name = c.column_name.toLowerCase();
-
-  // REMOVE ONLY PURE amount COLUMN
-  // KEEP total_amount_aed
-  return (
-    name !== "amount" &&
-    name !== "currency"
-  );
-
-});
-
-  
-  const currencyCols = currencies.map(cur => ({
-    column_name: `amount_${cur.toLowerCase()}`,
-    display_name: `AMOUNT (${cur.toUpperCase()})`,
-    currency: cur,
-    isDynamicCurrency: true
-  }));
-
-  // =====================================================
-  // FINAL COLUMNS
-  // =====================================================
-  const sortedCols = sortColumns([
-    ...normalCols,
-    ...currencyCols
-  ]);
-
-  const firstTotalIndex = sortedCols.findIndex(col =>
-  isTotalColumn(col)
-);
-
-  // =====================================================
-  // TOTALS
-  // =====================================================
-  const totals = {};
-
-  sortedCols.forEach(col => {
-
-  // ONLY TOTAL COLUMNS
-  if (isTotalColumn(col)) {
-
-    totals[col.column_name] = finalRows.reduce((sum, row) => {
-      return sum + toNumber(row[col.column_name]);
-    }, 0);
-
-  }
-
-});
-
-  // =====================================================
-  // HTML
-  // =====================================================
-  return `
-
-    <div style="text-align:center; margin-bottom:10px;">
-
-      ${
-        company
-          ? `
-            <h1 style="font-size:24px; margin-bottom:5px;">
-              ${company}
-            </h1>
-          `
-          : ``
-      }
-
-      <h2 style="margin-bottom:10px;">
-        ${printModuleName?.trim() || module?.display_name}
-      </h2>
-
-    </div>
-
-    <table
-      border="1"
-      cellspacing="0"
-      cellpadding="5"
-      style="width:100%; border-collapse:collapse;"
-    >
-
-      <!-- ================= HEADER ================= -->
-
-      <thead>
-
-        <tr>
-
-          <th>S.No</th>
-
-          ${sortedCols.map(col => `
-            <th>${col.display_name}</th>
-          `).join("")}
-
-        </tr>
-
-      </thead>
-
-      <!-- ================= BODY ================= -->
-
-      <tbody>
-
-        ${finalRows.map((row, index) => `
-
-          <tr>
-
-            <td style="text-align:center">
-              ${index + 1}
-            </td>
-
-            ${sortedCols.map(col => {
-
-              let value = "";
-
-              // =========================================
-              // DYNAMIC CURRENCY COLUMN
-              // =========================================
-              if (col.isDynamicCurrency) {
-
-                if (row.currency === col.currency) {
-                  value = row.amount;
-                } else {
-                  value = "";
-                }
-
-              }
-
-              // =========================================
-              // NORMAL COLUMN
-              // =========================================
-              else {
-
-                const raw = row[col.column_name];
-
-                value =
-                  typeof raw === "object"
-                    ? raw?.value ?? ""
-                    : raw ?? "";
-
-              }
-
-              // =========================================
-              // DATE
-              // =========================================
-              if (
-                col.data_type?.toLowerCase().includes("date")
-              ) {
-
-                return `
-                  <td style="text-align:center">
-                    ${formatDate(value)}
-                  </td>
-                `;
-              }
-
-              // =========================================
-              // CREDIT CARD
-              // =========================================
-              if (col.master === "credit_card") {
-
-                const str = String(value);
-                const last4 = str.slice(-4);
-
-                return `
-                  <td style="text-align:center">
-                    **** **** **** ${last4}
-                  </td>
-                `;
-              }
-
-              // =========================================
-              // NUMBER / AMOUNT
-              // =========================================
-              if (
-                isNumericColumn(col) ||
-                col.isDynamicCurrency
-              ) {
-
-                return `
-                  <td style="text-align:right">
-                    ${
-                      value !== ""
-                        ? formatNumber(value)
-                        : ""
-                    }
-                  </td>
-                `;
-              }
-
-              // =========================================
-              // DEFAULT
-              // =========================================
-              return `
-                <td style="text-align:center">
-                  ${value || "-"}
-                </td>
-              `;
-
-            }).join("")}
-
-          </tr>
-
-        `).join("")}
-
-      <!-- ================= TOTAL ROW ================= -->
-
-<tr style="font-weight:bold; background:#f5f5f5;">
-
-  <!-- S.No column -->
-  <td></td>
-
-  <!-- TOTAL LABEL (spans all non-total columns) -->
-  <td
-    colspan="${firstTotalIndex > 0 ? firstTotalIndex : 1}"
-    style="text-align:right"
-  >
-    TOTAL
-  </td>
-
-  <!-- TOTAL VALUES -->
-  ${sortedCols.slice(firstTotalIndex).map(col => {
-
-    if (!isTotalColumn(col)) {
-      return `<td></td>`;
-    }
-
-    return `
-      <td style="text-align:right">
-        ${formatNumber(totals[col.column_name] || 0)}
-      </td>
-    `;
-  }).join("")}
-
-</tr>
-
-      </tbody>
-
-    </table>
-
-  `;
-};
     
 const dateColumns = visibleColumns.filter(col =>
   col.data_type?.toLowerCase().includes("date")
 );
 
-const getExcelColumns = (mode) => {
-  const cols = getColumnsToUse(mode);
+const getExcelColumns = (mode, savedCols = [], groupBy = "service") => {
+
+  const cols = getColumnsToUse(mode, savedCols);
 
   const currencies = [
     ...new Set(finalRows.map(r => r.currency).filter(Boolean))
   ];
 
-  // remove base amount + currency columns
+  // =========================
+  // NORMAL COLUMNS
+  // =========================
   const normalCols = cols.filter(c => {
     const name = c.column_name.toLowerCase();
     return name !== "amount" && name !== "currency";
   });
 
+  // =========================
+  // DYNAMIC CURRENCY COLUMNS
+  // =========================
   const currencyCols = currencies.map(cur => ({
     column_name: `amount_${cur.toLowerCase()}`,
     display_name: `AMOUNT (${cur.toUpperCase()})`,
     currency: cur,
-    isDynamicCurrency: true
+    isDynamicCurrency: true,
+
+    // ✅ IMPORTANT: prevent grouping confusion
+    isDerived: true
   }));
 
+  // =========================
+  // FINAL COLS
+  // =========================
   let finalCols = [...normalCols, ...currencyCols];
 
-  // sort total last
+  // sort totals last
   finalCols = sortColumns(finalCols);
+
+  // =========================
+  // ADD GROUP META (IMPORTANT FIX)
+  // =========================
+  finalCols.groupBy = groupBy;
 
   return finalCols;
 };
 
 
-      const handleExcel = (mode) => {
-  const cols = getExcelColumns(mode);
-
+      const handleExcel = async (mode, savedCols = null, groupBy) => {
+  const cols = getExcelColumns(mode, savedCols);
+  //console.log("Excel export columns:", cols);
   const company = localStorage.getItem("print_company") || "";
   const moduleName =
     printModuleName ||
@@ -818,11 +662,12 @@ const getExcelColumns = (mode) => {
 
   const formattedRows = finalRows.map((row, index) => {
     const newRow = {
-      SNo: index + 1
+      SNo: index + 1,
+      __groupKey: getGroupKey(row, groupBy) // ✅ ADD THIS
     };
+    //console.log("Formatting row for Excel with groupBy:", groupBy, "Row:", row);
 
     cols.forEach(col => {
-
       let value = "";
 
       if (col.isDynamicCurrency) {
@@ -832,7 +677,6 @@ const getExcelColumns = (mode) => {
             : "";
       } else {
         const raw = row[col.column_name];
-
         value =
           typeof raw === "object"
             ? raw?.value ?? ""
@@ -853,12 +697,14 @@ const getExcelColumns = (mode) => {
 
     return newRow;
   });
-
+   
   exportToExcel(
     formattedRows,
     cols.map(c => c.display_name),
-    `${moduleName}` // 👈 IMPORTANT
+    moduleName,
+    groupBy // ✅ PASS IT
   );
+  
 };
 
     const handleExport = async () => {
@@ -901,6 +747,35 @@ const getExcelColumns = (mode) => {
             console.error(err);
             alert("Import failed ❌");
         }
+    };
+
+    const handleClear = async () => {
+      const defaults = getCurrentMonth();
+    
+      setDateFilters(defaults);
+    
+      const payload = {
+        search,
+        filters: JSON.stringify(filters || []),
+        dateFilters: JSON.stringify(buildDatePayload(defaults)),
+      };
+    
+      try {
+        setLoading(true);
+    
+        const res = await getModuleData(
+          id,
+          activeUserEmail,
+          payload
+        );
+    
+        setRows(res.data || []);
+      } catch (err) {
+        console.error(err);
+        setRows([]);
+      } finally {
+        setLoading(false);
+      }
     };
 
     useEffect(() => {
@@ -993,7 +868,7 @@ const getExcelColumns = (mode) => {
 
     // ================= PAGINATION =================
     const totalPages = Math.ceil(normalizedRows.length / pageSize);
-    const sortedRows = [...rows].sort((a, b) => {
+    const sortedRows = [...normalizedRows].sort((a, b) => {
   if (!sortConfig.key) return 0;
 
   let aValue = a[sortConfig.key];
@@ -1027,7 +902,7 @@ const getExcelColumns = (mode) => {
         page * pageSize
     );
 
-     const handlePdf = async (mode, customCols = null) => {
+       const handlePdf = async (mode, customCols = null, groupBy= "service" ) => {
         let cols;
 
         if (customCols && Array.isArray(customCols)) {
@@ -1051,6 +926,7 @@ const getExcelColumns = (mode) => {
                 // ✅ SEND BOTH TO BACKEND
                 moduleName: moduleTitle,
                 companyName: company,
+                groupBy
             });
 
             const url = window.URL.createObjectURL(new Blob([res.data]));
@@ -1076,7 +952,7 @@ const getExcelColumns = (mode) => {
   col.column_name.toLowerCase().includes("total")
 );
 
-console.log("Numeric columns for totals:", numericColumns.map(c => c.column_name));
+//console.log("Numeric columns for totals:", numericColumns.map(c => c.column_name));
 
 const totals = {};
 
@@ -1090,7 +966,379 @@ numericColumns.forEach(col => {
   }, 0);
 });
      
+useEffect(() => {
+  setPendingDateFilters(dateFilters);
+}, [dateFilters]);
 
+const handleApplyDateFilter = () => {
+  setDateFilters(pendingDateFilters);
+  // Optionally, call applyDateFilter() here if you want to fetch immediately
+};
+
+const onInputChange = (e) => {
+  const { name, value } = e.target;
+
+  setDateFilters((prev) => ({
+    ...prev,
+    [name]: value,
+  }));
+};
+
+const onPendingInputChange = (e) => {
+  const { name, value } = e.target;
+  setPendingDateFilters(prev => ({
+    ...prev,
+    [name]: value,
+  }));
+};
+
+const toNumber = (val) => {
+  if (val === null || val === undefined || val === "") return 0;
+
+  const n = Number(String(val).replace(/,/g, ""));
+  return isNaN(n) ? 0 : n;
+};
+
+const formatNumber = (val) => {
+  const num = toNumber(val);
+
+  return num.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
+
+const isNumericColumn = (col) => {
+  const name = (col.column_name || "").toLowerCase();
+   //console.log("Checking columns from raw data:", name);
+  return (
+    name.includes("amount") ||
+    name.includes("cost") ||
+    name.includes("price") ||
+    name.includes("total")
+  );
+};
+
+const isTotalColumn = (col) => {
+  const name = col.column_name.toLowerCase();
+   //console.log("Checking columns from raw data:", name);
+  return (
+    name.includes("total")
+  );
+};
+
+// SORT TOTAL LAST
+const sortColumns = (cols) => {
+   // console.log("Sorting columns:", cols.map(c => c.column_name));
+  const normal = cols.filter(
+    c => !c.column_name.toLowerCase().includes("total")
+  );
+
+  const total = cols.filter(
+    c => c.column_name.toLowerCase().includes("total")
+  );
+
+  return [...normal, ...total];
+};
+
+const getGroupKey = (row, groupBy = "service") => {
+
+  const normalize = (v) =>
+    String(v || "")
+      .replace(/^service\s*types?:?\s*/i, "") // removes "Service Types:"
+      .trim();
+
+  if (groupBy === "terms") {
+    return normalize(
+      row.term?.value ||
+      row.term ||
+      "UNKNOWN"
+    );
+  }
+
+  // DEFAULT → SERVICE TYPES
+  return normalize(
+    row.service_types?.value ||
+    row.service_types ||
+    "UNKNOWN"
+  );
+};
+
+const groupedRows = finalRows.reduce((acc, row) => {
+
+  const key = getGroupKey(row, groupBy); // 👈 dynamic
+
+  if (!acc[key]) acc[key] = [];
+
+  acc[key].push(row);
+
+  return acc;
+
+}, {});
+
+const grandTotals = {};
+
+const generateTableHTML = (cols = columns) => {
+
+  const company = localStorage.getItem("print_company");
+
+  // =====================================================
+  // DISTINCT CURRENCIES
+  // =====================================================
+  const currencies = [
+    ...new Set(
+      finalRows
+        .map(r => r.currency)
+        .filter(Boolean)
+    )
+  ];
+
+  // =====================================================
+  // REMOVE:
+  // 1. amount column
+  // 2. currency column
+  // =====================================================
+const normalCols = cols.filter(c => {
+
+  const name = c.column_name.toLowerCase();
+
+  // REMOVE ONLY PURE amount COLUMN
+  // KEEP total_amount_aed
+  return (
+    name !== "amount" &&
+    name !== "currency"
+  );
+
+});
+
+  
+  const currencyCols = currencies.map(cur => ({
+    column_name: `amount_${cur.toLowerCase()}`,
+    display_name: `AMOUNT (${cur.toUpperCase()})`,
+    currency: cur,
+    isDynamicCurrency: true
+  }));
+
+  // =====================================================
+  // FINAL COLUMNS
+  // =====================================================
+  const sortedCols = sortColumns([
+    ...normalCols,
+    ...currencyCols
+  ]);
+
+  const firstTotalIndex = sortedCols.findIndex(col =>
+  isTotalColumn(col)
+);
+
+  // =====================================================
+  // TOTALS
+  // =====================================================
+  const totals = {};
+
+  sortedCols.forEach(col => {
+
+  // ONLY TOTAL COLUMNS
+  if (isTotalColumn(col)) {
+
+    totals[col.column_name] = finalRows.reduce((sum, row) => {
+      return sum + toNumber(row[col.column_name]);
+    }, 0);
+
+  }
+
+});
+
+
+  const isDateColumn = (col) => {
+  const data_type = (col.data_type || "").toLowerCase();
+  return data_type.includes("date");
+};
+  // =====================================================
+  // HTML
+  // =====================================================
+return `
+  <div style="text-align:center; margin-bottom:20px;">
+
+    ${
+      company
+        ? `<h1 style="font-size:24px; margin-bottom:5px;">${company}</h1>`
+        : ``
+    }
+
+    <h2>${printModuleName?.trim() || module?.display_name}</h2>
+
+  </div>
+
+  ${Object.entries(groupedRows).map(([serviceType, rows]) => {
+
+    // ================= GROUP TOTALS =================
+    const groupTotals = {};
+
+    sortedCols.forEach(col => {
+      if (isTotalColumn(col)) {
+        groupTotals[col.column_name] = rows.reduce((sum, row) => {
+          return sum + toNumber(row[col.column_name]);
+        }, 0);
+
+        // add to grand total
+        grandTotals[col.column_name] =
+          (grandTotals[col.column_name] || 0) +
+          groupTotals[col.column_name];
+      }
+    });
+
+    const firstTotalIndex = sortedCols.findIndex(isTotalColumn);
+
+    return `
+      <div style="margin-bottom:40px; text: 5px;">
+
+        <!-- GROUP TITLE -->
+        <h3 style="margin:10px 0; text-align:center;">
+          ${serviceType}
+        </h3>
+
+        <table border="1" cellspacing="0" cellpadding="5"
+          style="width:100%; border-collapse:collapse;">
+
+          <!-- HEADER -->
+          <thead>
+            <tr>
+              <th style="text-align:center">S.No</th>
+              ${sortedCols.map(col => `
+                <th>${col.display_name}</th>
+              `).join("")}
+            </tr>
+          </thead>
+
+          <!-- BODY -->
+          <tbody>
+
+            ${rows.map((row, index) => `
+              <tr>
+                <td style="text-align:center">${index + 1}</td>
+
+                ${sortedCols.map(col => {
+
+                  let value = "";
+
+                  if (col.isDynamicCurrency) {
+                    value =
+                      row.currency === col.currency
+                        ? row.amount
+                        : "";
+                  } else {
+                    const raw = row[col.column_name];
+                    value =
+                      typeof raw === "object"
+                        ? raw?.value ?? ""
+                        : raw ?? "";
+                  }
+
+                  if (col.master === "credit_card") {
+                    const str = String(value);
+                    const last4 = str.slice(-4);
+                    return `
+                      <td style="text-align:center">
+                        **** **** **** ${last4}
+                      </td>
+                    `;
+                  }
+
+                  if (isDateColumn(col)) {
+                    value = value
+                      ? formatDate(value)
+                      : "";
+                  }
+
+                  if (isNumericColumn(col) || col.isDynamicCurrency) {
+                    return `
+                      <td style="text-align:right">
+                        ${value !== "" ? formatNumber(value) : ""}
+                      </td>
+                    `;
+                  }
+
+                  return `
+                    <td style="text-align:center">
+                      ${value || "-"}
+                    </td>
+                  `;
+
+                }).join("")}
+              </tr>
+            `).join("")}
+
+            <!-- ================= GROUP TOTAL ROW ================= -->
+            <tr style="font-weight:bold; background:#f5f5f5;">
+
+              <td></td>
+
+              <!-- 🔥 TOTAL LABEL BEFORE FIRST TOTAL COLUMN -->
+              <td colspan="${firstTotalIndex > 0 ? firstTotalIndex : 1}" style="text-align:right;">
+                TOTAL
+              </td>
+
+              <!-- TOTAL VALUES -->
+              ${sortedCols.slice(firstTotalIndex).map(col => {
+
+                if (!isTotalColumn(col)) {
+                  return `<td></td>`;
+                }
+
+                return `
+                  <td style="text-align:right;">
+                    ${formatNumber(groupTotals[col.column_name] || 0)}
+                  </td>
+                `;
+              }).join("")}
+
+            </tr>
+
+          </tbody>
+
+        </table>
+
+      </div>
+    `;
+  }).join("")}
+
+ <!-- ================= GRAND TOTAL (INLINE STYLE) ================= -->
+
+<table border="1" cellspacing="0" cellpadding="5"
+  style="width:100%; margin-top:30px; border-collapse:collapse;">
+
+  <tbody>
+
+    <tr style="font-weight:bold; background:#ddd;">
+
+      <td></td>
+
+      <!-- LABEL BEFORE FIRST TOTAL COLUMN -->
+      <td colspan="${firstTotalIndex > 0 ? firstTotalIndex : 1}" style="text-align:right;">
+        GRAND TOTAL
+      </td>
+
+      ${sortedCols.slice(firstTotalIndex).map(col => {
+
+        if (!isTotalColumn(col)) {
+          return `<td></td>`;
+        }
+
+        return `
+          <td style="text-align:right;">
+            ${formatNumber(grandTotals[col.column_name] || 0)}
+          </td>
+        `;
+      }).join("")}
+
+    </tr>
+
+  </tbody>
+
+</table>
+`;
+};
 
     return (
         <div className="h-full flex flex-col">
@@ -1140,6 +1388,13 @@ numericColumns.forEach(col => {
   >
     PDF
   </PermissionButton>
+     <button
+                    onClick={() => setShowTableColumnModal(true)}
+                      className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
+               hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
+                >
+                    Customize
+                </button>
 
 </div>
 
@@ -1159,12 +1414,14 @@ numericColumns.forEach(col => {
 
 
                 {/* FILTER BUTTON */}
-                <TableFilters
-                    masterList={masterList}
-                    filters={filters}
-                    setFilters={setFilters}
-                    currencies={currencies}
-                />
+                                 <TableFilters
+                                  masterList={masterList}
+                                  filters={filters}
+                                  setFilters={setFilters}
+                                  currencies={currencies}
+                                  masterDataMap={masterDataMap}
+                                  setMasterDataMap={setMasterDataMap}
+                                />
                 {isFilterActive && (
   <div className="flex items-center gap-2 ml-2 bg-gray-50 px-3 py-2 rounded-lg border">
 
@@ -1193,44 +1450,67 @@ numericColumns.forEach(col => {
   </div>
 )}
                  {/* ✅ DATE FILTER BUTTONS */}
-  {dateColumns.map((col, i) => {
-  const filter = dateFilters?.[col.column_name];
+<div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+  <input
+    type="date"
+    name="startDate"
+    value={pendingDateFilters.startDate}
+    onChange={onPendingInputChange}
+    style={{
+      padding: "8px 12px",
+      borderRadius: 6,
+      border: "1px solid #ccc",
+      fontSize: 14,
+      minWidth: 150,
+      maxWidth: 180,
+      background: "#f8fafc",
+      textAlign: "center",
+    }}
+  />
 
-  const format = (date) =>
-    date ? new Date(date).toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric"
-    }) : "";
+  <span style={{ fontSize: 14, color: "#666" }}>to</span>
 
-  return (
-    <button
-      key={i}
-      onClick={() =>
-        setActiveDateFilter(
-          activeDateFilter === col.column_name ? null : col.column_name
-        )
-      }
-      className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
-    >
-      <div className="flex flex-col items-start">
-        
-
-        {filter?.start && filter?.end && (
-          <span className="text-sm text-gray-600">
-            {col.display_name} Range: {format(filter.start)} - {format(filter.end)}
-          </span>
-        )}
-      </div>
-    </button>
-  );
-})}
-                <button
-                    onClick={() => setShowTableColumnModal(true)}
-                    className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
-                >
-                    Customize Columns
-                </button>
+  <input
+    type="date"
+    name="endDate"
+    value={pendingDateFilters.endDate}
+    onChange={onPendingInputChange}
+    style={{
+      padding: "8px 12px",
+      borderRadius: 6,
+      border: "1px solid #ccc",
+      fontSize: 14,
+      minWidth: 150,
+      maxWidth: 180,
+      background: "#f8fafc",
+      textAlign: "center",
+    }}
+  />
+</div>
+<button
+  onClick={handleApplyDateFilter}
+  className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
+>
+  Apply
+</button>
+<button
+    onClick={handleClear}
+  className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
+>
+  Clear
+</button>
+             <button
+  onClick={() =>
+    setActiveDateFilter(
+      activeDateFilter === "custom" ? null : "custom"
+    )
+  }
+  className={`px-3 py-2 border rounded-lg text-sm hover:bg-gray-100 ${
+    activeDateFilter === "custom" ? "bg-gray-100" : ""
+  }`}
+>
+  Custom Range
+</button>
                
 
                 {/* PAGINATION (LEFT SIDE LIKE YOU WANTED) */}
@@ -1267,22 +1547,28 @@ numericColumns.forEach(col => {
             </div>
             {activeDateFilter && (
   <div className="mb-4">
-   <DateOnlyFilter
-    onApply={(range) => {
-  if (!range?.start || !range?.end) return;
+<DateOnlyFilter
+  onApply={(range) => {
+    if (!range?.start || !range?.end) return;
 
-  setDateFilters(prev => ({
-    ...prev,
-    [activeDateFilter]: {
-      start: range.start,
-      end: range.end,
-      source: "picker"
-    }
-  }));
+    const updatedFilters = {
+      startDate: range.start,
+      endDate: range.end,
+    };
 
-  setActiveDateFilter(null);
-}}
-   />
+    setDateFilters(updatedFilters);
+    setActiveDateFilter(null);
+
+    // ✅ pass latest filters directly
+    loadModule(updatedFilters);
+    getFilteredReports({
+      dateFilters: updatedFilters,
+      module_id: report?.module_id,
+      filters: filters || [],
+      search: search || "",
+    });
+  }}
+/>
   </div>
 )}
 
@@ -1322,14 +1608,18 @@ numericColumns.forEach(col => {
               {val}
               <button
                 onClick={() => {
-                  const updated = [...filters];
+               setFilters(prev =>
+                  prev.map((item, index) => {
+                    if (index !== i) return item;
 
-                  updated[i].values =
-                    updated[i].values
-                      .map(normalize)
-                      .filter(v => v !== val);
-
-                  setFilters(updated);
+                    return {
+                      ...item,
+                      values: (item.values || [])
+                        .map(normalize)
+                        .filter(v => v !== val),
+                    };
+                  })
+                );
                 }}
                 className="text-blue-500 hover:text-red-500"
               >
@@ -1372,19 +1662,21 @@ numericColumns.forEach(col => {
                     type="checkbox"
                     checked={checked}
                     onChange={() => {
-                      const updated = [...filters];
+                     setFilters(prev =>
+                        prev.map((item, index) => {
+                          if (index !== i) return item;
 
-                      const current =
-                        (updated[i].values || []).map(normalize);
+                          const current =
+                            (item.values || []).map(normalize);
 
-                      if (checked) {
-                        updated[i].values =
-                          current.filter(v => v !== label);
-                      } else {
-                        updated[i].values = [...current, label];
-                      }
-
-                      setFilters(updated);
+                          return {
+                            ...item,
+                            values: checked
+                              ? current.filter(v => v !== label)
+                              : [...current, label],
+                          };
+                        })
+                      );
                     }}
                   />
 
@@ -1416,11 +1708,15 @@ numericColumns.forEach(col => {
             {/* ================= TABLE WRAPPER ================= */}
             <div className="bg-white rounded-xl shadow flex-1 flex flex-col overflow-hidden">
                 <div className="flex-1 w-full overflow-auto">
+                  {loading ? (
+                    <div className="flex items-center justify-center h-64">
+                      <Loader type="orbit" />
+                    </div>
+                  ) : (
                     <table className="min-w-max w-full text-sm">
                         <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
                             <tr>
-                                <th className="px-4 py-3 border-b text-left">S.No</th> {/* ✅ ADD THIS */}
-
+                                <th className="px-4 py-3 border-b text-left">S.No</th>
                                 {visibleColumns.map(col => (
                                    <th
   key={col.column_id}
@@ -1451,7 +1747,6 @@ numericColumns.forEach(col => {
 
                         {/* TABLE BODY */}
                     <tbody className="divide-y">
-{/* ================= DATA ROWS ================= */}
 {paginatedRows.map((row, i) => (
   <tr key={row.id ?? i} className="hover:bg-gray-50">
 
@@ -1464,7 +1759,7 @@ numericColumns.forEach(col => {
       const editKey = `edit-${row.id}-${col.column_name}`;
       const isDate = col.data_type?.toLowerCase().includes("date");
       const isAmount = col.data_type?.toLowerCase().includes("decimal") 
-
+      // console.log("rendering row:", row, "with column:", col);
       // ✅ normalize row value (CRITICAL FIX)
       const rawValue = row?.[col.column_name];
       const value =
@@ -1583,7 +1878,6 @@ numericColumns.forEach(col => {
   </tr>
   
 ))}
-{/* ================= TOTAL ROW ================= */}
 <tr className="bg-gray-100 font-semibold">
 
   {/* S.No column */}
@@ -1624,6 +1918,7 @@ numericColumns.forEach(col => {
 </tbody>
 
                     </table>
+                  )}
                     {showImportModal && (
                         <Modal title="Import Data" onClose={() => setShowImportModal(false)}>
 
@@ -1682,52 +1977,13 @@ numericColumns.forEach(col => {
 
                         </Modal>
                     )}
-                    {showPrintModal && (
+                     {showPrintModal && (
                         <Modal title="Print Options" onClose={() => setShowPrintModal(false)}>
 
                             <div className="flex gap-3">
 
                                 <button
-                                    onClick={() => handlePrint("default")}
-                                    className="btn btn-gray flex-1"
-                                >
-                                    Default
-                                </button>
-
-                                <button
-                                     onClick={async () => {
-                                    const savedCols = await fetchCustomizedColumns();
-
-                                    handlePrint("saved", savedCols); // ✅ pass directly
-                                    }}
-                                    className="btn btn-blue flex-1"
-                                >
-                                    Saved
-                                </button>
-
-                                <button
-                                    onClick={() => setShowColumnSelector(true)}
-                                    className="btn btn-green flex-1"
-                                >
-                                    Customize
-                                </button>
-                                <button
-                                    onClick={() => setShowPrintOptions(true)}
-                                    className="btn btn-green flex-1"
-                                >
-                                  Header
-                                </button>
-
-                            </div>
-
-                        </Modal>
-                    )}
-                    {showExcelModal && (
-                        <Modal title="Excel Export" onClose={() => setShowExcelModal(false)}>
-                            <div className="flex gap-3">
-
-                                <button
-                                    onClick={() => handleExcel("default")}
+                                    onClick={() => handlePrint("default",null,groupBy)}
                                     className="btn btn-gray flex-1"
                                 >
                                     Default
@@ -1735,8 +1991,9 @@ numericColumns.forEach(col => {
 
                                 <button
                                     onClick={async () => {
-                                        const savedCols = await fetchCustomizedColumns();
-                                        handleExcel("saved",savedCols)
+                                    const savedCols = await fetchCustomizedColumns();
+
+                                    handlePrint("saved", savedCols, groupBy); // ✅ pass directly
                                     }}
                                     className="btn btn-blue flex-1"
                                 >
@@ -1755,6 +2012,63 @@ numericColumns.forEach(col => {
                                 >
                                      Header
                                 </button>
+                                 <select
+                                    value={groupBy}
+                                    onChange={(e) => setGroupBy(e.target.value)}
+                                    className="border p-2 w-full rounded"
+                                  >
+                                    <option value="service">Service Types</option>
+                                    <option value="terms">Terms</option>
+                                  </select>
+                               
+
+                            </div>
+
+                        </Modal>
+                    )}
+                   {showExcelModal && (
+                        <Modal title="Excel Export" onClose={() => setShowExcelModal(false)}>
+                            <div className="flex gap-3">
+
+                                <button
+                                    onClick={() => handleExcel("default", null, groupBy)}
+                                    className="btn btn-gray flex-1"
+                                >
+                                    Default
+                                </button>
+
+                                <button
+                                     onClick={async () => {
+                                    const savedCols = await fetchCustomizedColumns();
+
+                                    handleExcel("saved", savedCols, groupBy);  // ✅ pass directly
+                                    }}
+                                    className="btn btn-blue flex-1"
+                                >
+                                    Saved
+                                </button>
+
+                                <button
+                                    onClick={() => setShowColumnSelector(true)}
+                                    className="btn btn-green flex-1"
+                                >
+                                    Customize
+                                </button>
+                                <button
+                                    onClick={() => setShowPrintOptions(true)}
+                                    className="btn btn-green flex-1"
+                                >
+                                     Header
+                                </button>
+                                 <select
+                                    value={groupBy}
+                                    onChange={(e) => setGroupBy(e.target.value)}
+                                    className="border p-2 w-full rounded"
+                                  >
+                                    <option value="service">Service Types</option>
+                                    <option value="terms">Terms</option>
+                                  </select>
+
                             </div>
 
                         </Modal>
@@ -1765,16 +2079,16 @@ numericColumns.forEach(col => {
                             <div className="flex gap-3">
 
                                 <button
-                                    onClick={() => handlePdf("default")}
+                                    onClick={() => handlePdf("default", null, groupBy)}
                                     className="btn btn-gray flex-1"
                                 >
                                     Default
                                 </button>
 
                                 <button
-                                     onClick={async () => {
+                                   onClick={async () => {
                                         const savedCols = await fetchCustomizedColumns();
-                                        handlePdf("saved",savedCols)
+                                        handlePdf("saved", savedCols, groupBy); // ✅ pass directly
                                     }}
                                     className="btn btn-blue flex-1"
                                 >
@@ -1793,6 +2107,14 @@ numericColumns.forEach(col => {
                                 >
                                      Header
                                 </button>
+                                 <select
+                                    value={groupBy}
+                                    onChange={(e) => setGroupBy(e.target.value)}
+                                    className="border p-2 w-full rounded"
+                                  >
+                                    <option value="service">Service Types</option>
+                                    <option value="terms">Terms</option>
+                                  </select>
 
                             </div>
 
@@ -1858,56 +2180,134 @@ numericColumns.forEach(col => {
                       </Modal>
                     )}
 
-                    {showColumnSelector && (
-                        <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
+                     {showColumnSelector && (
+  <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50">
 
-                            <div className="bg-white p-5 rounded-xl shadow-lg w-[420px]">
+    <div className="w-[500px] bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden">
 
-                                <h3 className="mb-4 text-lg font-semibold">
-                                    Select Columns
-                                </h3>
+      {/* Header */}
+      <div className="px-6 py-5 bg-gradient-to-r from-slate-50 to-blue-50 border-b">
 
-                                <div className="max-h-60 overflow-auto space-y-2 pr-2">
+        <h2 className="text-lg font-semibold text-gray-800">
+          Customize Columns
+        </h2>
 
-                                    {columns.map(col => (
-                                        <label
-                                            key={col.column_id}
-                                            className="flex items-center gap-2 p-2 rounded hover:bg-gray-100 cursor-pointer"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedColumns.includes(col.column_name)}
-                                                onChange={() => toggleColumn(col.column_name)}
-                                                className="accent-blue-600"
-                                            />
-                                            <span>{col.display_name}</span>
-                                        </label>
-                                    ))}
+        <p className="text-sm text-gray-500 mt-1">
+          Search and select fields to show in your table
+        </p>
 
-                                </div>
+        {/* SEARCH */}
+        <div className="mt-4 relative">
 
-                                <div className="flex justify-end gap-2 mt-4">
+          <input
+            type="text"
+            placeholder="Search columns..."
+            value={columnSearch}
+            onChange={(e) => setColumnSearch(e.target.value)}
+            className="w-full px-4 py-2 pl-10 text-sm rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 outline-none transition"
+          />
 
-                                    <button
-                                        onClick={() => setShowColumnSelector(false)}
-                                        className="btn btn-outline"
-                                    >
-                                        Cancel
-                                    </button>
+          <span className="absolute left-3 top-2.5 text-gray-400 text-sm">
+            🔍
+          </span>
 
-                                    <button
-                                        onClick={saveColumnSelection}
-                                        className="btn btn-blue"
-                                    >
-                                        💾 Save
-                                    </button>
+        </div>
 
-                                </div>
+      </div>
 
-                            </div>
+      {/* Quick actions */}
+      <div className="flex justify-between px-6 py-3 text-xs bg-gray-50 border-b">
 
-                        </div>
-                    )}
+        <button
+          onClick={() => setTempSelectedColumns(columns.map(c => c.column_name))}
+          className="text-blue-600 hover:underline font-medium"
+        >
+          Select All
+        </button>
+
+        <button
+          onClick={() => setTempSelectedColumns([])}
+          className="text-red-500 hover:underline font-medium"
+        >
+          Clear All
+        </button>
+
+      </div>
+
+      {/* List */}
+      <div className="max-h-72 overflow-auto p-4 space-y-2">
+
+        {columns
+          .filter(col =>
+            col.display_name
+              .toLowerCase()
+              .includes(columnSearch.toLowerCase())
+          )
+          .map(col => {
+
+            const checked = tempSelectedColumns.includes(col.column_name);
+
+            return (
+              <div
+                key={col.column_id}
+                onClick={() => toggleTempColumn(col.column_name)}
+                className={`
+                  flex items-center justify-between px-4 py-3 rounded-2xl border cursor-pointer transition
+                  ${checked
+                    ? "bg-blue-50 border-blue-300 shadow-sm"
+                    : "hover:bg-gray-50 border-gray-100"
+                  }
+                `}
+              >
+
+                <div className="flex items-center gap-3">
+
+                  {/* custom checkbox */}
+                  <div className={`
+                    w-5 h-5 flex items-center justify-center rounded-md border transition
+                    ${checked
+                      ? "bg-blue-600 border-blue-600 text-white"
+                      : "border-gray-300"
+                    }
+                  `}>
+                    {checked && "✓"}
+                  </div>
+
+                  <span className="text-sm text-gray-700">
+                    {col.display_name}
+                  </span>
+
+                </div>
+
+              </div>
+            );
+          })}
+
+      </div>
+
+      {/* Footer */}
+      <div className="flex justify-end gap-2 px-6 py-4 border-t bg-white">
+
+        <button
+          onClick={() => setShowColumnSelector(false)}
+          className="px-4 py-2 text-sm rounded-xl border hover:bg-gray-100 transition"
+        >
+          Cancel
+        </button>
+
+        <button
+          onClick={saveColumnSelection}
+          className="px-5 py-2 text-sm rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:opacity-90 shadow-md transition"
+        >
+          Apply Changes
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+)}
                     {showPrintOptions && (
                         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
 
@@ -1977,7 +2377,15 @@ numericColumns.forEach(col => {
                 </div>
             </div>
 
-
+<div ref={printRef} className="hidden print:block">
+  <PrintableTable
+    columns={columns}
+    finalRows={finalRows}
+    printModuleName={printModuleName}
+    module={module}
+    groupBy={groupBy}
+  />
+</div>
 
         </div>
 

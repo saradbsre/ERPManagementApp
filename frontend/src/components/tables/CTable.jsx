@@ -18,6 +18,7 @@ import DateOnlyFilter from "../DateOnlyFilter";
 import Loader from "../Loader";
 import ConfirmModal from "../ConfirmationPopups";
 import PrintableTable from "../PrintableTable";
+import ValidatePopups from "../Validatepopups";
 
 
 const Modal = ({ title, children, onClose }) => (
@@ -93,6 +94,16 @@ export default function DynamicTablePage() {
     const [tempSelectedColumns, setTempSelectedColumns] = useState([]);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [confirmData, setConfirmData] = useState({});
+    const [popupMessage, setPopupMessage] = useState("");
+    const [popupType, setPopupType] = useState("");
+    // const [confirmData, setConfirmData] = useState({
+    //   title: "Are you sure?",
+    //   message: "This action cannot be undone.",
+    //   confirmText: "Delete",
+    //   cancelText: "Cancel",
+    //   type: "danger",
+    //   onConfirm: null,
+    // });
     const [sortConfig, setSortConfig] = useState({
       key: null,
       direction: "asc",
@@ -544,30 +555,47 @@ const normalizeCreateColumns = (cols) => {
 };
 
 
-const getExcelColumns = (mode) => {
-  const cols = getColumnsToUse(mode);
+const getExcelColumns = (mode, savedCols = [], groupBy = "service") => {
+
+  const cols = getColumnsToUse(mode, savedCols);
 
   const currencies = [
     ...new Set(finalRows.map(r => r.currency).filter(Boolean))
   ];
 
-  // remove base amount + currency columns
+  // =========================
+  // NORMAL COLUMNS
+  // =========================
   const normalCols = cols.filter(c => {
     const name = c.column_name.toLowerCase();
     return name !== "amount" && name !== "currency";
   });
 
+  // =========================
+  // DYNAMIC CURRENCY COLUMNS
+  // =========================
   const currencyCols = currencies.map(cur => ({
     column_name: `amount_${cur.toLowerCase()}`,
     display_name: `AMOUNT (${cur.toUpperCase()})`,
     currency: cur,
-    isDynamicCurrency: true
+    isDynamicCurrency: true,
+
+    // ✅ IMPORTANT: prevent grouping confusion
+    isDerived: true
   }));
 
+  // =========================
+  // FINAL COLS
+  // =========================
   let finalCols = [...normalCols, ...currencyCols];
 
-  // sort total last
+  // sort totals last
   finalCols = sortColumns(finalCols);
+
+  // =========================
+  // ADD GROUP META (IMPORTANT FIX)
+  // =========================
+  finalCols.groupBy = groupBy;
 
   return finalCols;
 };
@@ -970,7 +998,7 @@ useEffect(() => {
 
         // Optionally remove the original 'amount' field if not needed
         // delete payload.amount;
-        console.log("Creating row with payload:", payload);
+        //console.log("Creating row with payload:", payload);
         await createModuleRow(id, payload, activeUserEmail);
 
         setIsCreating(false);
@@ -979,9 +1007,12 @@ setNewRow({});
 setInputValues({});
 setActiveDropdown(null);
 setAutoFilledFields({});
-
+setPopupMessage("Record created successfully");
+setPopupType("success");
 loadModule();
     } catch (err) {
+        setPopupMessage("Error creating record");
+        setPopupType("error");
         console.error(err);
     }
 };
@@ -1017,9 +1048,13 @@ loadModule();
             setEditRowId(null);
             setEditRow({});
             setOriginalRow({});
+            setPopupMessage("Record updated successfully");
+            setPopupType("success");
 
             loadModule();
         } catch (err) {
+            setPopupMessage("Error updating record");
+            setPopupType("error");
             console.error(err);
         }
     };
@@ -1029,92 +1064,77 @@ loadModule();
         setEditRow({});
     };
 
-   const handleDelete = (row) => {
-
+const handleDelete = (row) => {
   setConfirmData({
     title: "Delete Record",
     message: `Are you sure you want to delete this record?`,
     confirmText: "Delete",
     type: "danger",
-
-    action: async () => {
+    onConfirm: async () => {
       try {
-
-        await deleteModuleRow(
-          id,
-          row.id,
-          activeUserEmail
-        );
-
+        await deleteModuleRow(id, row.id, activeUserEmail);
+        setPopupMessage("Record deleted successfully");
+        setPopupType("success");
         loadModule();
-
       } catch (err) {
         console.error(err);
+        setPopupMessage("Error deleting record");
+        setPopupType("error");
       }
+      setConfirmOpen(false); // <-- add this line
     }
   });
-
   setConfirmOpen(true);
 };
 
-  const handleCancelRow = (row) => {
-
+const handleCancelRow = (row) => {
   setConfirmData({
     title: "Cancel Record",
     message: "Are you sure you want to cancel this record?",
     confirmText: "Yes, Cancel",
     type: "warning",
-
-    action: async () => {
+    onConfirm: async () => {
       try {
-
-        await cancelModuleRow(
-          id,
-          row.id,
-          activeUserEmail
-        );
-
+        await cancelModuleRow(id, row.id, activeUserEmail);
+        setPopupMessage("Record cancelled successfully");
+        setPopupType("success");
         loadModule();
-
       } catch (err) {
         console.error(err);
+        setPopupMessage("Error cancelling record");
+        setPopupType("error");
       }
+      setConfirmOpen(false); // Always close modal
     }
   });
-
   setConfirmOpen(true);
 };
 
-  const handleUndoCancelRow = (row) => {
-
+const handleUndoCancelRow = (row) => {
   setConfirmData({
     title: "Undo Cancellation",
     message: "Do you want to restore this cancelled record?",
     confirmText: "Restore",
     type: "info",
-
-    action: async () => {
+    onConfirm: async () => {
       try {
-
-        await undoCancelModuleRow(
-          id,
-          row.id,
-          activeUserEmail
-        );
-
+        await undoCancelModuleRow(id, row.id, activeUserEmail);
+        setPopupMessage("Record restored successfully");
+        setPopupType("success");
         loadModule();
-
       } catch (err) {
         console.error(err);
+        setPopupMessage("Error restoring record");
+        setPopupType("error");
       }
+      setConfirmOpen(false); // Always close modal
     }
   });
-
   setConfirmOpen(true);
 };
-   const handleExcel = (mode) => {
-  const cols = getExcelColumns(mode);
-
+const handleExcel = async (mode, savedCols = null, groupBy) => {
+  const cols = getExcelColumns(mode, savedCols);
+  //console.log("Excel export columns:", cols);
   const company = localStorage.getItem("print_company") || "";
   const moduleName =
     printModuleName ||
@@ -1123,11 +1143,12 @@ loadModule();
 
   const formattedRows = finalRows.map((row, index) => {
     const newRow = {
-      SNo: index + 1
+      SNo: index + 1,
+      __groupKey: getGroupKey(row, groupBy) // ✅ ADD THIS
     };
+    //console.log("Formatting row for Excel with groupBy:", groupBy, "Row:", row);
 
     cols.forEach(col => {
-
       let value = "";
 
       if (col.isDynamicCurrency) {
@@ -1137,7 +1158,6 @@ loadModule();
             : "";
       } else {
         const raw = row[col.column_name];
-
         value =
           typeof raw === "object"
             ? raw?.value ?? ""
@@ -1158,16 +1178,15 @@ loadModule();
 
     return newRow;
   });
-
+   
   exportToExcel(
     formattedRows,
     cols.map(c => c.display_name),
-    `${moduleName}` ,
-   // moduleName 
+    moduleName,
+    groupBy // ✅ PASS IT
   );
- // console.log("moduleName:", moduleName);
+  
 };
-
 
     const handleExport = async () => {
         try {
@@ -1512,114 +1531,7 @@ const finalRows = filtered.filter(row => {
     });
     }, [editRowId, visibleColumns, masterDataMap]);
 
-//     const filteredRows = rows.filter((row) => {
-//   return filters.every((filter) => {
-//     const masterName = normalize(filter.master);
 
-//     const selectedValues = (filter.values || []).map(normalize);
-
-//     // no selected values → skip filter
-//     if (selectedValues.length === 0) return true;
-
-//     // row value
-//     const rawValue = row?.[masterName];
-
-//     const rowValue = normalize(
-//       typeof rawValue === "object"
-//         ? rawValue?.value
-//         : rawValue
-//     );
-
-//     return selectedValues.includes(rowValue);
-//   });
-// });
-
-// const filteredRows = rows.filter((row, rowIndex) => {
-
-//   console.log(`\n================ ROW ${rowIndex} ================`);
-//   console.log("ROW DATA:", row);
-
-//   // =========================
-//   // 1. FILTER CHIPS
-//   // =========================
-// const passesFilters = filters.every((filter) => {
-
-//   const selectedValues =
-//     (filter.values || []).map(normalize);
-
-//   if (selectedValues.length === 0) return true;
-
-//   // ✅ MASTER → COLUMN_NAME
-//   const fieldKey =
-//     columns.find(c => c.master === filter.master)
-//       ?.column_name || filter.master;
-
-//   const rawValue = row?.[fieldKey];
-
-//   const rowValue = normalize(
-//     typeof rawValue === "object"
-//       ? rawValue?.value
-//       : rawValue
-//   );
-
-//   console.log("Master:", filter.master);
-//   console.log("FieldKey:", fieldKey);
-//   console.log("Selected:", selectedValues);
-//   console.log("Raw Row Value:", rawValue);
-//   console.log("Normalized Row Value:", rowValue);
-
-//   return selectedValues.includes(rowValue);
-// });
-
-//   console.log("➡️ passesFilters FINAL:", passesFilters);
-
-//   if (!passesFilters) {
-//     console.log("❌ ROW REJECTED BY FILTERS");
-//     return false;
-//   }
-
-//   // =========================
-//   // 2. SEARCH FILTER
-//   // =========================
-//   if (!search) {
-//     console.log("No search → ROW PASSED");
-//     return true;
-//   }
-
-//   const searchNorm = normalizeString(search);
-
-//   console.log("🔍 SEARCH TERM:", searchNorm);
-
-//   const searchMatch = visibleColumns.some((col, cIndex) => {
-
-//     const val = row[col.column_name];
-
-//     const cellNorm = normalizeString(
-//       typeof val === "object"
-//         ? val?.value ?? ""
-//         : val ?? ""
-//     );
-
-//     const match = cellNorm.includes(searchNorm);
-
-//     console.log(
-//       `Column ${cIndex} (${col.column_name}) →`,
-//       cellNorm,
-//       "MATCH:",
-//       match
-//     );
-
-//     return match;
-//   });
-
-//   console.log("🔎 SEARCH FINAL RESULT:", searchMatch);
-
-//   return searchMatch;
-// });
-
-// ======================================================
-// FILTER + SEARCH
-// ======================================================
 
 const filteredRows = rows.filter((row, rowIndex) => {
 
@@ -1828,8 +1740,8 @@ const getGroupKey = (row, groupBy = "service") => {
 
   if (groupBy === "terms") {
     return normalize(
-      row.terms?.value ||
-      row.terms ||
+      row.term?.value ||
+      row.term ||
       "UNKNOWN"
     );
   }
@@ -2124,7 +2036,14 @@ return `
     );
     return (
         <div className="h-full flex flex-col">
-
+             <ValidatePopups
+                            type={popupType}
+                            message={popupMessage}
+                            onClose={() => {
+                              setPopupMessage("");
+                              setPopupType("success");
+                            }}
+                          />
             {/* ================= HEADER ================= */}
             <div className="flex justify-between items-center mb-4">
 
@@ -2259,39 +2178,7 @@ onClick={handleCreate}
 
   </div>
 )}
-                 {/* ✅ DATE FILTER BUTTONS */}
- {/* {dateColumns.map((col, i) => {
-  const filter = dateFilters?.[col.column_name];
-
-  const format = (date) =>
-    date ? new Date(date).toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric"
-    }) : "";
-
-  return (
-    <button
-      key={i}
-      onClick={() =>
-        setActiveDateFilter(
-          activeDateFilter === col.column_name ? null : col.column_name
-        )
-      }
-      className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
-    >
-      <div className="flex flex-col items-start">
-        
-
-        {filter?.start && filter?.end && (
-          <span className="text-sm text-gray-600">
-            {col.display_name} Range: {format(filter.start)} - {format(filter.end)}
-          </span>
-        )}
-      </div>
-    </button>
-  );
-})} */}
+              
 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
   <input
     type="date"
@@ -2551,8 +2438,7 @@ onClick={handleCreate}
                     <table className="min-w-max w-full text-sm">
                         <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
                             <tr>
-                                <th className="px-4 py-3 border-b text-left">S.No</th> {/* ✅ ADD THIS */}
-
+                                <th className="px-4 py-3 border-b text-left">S.No</th> 
                                 {visibleColumns.map(col => (
                                    <th
   key={col.column_id}
@@ -2583,8 +2469,6 @@ onClick={handleCreate}
 
                         {/* TABLE BODY */}
                     <tbody className="divide-y">
-
-{/* ================= CREATE ROW ================= */}
 {isCreating && (
   <tr className="bg-blue-50">
     <td className="px-4 py-3 whitespace-nowrap"></td>
@@ -2880,8 +2764,6 @@ if (col.master === "credit_card" && value) {
     </td>
   </tr>
 )}
-
-{/* ================= DATA ROWS ================= */}
 {sortedRows.map((row, i) => (
   <tr
     key={row.id ?? i}
@@ -3614,7 +3496,7 @@ if (col.master === "credit_card" && value) {
                             <div className="flex gap-3">
 
                                 <button
-                                    onClick={() => handleExcel("default")}
+                                    onClick={() => handleExcel("default", null, groupBy)}
                                     className="btn btn-gray flex-1"
                                 >
                                     Default
@@ -3624,7 +3506,7 @@ if (col.master === "credit_card" && value) {
                                      onClick={async () => {
                                     const savedCols = await fetchCustomizedColumns();
 
-                                    handleExcel("saved", savedCols); // ✅ pass directly
+                                    handleExcel("saved", savedCols, groupBy);  // ✅ pass directly
                                     }}
                                     className="btn btn-blue flex-1"
                                 >
@@ -3643,7 +3525,14 @@ if (col.master === "credit_card" && value) {
                                 >
                                      Header
                                 </button>
-
+                                 <select
+                                    value={groupBy}
+                                    onChange={(e) => setGroupBy(e.target.value)}
+                                    className="border p-2 w-full rounded"
+                                  >
+                                    <option value="service">Service Types</option>
+                                    <option value="terms">Terms</option>
+                                  </select>
 
                             </div>
 
@@ -4086,7 +3975,16 @@ if (col.master === "credit_card" && value) {
     groupBy={groupBy}
   />
 </div>
-
+ <ConfirmModal
+  open={confirmOpen}
+  title={confirmData.title}
+  message={confirmData.message}
+  confirmText={confirmData.confirmText}
+  cancelText={confirmData.cancelText}
+  type={confirmData.type}
+  onClose={() => setConfirmOpen(false)}
+  onConfirm={confirmData.onConfirm}
+/>
 
         </div>
 

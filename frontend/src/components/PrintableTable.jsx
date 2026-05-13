@@ -5,7 +5,8 @@ const PrintableTable = ({
   finalRows,
   printModuleName,
   module,
-  groupBy// 👈 new prop with default
+  groupBy = "service" // 👈 new prop with default
+
 }) => {
  // console.log("Rendering PrintableTable with columns:", columns);
   // =========================

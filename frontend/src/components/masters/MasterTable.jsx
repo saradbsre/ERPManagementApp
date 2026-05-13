@@ -8,6 +8,8 @@ import PermissionButton from "../PermissionButton";
 import { formatDateTime } from "../../utils/formatDateTime";
 import { formatDate } from "../../utils/formatDate";
 import ValidatePopups from "../Validatepopups";
+import Loader from "../Loader";
+import ConfirmModal from "../ConfirmationPopups";
 
 
 const Modal = ({ title, children, onClose }) => (
@@ -34,7 +36,7 @@ export default function MasterTablePage() {
     const [editRowId, setEditRowId] = useState(null);
     const [editRow, setEditRow] = useState({});
     const [originalRow, setOriginalRow] = useState({});
-    //const [columns, setColumns] = useState([]);
+    const [loading, setLoading] = useState(false);
     const [rows, setRows] = useState([]);
     const [search, setSearch] = useState("");
     const [showImportModal, setShowImportModal] = useState(false);
@@ -60,6 +62,17 @@ export default function MasterTablePage() {
     const [editingPlanName, setEditingPlanName] = useState("");
     const [servicesList, setServicesList] = useState([]);
     const [providersList, setProvidersList] = useState([]);
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [popupMessage, setPopupMessage] = useState("");
+    const [popupType, setPopupType] = useState("");
+    const [confirmData, setConfirmData] = useState({
+      title: "Are you sure?",
+      message: "This action cannot be undone.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      type: "danger",
+      onConfirm: null,
+    });
     const [sortConfig, setSortConfig] = useState({
       key: null,
       direction: "asc",
@@ -114,8 +127,12 @@ const handleCreatePlan = async () => {
 
     setAllPlans(prev => [...prev, res.data]);
     setNewPlanName("");
+    setPopupMessage("Master created successfully!");
+    setPopupType("success");
   } catch (err) {
     console.error("CREATE PLAN ERROR:", err);
+    setPopupMessage("Error creating master!");
+    setPopupType("error");
   }
 };
 const handleUpdatePlan = async (id) => {
@@ -132,7 +149,11 @@ const handleUpdatePlan = async (id) => {
 
     setEditingPlanId(null);
     setEditingPlanName("");
+    setPopupMessage("Master updated successfully!");
+    setPopupType("success");
   } catch (err) {
+    setPopupMessage("Error updating master!");
+    setPopupType("error");
     console.error("UPDATE PLAN ERROR:", err);
   }
 };
@@ -218,6 +239,7 @@ const handleSavePlans = async () => {
 
   const loadMasterData = async () => {
   try {
+    setLoading(true);
     const res = await getMasterData(masterName, activeUserEmail);
     const data = res.data || [];
 
@@ -227,6 +249,7 @@ const handleSavePlans = async () => {
     }));
     
     setRows(withIds);
+    setLoading(false);
   } catch (err) {
     console.error(err);
   }
@@ -307,20 +330,34 @@ const handleCancel = () => {
   setNewRow({});
 };
 
-const handleDelete = async (row) => {
-    try{
+const handleDelete = (row) => {
+  setConfirmData({
+    title: "Delete Record",
+    message: "Are you sure you want to delete this record?",
+    confirmText: "Delete",
+    cancelText: "Cancel",
+    type: "danger",
+    onConfirm: async () => {
+      setConfirmOpen(false);
+      try {
         await deleteMasterData(masterName, row.id, activeUserEmail);
         setValidationMessage("Record deleted successfully!");
         setValidationType("success");
+        setPopupMessage("Record deleted successfully!");
+        setPopupType("success");
         setShowValidatePopup(true);
         loadMasterData();
-    }
-    catch(err){
+      } catch (err) {
         console.error("DELETE ERROR:", err);
         setValidationMessage("Error deleting record!");
         setValidationType("error");
-        setShowValidatePopup(true); 
+        setPopupMessage("Error deleting record!");
+        setPopupType("error");
+        setShowValidatePopup(true);
+      }
     }
+  });
+  setConfirmOpen(true);
 };
 
 const handleSaveEdit = async () => {
@@ -342,6 +379,8 @@ const handleSaveEdit = async () => {
     setValidationMessage("Record updated successfully!");
     setValidationType("success");
     setShowValidatePopup(true);
+    setPopupMessage("Record updated successfully!");
+    setPopupType("success");
 
     setEditRowId(null);
     setEditRow({});
@@ -352,6 +391,8 @@ const handleSaveEdit = async () => {
     setValidationMessage("Error updating record!");
     setValidationType("error");
     setShowValidatePopup(true);
+    setPopupMessage("Error updating record!");
+    setPopupType("error");
     console.error("UPDATE ERROR:", err);
   }
 };
@@ -399,6 +440,14 @@ useEffect(() => {
 
     return (
         <div className="h-full flex flex-col">
+           <ValidatePopups
+                type={popupType}
+                message={popupMessage}
+                onClose={() => {
+                  setPopupMessage("");
+                  setPopupType("success");
+                }}
+              />
 
             <div className="flex justify-between items-center mb-4">
 
@@ -527,6 +576,11 @@ useEffect(() => {
                   {/* TABLE */}
              <div className="bg-white rounded-xl shadow flex-1 flex flex-col overflow-hidden">
   <div className="flex-1 w-full overflow-auto">
+    {loading ? (
+      <div className="flex items-center justify-center h-64">
+        <Loader type="orbit" />
+      </div>
+    ) : (
     <table className="min-w-max w-full text-sm">
       <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
   <tr>
@@ -901,6 +955,7 @@ useEffect(() => {
 </tbody>
 
                         </table>
+    )}
                        {showPlansModal && (
   <Modal
     title={`Plans - ${selectedProvider?.provider_name || "New Provider"}`}
@@ -1032,6 +1087,16 @@ useEffect(() => {
 )}
                     </div>
                 </div>
+                <ConfirmModal
+  open={confirmOpen}
+  title={confirmData.title}
+  message={confirmData.message}
+  confirmText={confirmData.confirmText}
+  cancelText={confirmData.cancelText}
+  type={confirmData.type}
+  onClose={() => setConfirmOpen(false)}
+  onConfirm={confirmData.onConfirm}
+/>
         </div>
     );
 }
