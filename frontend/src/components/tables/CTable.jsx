@@ -1000,16 +1000,16 @@ useEffect(() => {
         // delete payload.amount;
         //console.log("Creating row with payload:", payload);
         await createModuleRow(id, payload, activeUserEmail);
-
+           setPopupMessage("Record created successfully");
+      setPopupType("success");
         setIsCreating(false);
 
-setNewRow({});
-setInputValues({});
-setActiveDropdown(null);
-setAutoFilledFields({});
-setPopupMessage("Record created successfully");
-setPopupType("success");
-loadModule();
+      setNewRow({});
+      setInputValues({});
+      setActiveDropdown(null);
+      setAutoFilledFields({});
+   
+      loadModule();
     } catch (err) {
         setPopupMessage("Error creating record");
         setPopupType("error");
