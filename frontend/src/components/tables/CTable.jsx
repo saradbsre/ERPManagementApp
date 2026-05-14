@@ -896,15 +896,9 @@ const getMasterOptions = (col, searchText = "") => {
 };
 const calculateCost = (amount, currencyCode, term) => {
   if (!amount || !currencyCode) return null;
-
   const rate = getExchangeRate(currencyCode);
   if (!rate || isNaN(rate)) return null;
-
-  const adjustedAmount = applyTermMultiplier(amount, term);
-
-  const monthly = Number(adjustedAmount) * Number(rate);
-
-  return monthly;
+  return Number(amount) * Number(rate);
 };
 
 
