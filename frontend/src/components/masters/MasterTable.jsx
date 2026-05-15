@@ -217,21 +217,26 @@ const openPlansModal = async (provider) => {
   }
 };
 const handleSavePlans = async () => {
+  setLoading(true);
   try {
     await saveProviderPlans({
       provider_id: selectedProvider.id,
       plan_ids: selectedPlans
     }, activeUserEmail);
+    setLoading(false);
     setValidationMessage("Plans updated successfully!");
     setValidationType("success");
     setShowValidatePopup(true);
 
     setShowPlansModal(false);
   } catch (err) {
+    setLoading(false);
     console.error("SAVE PLANS ERROR:", err);
     setValidationMessage("Failed to save plans");
     setValidationType("error");
     setShowValidatePopup(true);
+  } finally {
+    setLoading(false);
   }
 };
 
@@ -985,6 +990,12 @@ useEffect(() => {
     title={`Plans - ${selectedProvider?.provider_name || "New Provider"}`}
     onClose={() => setShowPlansModal(false)}
   >
+    {loading ? (
+      <div className="flex items-center justify-center h-48">
+        <Loader type="orbit" />
+      </div>
+    ) : (
+      <>
     {/* ================= PLAN GRID ================= */}
     <div className="grid grid-cols-2 gap-3 max-h-72 overflow-auto pr-2">
 
@@ -1026,7 +1037,7 @@ useEffect(() => {
 ))}
 
     </div>
-
+   
     {/* ================= ADD NEW PLAN ================= */}
     <div className="mt-4 border-t pt-4">
 
@@ -1090,9 +1101,9 @@ useEffect(() => {
 
  
 
-    </div>
+    </div> </>
 
-
+  )}
   </Modal>
 )}
                     </div>
