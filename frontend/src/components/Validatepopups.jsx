@@ -3,7 +3,7 @@ import React, { useEffect } from 'react';
 export default function ValidatePopups({ type, message, onClose }) {
   useEffect(() => {
     if (!message) return;
-    const timer = setTimeout(onClose, 5000);
+    const timer = setTimeout(onClose, 4000); // Auto-close after 4 seconds
     return () => clearTimeout(timer);
   }, [message, onClose]);
 

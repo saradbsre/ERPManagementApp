@@ -61,14 +61,14 @@ if (type === "orbit") {
       </div>
 
       {/* LOADING TEXT */}
-      <div className="text-sm text-gray-500 flex items-center gap-1 mt-2">
+      {/* <div className="text-sm text-gray-500 flex items-center gap-1 mt-2">
         Loading
         <span className="flex">
           <span className="animate-bounce [animation-delay:-0.3s]">.</span>
           <span className="animate-bounce [animation-delay:-0.15s]">.</span>
           <span className="animate-bounce">.</span>
         </span>
-      </div>
+      </div> */}
 
     </div>
   );

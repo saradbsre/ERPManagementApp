@@ -341,3 +341,7 @@ export const updateUserProfile = (email, data) => {
 export const sessionHeartbeat = (email) => {
   return API.post("/auth/heartbeat", { email });
 };
+
+export const getDbStatus = () => {
+  return API.get("/db-status");
+};

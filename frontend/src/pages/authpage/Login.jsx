@@ -2,9 +2,10 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../../assets/headerlogo.jpeg";
 import binshabib1 from '../../assets/binshabib1.png';
-
+import { getDbStatus } from "../../api/api";
 import { loginUser, registerUser } from "../../api/api";
 import { useUser } from "../../components/UserContext";
+import DbStatusOverlay from "../../components/DbStatusOverlay";
 
 
 export default function Login() {
@@ -28,9 +29,24 @@ export default function Login() {
     });
     const [signupError, setSignupError] = useState({});
     const [checkingAuth, setCheckingAuth] = useState(true);
+    const [dbStatus, setDbStatus] = useState("loading"); 
 
 
+useEffect(() => {
+  setDbStatus("loading");
 
+  getDbStatus()
+    .then(res => {
+      if (res.data?.status === "connected") {
+        setDbStatus("connected");
+      } else {
+        setDbStatus("error");
+      }
+    })
+    .catch(() => {
+      setDbStatus("error");
+    });
+}, []);
 
     const handleLogin = async (e) => {
     e.preventDefault();
@@ -45,7 +61,7 @@ export default function Login() {
             withCredentials: true,
         });
 
-        console.log("API RESPONSE:", res.data);
+       // console.log("API RESPONSE:", res.data);
 
         const loggedInUser = res?.data?.user;
 
@@ -57,7 +73,7 @@ export default function Login() {
         // update context
         setUser(loggedInUser);
 
-        console.log("Logged in user:", loggedInUser);
+        //console.log("Logged in user:", loggedInUser);
 
         // 🚀 NAVIGATE HERE (ONLY ONCE)
         navigate("/dashboard");
@@ -65,7 +81,7 @@ export default function Login() {
     } catch (err) {
         setError(
             err.response?.data?.message ||
-            "Login failed"
+            "Server error during login. Please try again."
         );
     } finally {
         setLoading(false);
@@ -135,7 +151,7 @@ export default function Login() {
         setIsSignup(false);
 
     } catch (err) {
-        setError(err.response?.data?.message || "Signup failed");
+        setError(err.response?.data?.message || "Server error during signup. Please try again.");
     } finally {
         setLoading(false);
     }
@@ -149,7 +165,8 @@ export default function Login() {
                 backgroundImage:
                     `linear-gradient(to bottom right, rgba(0,0,0,0.5), rgba(0,0,0,0.2)), url(${binshabib1})`,
             }}
-        >
+        > 
+            {/* <DbStatusOverlay dbStatus={dbStatus} onRetry={() => window.location.reload()} /> */}
            
             <div className="flex flex-col md:flex-row justify-between items-center w-full max-w-6xl">
 
@@ -214,10 +231,12 @@ export default function Login() {
                                     </button>
 
                                     <button
-                                        type="submit"
-                                        className="flex-1 border border-white text-white py-3 rounded hover:bg-orange-500"
+                                    type="submit"
+                                    disabled={loading}
+                                    className={`flex-1 border border-white text-white py-3 rounded hover:bg-orange-500 transition
+                                        ${loading ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                                     >
-                                        Login
+                                    {loading ? "Logging in..." : "Login"}
                                     </button>
                                 </div>
                                 <div className="text-center">

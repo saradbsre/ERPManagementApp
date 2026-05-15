@@ -974,6 +974,7 @@ useEffect(() => {
   
    const handleSave = async () => {
     try {
+       setLoading(true);
         // Clone the newRow to avoid mutating state directly
         const payload = { ...newRow };
 
@@ -994,6 +995,7 @@ useEffect(() => {
         // delete payload.amount;
         //console.log("Creating row with payload:", payload);
         await createModuleRow(id, payload, activeUserEmail);
+           setLoading(false);
            setPopupMessage("Record created successfully");
       setPopupType("success");
         setIsCreating(false);
@@ -1005,6 +1007,7 @@ useEffect(() => {
    
       loadModule();
     } catch (err) {
+        setLoading(false);
         setPopupMessage("Error creating record");
         setPopupType("error");
         console.error(err);
@@ -1023,6 +1026,7 @@ useEffect(() => {
     };
 
     const handleSaveEdit = async () => {
+        setLoading(true);
         try {
             const changedData = {};
 
@@ -1038,7 +1042,7 @@ useEffect(() => {
             }
 
             await updateModuleRow(id, editRowId, changedData, activeUserEmail);
-
+              setLoading(false);
             setEditRowId(null);
             setEditRow({});
             setOriginalRow({});
@@ -1047,6 +1051,7 @@ useEffect(() => {
 
             loadModule();
         } catch (err) {
+              setLoading(false);
             setPopupMessage("Error updating record");
             setPopupType("error");
             console.error(err);
@@ -1059,6 +1064,7 @@ useEffect(() => {
     };
 
 const handleDelete = (row) => {
+  setLoading(false);
   setConfirmData({
     title: "Delete Record",
     message: `Are you sure you want to delete this record?`,
@@ -1067,10 +1073,12 @@ const handleDelete = (row) => {
     onConfirm: async () => {
       try {
         await deleteModuleRow(id, row.id, activeUserEmail);
+        setLoading(false);
         setPopupMessage("Record deleted successfully");
         setPopupType("success");
         loadModule();
       } catch (err) {
+          setLoading(false);
         console.error(err);
         setPopupMessage("Error deleting record");
         setPopupType("error");
@@ -1082,6 +1090,7 @@ const handleDelete = (row) => {
 };
 
 const handleCancelRow = (row) => {
+  setLoading(true);
   setConfirmData({
     title: "Cancel Record",
     message: "Are you sure you want to cancel this record?",
@@ -1090,6 +1099,7 @@ const handleCancelRow = (row) => {
     onConfirm: async () => {
       try {
         await cancelModuleRow(id, row.id, activeUserEmail);
+        setLoading(false);
         setPopupMessage("Record cancelled successfully");
         setPopupType("success");
         loadModule();
@@ -1098,6 +1108,7 @@ const handleCancelRow = (row) => {
         setPopupMessage("Error cancelling record");
         setPopupType("error");
       }
+      setLoading(false);
       setConfirmOpen(false); // Always close modal
     }
   });
@@ -1105,6 +1116,7 @@ const handleCancelRow = (row) => {
 };
 
 const handleUndoCancelRow = (row) => {
+  setLoading(true);
   setConfirmData({
     title: "Undo Cancellation",
     message: "Do you want to restore this cancelled record?",
@@ -1113,10 +1125,12 @@ const handleUndoCancelRow = (row) => {
     onConfirm: async () => {
       try {
         await undoCancelModuleRow(id, row.id, activeUserEmail);
+        setLoading(false);
         setPopupMessage("Record restored successfully");
         setPopupType("success");
         loadModule();
       } catch (err) {
+          setLoading(false);
         console.error(err);
         setPopupMessage("Error restoring record");
         setPopupType("error");

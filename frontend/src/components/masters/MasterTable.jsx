@@ -122,7 +122,7 @@ export default function MasterTablePage() {
 };
 const handleCreatePlan = async () => {
   if (!newPlanName.trim()) return;
-
+  setLoading(true);
   try {
     const res = await createMasterData("plans", {
       plan_name: newPlanName,
@@ -137,10 +137,13 @@ const handleCreatePlan = async () => {
     console.error("CREATE PLAN ERROR:", err);
     setPopupMessage("Error creating master!");
     setPopupType("error");
+  } finally {
+    setLoading(false);
   }
 };
 const handleUpdatePlan = async (id) => {
   try {
+    setLoading(true);
     await updateMasterData("plans", id, {
       plan_name: editingPlanName
     }, activeUserEmail);
@@ -159,6 +162,9 @@ const handleUpdatePlan = async (id) => {
     setPopupMessage("Error updating master!");
     setPopupType("error");
     console.error("UPDATE PLAN ERROR:", err);
+  }
+    finally {
+    setLoading(false);
   }
 };
 
@@ -301,6 +307,7 @@ useEffect(() => {
 }, [activeUserEmail]);
 
 const handleSave = async () => {
+  setLoading(true);
   try {
     // 🔥 REMOVE INVALID KEYS BEFORE SENDING
     const cleanedRow = Object.fromEntries(
@@ -330,6 +337,9 @@ const handleSave = async () => {
     setValidationType("error");
     setShowValidatePopup(true);
   }
+    finally {
+    setLoading(false);
+  }
 };
 
 const handleCancel = () => {
@@ -338,6 +348,7 @@ const handleCancel = () => {
 };
 
 const handleDelete = (row) => {
+  setLoading(true);
   setConfirmData({
     title: "Delete Record",
     message: "Are you sure you want to delete this record?",
@@ -354,7 +365,9 @@ const handleDelete = (row) => {
         setPopupType("success");
         setShowValidatePopup(true);
         loadMasterData();
+        setLoading(false);
       } catch (err) {
+        setLoading(false);
         console.error("DELETE ERROR:", err);
         setValidationMessage("Error deleting record!");
         setValidationType("error");
@@ -368,6 +381,7 @@ const handleDelete = (row) => {
 };
 
 const handleSaveEdit = async () => {
+  setLoading(true);
   try {
     const changedData = {};
 
@@ -401,6 +415,9 @@ const handleSaveEdit = async () => {
     setPopupMessage("Error updating record!");
     setPopupType("error");
     console.error("UPDATE ERROR:", err);
+    setLoading(false);
+  } finally {
+    setLoading(false);
   }
 };
 

@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate, Outlet, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
-
+import { getDbStatus } from "./api/api";
 import Login from "./pages/authpage/Login";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/admin/Admin";
@@ -15,6 +15,7 @@ import PaymentReqForm from "./pages/PaymentReqForm";
 import Profile from "./pages/Profile";
 import { useUser } from "./components/UserContext";
 import { sessionHeartbeat, logOut } from "./api/api";
+import DbStatusOverlay from "./components/DbStatusOverlay";
 
 function AppRouter() {
   const navigate = useNavigate();
@@ -22,6 +23,46 @@ function AppRouter() {
   const isActive = useRef(false);
   const inactiveCount = useRef(0);
   const [inactiveMsg, setInactiveMsg] = useState("");
+  const [dbStatus, setDbStatus] = useState("loading"); 
+
+useEffect(() => {
+
+  const checkDb = async () => {
+
+    // delay before showing loading
+    const loadingTimer = setTimeout(() => {
+      setDbStatus("loading");
+    }, 1500); // 1.5 sec delay
+
+    try {
+      const res = await getDbStatus();
+
+      // stop loading timer
+      clearTimeout(loadingTimer);
+
+      if (res.data?.status === "connected") {
+        setDbStatus("connected");
+      } else {
+        setDbStatus("error");
+      }
+
+    } catch (err) {
+
+      clearTimeout(loadingTimer);
+
+      setDbStatus("error");
+    }
+  };
+
+  checkDb();
+
+  const interval = setInterval(() => {
+    checkDb();
+  }, 60000);
+
+  return () => clearInterval(interval);
+
+}, []);
 
 useEffect(() => {
   if (!user) return;
@@ -69,6 +110,8 @@ useEffect(() => {
 
   return (
     <>
+
+      <DbStatusOverlay dbStatus={dbStatus} onRetry={() => window.location.reload()} />
       {inactiveMsg && (
         <div style={{
           position: "fixed",

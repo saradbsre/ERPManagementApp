@@ -1,14 +1,31 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useUser } from "../components/UserContext";
 import ChartforTop5 from "../components/dashboard/ChartforTop5";
 import SignupRequestsCard from "../components/dashboard/RequestCards";
 import RenewalCards from "../components/dashboard/Renewals";
 import CurrencyWidget from "../components/dashboard/Currency";
 import RecentTransactions from "../components/dashboard/RecentTransactions";
+import Loader from "../components/Loader";
 
 
 export default function Dashboard() {
   const { user } = useUser();
+  const [loading, setLoading] = React.useState(true);
+
+  
+  useEffect(() => {
+    // Simulate loading, replace with your real data loading logic
+    const timer = setTimeout(() => setLoading(false), 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader type="orbit" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen">
