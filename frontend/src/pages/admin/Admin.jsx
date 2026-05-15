@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useLocation } from "react-router-dom";
 import UserList from "../../components/admin/UserList";
 import RoleAccess from "../../components/admin/RoleAccess";
 import Approvals from "../../components/admin/Approvals";
@@ -18,7 +19,9 @@ const tabs = [
 ];
 
 export default function Admin() {
-    const [activeTab, setActiveTab] = useState(0);
+    const location = useLocation();
+    const initialTab = location.state?.activeTab ?? 0;
+    const [activeTab, setActiveTab] = useState(initialTab);
 
     return (
         <div>

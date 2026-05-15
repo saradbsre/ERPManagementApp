@@ -24,19 +24,47 @@ export default function RenewalTimeline() {
     fetchData();
   }, []);
 
+  function getDisplayDate(dateStr) {
+  const original = new Date(dateStr);
+  const now = new Date();
+  // If not current month/year, show with current month/year but same day
+  if (
+    original.getMonth() !== now.getMonth() ||
+    original.getFullYear() !== now.getFullYear()
+  ) {
+    // Handle month overflow (e.g., 31st in a month with only 30 days)
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const day = Math.min(original.getDate(), daysInMonth);
+    return new Date(now.getFullYear(), now.getMonth(), day).toDateString();
+  }
+  // Otherwise, show the actual date
+  return original.toDateString();
+}
+
   // -----------------------------
   // FLATTEN DATA
   // -----------------------------
-  const flatData = useMemo(() => {
-    return data.flatMap((master) =>
-      master.alerts.flatMap((alert) =>
+const flatData = useMemo(() => {
+  return data.flatMap((master) => {
+    // If master.alerts exists, use the old logic
+    if (Array.isArray(master.alerts)) {
+      return master.alerts.flatMap((alert) =>
         alert.data.map((item) => ({
           ...item,
           date_column: alert.date_column
         }))
-      )
-    );
-  }, [data]);
+      );
+    }
+    // If master.data exists, use the new logic
+    if (Array.isArray(master.data)) {
+      return master.data.map((item) => ({
+        ...item,
+        date_column: master.date_column
+      }));
+    }
+    return [];
+  });
+}, [data]);
 
   // -----------------------------
   // PRIORITY LOGIC (SOFT COLORS)
@@ -52,7 +80,17 @@ export default function RenewalTimeline() {
       (date - today) / (1000 * 60 * 60 * 24)
     );
 
-    if (diff <= 0) {
+    if (diff < 0) {
+      return {
+        label: "Overdue",
+        bg: "bg-gray-100",
+        border: "border-gray-300",
+        text: "text-gray-500",
+        bar: "bg-gray-400"
+      };
+    }
+
+    if (diff === 0) {
       return {
         label: "Today",
         bg: "bg-red-50",
@@ -96,7 +134,7 @@ export default function RenewalTimeline() {
   // -----------------------------
   const sortedData = [...flatData].sort(
     (a, b) =>
-      new Date(a.renewal_date) - new Date(b.renewal_date)
+      new Date(a.date) - new Date(b.date)
   );
 
   // -----------------------------
@@ -116,7 +154,7 @@ export default function RenewalTimeline() {
         )}
 
         {sortedData.map((item, i) => {
-          const priority = getPriority(item.renewal_date);
+          const priority = getPriority(item.date);
 
           return (
             <div
@@ -135,7 +173,7 @@ export default function RenewalTimeline() {
 
                 <div className="flex justify-between items-center">
                   <p className="font-medium text-sm">
-                    {item.provider_name}
+                    {item.service_providers}
                   </p>
 
                   <span
@@ -148,9 +186,7 @@ export default function RenewalTimeline() {
                
 
                 <p className="text-xs text-gray-400 mt-1">
-                  {new Date(
-                    item.renewal_date
-                  ).toDateString()}
+                  {getDisplayDate(item.date)}
                 </p>
 
               </div>

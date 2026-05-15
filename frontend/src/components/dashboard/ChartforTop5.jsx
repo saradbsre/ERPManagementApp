@@ -10,117 +10,156 @@ import {
 
 import { getTopExpensiveAssets } from "../../api/api";
 
-export default function CostChart() {
-  const [data, setData] = useState([]);
+export default function ChartforTop5() {
+  const [data, setData] = useState([]); // This will be the flattened data for charting
+  const [modules, setModules] = useState([]); // List of modules for dropdown
   const [selectedModule, setSelectedModule] = useState("");
 
   // -----------------------------
   // FETCH DATA
   // -----------------------------
-useEffect(() => {
-  const fetchData = async () => {
-    try {
-      const result = await getTopExpensiveAssets();
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const result = await getTopExpensiveAssets();
+        // Defensive: result.data may be an object with a 'data' array
+        const modulesArr = Array.isArray(result?.data?.data) ? result.data.data : [];
 
-     // console.log("FULL API RESULT:", result);
+        // Flatten all asset data with module info for charting
+        const flatData = modulesArr.flatMap((mod) =>
+          (Array.isArray(mod.data) ? mod.data : []).map((item) => ({
+            ...item,
+            module_display_name: mod.module_display_name
+          }))
+        );
 
-      const rows = result?.data || [];
+        setData(flatData);
+        setModules(modulesArr.map((mod) => ({
+          name: mod.module_display_name,
+          value: mod.module_display_name
+        })));
 
-      //console.log("Fetched Data:", rows);
-
-      setData(rows);
-
-      if (rows.length > 0) {
-        setSelectedModule(rows[0].module_display_name);
-        console.log("First Module:", rows[0].module_display_name);
+        if (modulesArr.length > 0) {
+          setSelectedModule(modulesArr[0].module_display_name);
+        }
+      } catch (err) {
+        console.error(err);
+        setData([]);
+        setModules([]);
       }
-    } catch (err) {
-      console.error("API error:", err);
-      setData([]);
-    }
-  };
+    };
 
-  fetchData();
-}, []);
+    fetchData();
+  }, []);
+
+  // modules state is now set in useEffect
 
   // -----------------------------
-  // UNIQUE MODULES FOR DROPDOWN
-  // -----------------------------
-  const modules = useMemo(() => {
-    const map = new Map();
-
-    data.forEach((item) => {
-      if (!map.has(item.module_display_name)) {
-        map.set(item.module_display_name, {
-          name: item.module_display_name,
-          value: item.module_name
-        });
-      }
-    });
-
-    return Array.from(map.values());
-  }, [data]);
-
-  // -----------------------------
-  // CHART DATA (FIXED FILTER)
+  // FILTER DATA
   // -----------------------------
   const chartData = useMemo(() => {
-  if (!Array.isArray(data)) return [];
+    if (!Array.isArray(data)) return [];
 
-  return data
-    .filter((item) => item.module_display_name === selectedModule)
-    .map((item) => ({
-      name: item.provider_name,
-      total: item.total_cost_monthly_aed || 0
-    }));
-}, [data, selectedModule]);
+    return data
+      .filter((item) => item.module_display_name === selectedModule)
+      .map((item) => ({
+        name: item.service_providers,
+        total: item.total_amount_aed || 0
+      }));
+  }, [data, selectedModule]);
 
   // -----------------------------
   // UI
   // -----------------------------
   return (
-    <div className="bg-white p-4 rounded-xl shadow h-96">
+    <div className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl shadow-lg border border-gray-100 w-full h-96 overflow-hidden">
 
       {/* HEADER */}
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-start mb-4">
 
-        <h2 className="font-semibold">
-          Top Expenses by Provider
-        </h2>
+        <div>
+          <h2 className="font-semibold text-gray-800 text-lg">
+            Top Expenses
+          </h2>
+          <p className="text-xs text-gray-400">
+            Provider wise spending analysis
+          </p>
+        </div>
 
-        {/* MODULE FILTER (DISPLAY NAME) */}
+        {/* DROPDOWN */}
         <select
-          className="border p-2 rounded"
+          className="bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
           value={selectedModule}
-          onChange={(e) =>
-            setSelectedModule(e.target.value)
-          }
+          onChange={(e) => setSelectedModule(e.target.value)}
         >
           {modules.map((m, i) => (
-            <option key={i} value={m.name}>
+            <option key={i} value={m.value}>
               {m.name}
             </option>
           ))}
         </select>
+
       </div>
 
-      {/* CHART */}
-     <ResponsiveContainer width="100%" height="85%">
-        <BarChart
+      {/* CHART OR NO DATA MESSAGE */}
+      {chartData.length === 0 ? (
+        <div className="flex items-center justify-center h-4/5">
+          <span className="text-gray-400 text-sm">No transactions for this month</span>
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height="85%">
+          <BarChart
             layout="vertical"
             data={chartData}
             margin={{ top: 10, right: 20, left: 0, bottom: 10 }}
-        >
-            <XAxis type="number" />
-            <YAxis
-            type="category"
-            dataKey="name"
-            width={150}
+          >
+            {/* GRADIENT */}
+            <defs>
+              <linearGradient id="barColor" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#6366F1" />
+                <stop offset="100%" stopColor="#8B5CF6" />
+              </linearGradient>
+            </defs>
+
+            {/* X AXIS */}
+            <XAxis
+              type="number"
+              tick={{ fill: "#6B7280", fontSize: 12 }}
+              axisLine={false}
+              tickLine={false}
             />
-            <Tooltip />
-            <Bar dataKey="total" fill="#4f46e5" />
-        </BarChart>
+
+            {/* Y AXIS (REDUCED WIDTH → FIX LEFT GAP) */}
+            <YAxis
+              type="category"
+              dataKey="name"
+              width={80}
+              tick={{ fill: "#374151", fontSize: 12 }}
+              axisLine={false}
+              tickLine={false}
+            />
+
+            {/* TOOLTIP */}
+            <Tooltip
+              cursor={{ fill: "rgba(99,102,241,0.08)" }}
+              contentStyle={{
+                borderRadius: "10px",
+                border: "none",
+                boxShadow: "0 8px 20px rgba(0,0,0,0.1)"
+              }}
+            />
+
+            {/* BAR */}
+            <Bar
+              dataKey="total"
+              fill="url(#barColor)"
+              radius={[0, 10, 10, 0]}
+              barSize={18}
+            />
+
+          </BarChart>
         </ResponsiveContainer>
+      )}
     </div>
   );
 }

@@ -188,7 +188,7 @@ exports.getRecentTransactions = async (req, res) => {
       const dateColumns = dateColumnCheck.recordset.map(
         (c) => c.COLUMN_NAME
       );
-      console.log(`Date columns for ${tableName}:`, dateColumns);
+      //console.log(`Date columns for ${tableName}:`, dateColumns);
 
       // 2. FETCH DATA
       const dataQuery = await pool.request().query(`

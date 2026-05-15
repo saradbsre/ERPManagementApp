@@ -337,3 +337,7 @@ export const changePassword = (data, activeUserEmail) => {
 export const updateUserProfile = (email, data) => {
   return API.put(`/users/profile/${email}`, data);
 };
+
+export const sessionHeartbeat = (email) => {
+  return API.post("/auth/heartbeat", { email });
+};

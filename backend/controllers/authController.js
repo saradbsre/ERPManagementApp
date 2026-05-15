@@ -36,7 +36,7 @@ exports.registerUser = async (req, res) => {
         INSERT INTO users (name, email, phone_number, password, role)
         VALUES (@name, @email, @phone, @password, @role)
       `);
-    console.log("going to log audit for user registration:", email);
+   // console.log("going to log audit for user registration:", email);
     // 4. AUDIT LOG ENTRY
     await auditLogger({
       pool,
@@ -112,9 +112,9 @@ exports.loginUser = async (req, res) => {
 
     const user = result.recordset[0];
 
-    console.log("DB password:", user.password);
-    console.log("Temp password:", user.temp_password);
-    console.log("Entered:", password);
+    // console.log("DB password:", user.password);
+    // console.log("Temp password:", user.temp_password);
+    // console.log("Entered:", password);
 
     let isMatch = false;
     let usedTempPassword = false;
@@ -134,7 +134,7 @@ exports.loginUser = async (req, res) => {
       isMatch = await bcrypt.compare(password, user.password);
     }
 
-    console.log("Password valid:", isMatch);
+    //console.log("Password valid:", isMatch);
 
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid password" });
@@ -332,7 +332,7 @@ exports.resetPassword = async (req, res) => {
       <p>Regards,<br/>IT Support Team</p>
     `
   });
-  console.log(`Temporary password email sent to ${email}`);
+ // console.log(`Temporary password email sent to ${email}`);
 
   return res.json({ message: "Temporary password set and email sent" });
     }
@@ -346,7 +346,7 @@ exports.resetPassword = async (req, res) => {
 
       // 🔥 compare with temp_password column
       const valid = await bcrypt.compare(tempPassword, user.temp_password);
-      console.log("Temp password valid:", valid);
+      //console.log("Temp password valid:", valid);
       if (!valid) {
         return res.status(400).json({
           message: "Invalid temporary password"

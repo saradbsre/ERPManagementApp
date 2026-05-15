@@ -9,7 +9,7 @@ exports.getModuleData = async (req, res) => {
     const { module_id } = req.params;
     const { activeUserEmail } = req.query;
     const pool = await poolPromise;
-    console.log("Fetching data for module_id:", module_id, "activeUserEmail:", activeUserEmail); // Debug log
+    //console.log("Fetching data for module_id:", module_id, "activeUserEmail:", activeUserEmail); // Debug log
 
     // 🔥 Get module (to know table name)
     const moduleRes = await pool.request()

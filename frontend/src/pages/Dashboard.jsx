@@ -1,4 +1,5 @@
 import React from "react";
+import { useUser } from "../components/UserContext";
 import ChartforTop5 from "../components/dashboard/ChartforTop5";
 import SignupRequestsCard from "../components/dashboard/RequestCards";
 import RenewalCards from "../components/dashboard/Renewals";
@@ -7,6 +8,7 @@ import RecentTransactions from "../components/dashboard/RecentTransactions";
 
 
 export default function Dashboard() {
+  const { user } = useUser();
 
   return (
     <div className="p-6 bg-gray-100 min-h-screen">
@@ -26,28 +28,31 @@ export default function Dashboard() {
           </div>
 
           {/* Exchange Rates (Small) */}
-          <div className="bg-white p-6 rounded-xl shadow">
+          {/* <div className="bg-white p-6 rounded-xl shadow">
             <h2 className="font-semibold mb-2">Exchange Rates</h2>
             <CurrencyWidget />
-          </div>
+          </div> */}
 
         </div>
 
         {/* MIDDLE COLUMN */}
-        <div className="grid grid-rows-[1fr_2fr] gap-6 h-[500px]">
-          
-          {/* New Requests (Small Top) */}
-          <div className="bg-white p-6 rounded-xl shadow flex flex-col justify-center">
-            <SignupRequestsCard />
-          </div>
+         <div className="grid grid-rows-[2fr_1fr] gap-6 h-[500px]">
 
-          {/* Transactions (Big Bottom) */}
-          <div className="bg-white p-6 rounded-xl shadow overflow-auto">
+           {/* Transactions (Bottom Half) */}
+          <div className="bg-white p-6 rounded-xl shadow flex flex-col">
             <h2 className="font-semibold mb-4">Recent Transactions (Last 30 Days)</h2>
-
             <RecentTransactions />
           </div>
+          {/* New Requests (Top Half) */}
+          {user?.role === "ADMIN" ? (
+            <div className="bg-white p-6 rounded-xl shadow">
+              <SignupRequestsCard />
+            </div>
+          ) : (
+            <div />
+          )}
 
+         
         </div>
 
         {/* RIGHT COLUMN */}
@@ -63,10 +68,10 @@ export default function Dashboard() {
           </div>
 
           {/* Total Assets (Small) */}
-          {/* <div className="bg-white p-6 rounded-xl shadow flex flex-col justify-center">
-            <h2 className="font-semibold mb-2">Total Assets</h2>
-            <p className="text-2xl font-bold">320</p>
-          </div> */}
+          <div className="bg-white p-6 rounded-xl shadow">
+            <h2 className="font-semibold mb-2">Exchange Rates</h2>
+            <CurrencyWidget />
+          </div>
 
         </div>
 
