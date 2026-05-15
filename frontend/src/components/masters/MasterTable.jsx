@@ -10,6 +10,7 @@ import { formatDate } from "../../utils/formatDate";
 import ValidatePopups from "../Validatepopups";
 import Loader from "../Loader";
 import ConfirmModal from "../ConfirmationPopups";
+import PlanDropdown from "./PlanDropdown";
 
 
 const Modal = ({ title, children, onClose }) => (
@@ -65,6 +66,9 @@ export default function MasterTablePage() {
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [popupMessage, setPopupMessage] = useState("");
     const [popupType, setPopupType] = useState("");
+    const [mappedPlans, setMappedPlans] = useState([]);
+    const [unmappedPlans, setUnmappedPlans] = useState([]);
+    const [selectedPlanToAdd, setSelectedPlanToAdd] = useState("");
     const [confirmData, setConfirmData] = useState({
       title: "Are you sure?",
       message: "This action cannot be undone.",
@@ -176,7 +180,6 @@ const handleSort = (columnName) => {
 
 const openPlansModal = async (provider) => {
   try {
-    // ✅ handle CREATE ROW case
     if (!provider || !provider.id) {
       setValidationMessage("Please save provider first before assigning plans");
       setValidationType("warning");
@@ -189,14 +192,15 @@ const openPlansModal = async (provider) => {
 
     // 1. Get all plans
     const plansRes = await getMasterData("plans", activeUserEmail);
-    setAllPlans(plansRes.data || []);
+    const allPlans = plansRes.data || [];
 
     // 2. Get mapped plans for provider
     const mappedRes = await getProviderPlans(provider.id);
-
-    // IMPORTANT: ensure array safety
     const mappedIds = (mappedRes?.data || []).map(p => p.plan_id);
 
+    // 3. Split mapped and unmapped plans
+    setMappedPlans(allPlans.filter(plan => mappedIds.includes(plan.id)));
+    setUnmappedPlans(allPlans.filter(plan => !mappedIds.includes(plan.id)));
     setSelectedPlans(mappedIds);
 
   } catch (err) {
@@ -219,6 +223,9 @@ const handleSavePlans = async () => {
     setShowPlansModal(false);
   } catch (err) {
     console.error("SAVE PLANS ERROR:", err);
+    setValidationMessage("Failed to save plans");
+    setValidationType("error");
+    setShowValidatePopup(true);
   }
 };
 
@@ -964,124 +971,110 @@ useEffect(() => {
     {/* ================= PLAN GRID ================= */}
     <div className="grid grid-cols-2 gap-3 max-h-72 overflow-auto pr-2">
 
-      {allPlans.map(plan => {
-        const isSelected = selectedPlans.includes(plan.id);
-
-        return (
-          <div
-            key={plan.id}
-            className={`p-3 rounded-lg border cursor-pointer transition flex items-center justify-between
-              ${isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-400"}
-            `}
-            onClick={() => {
-              if (isSelected) {
-                setSelectedPlans(selectedPlans.filter(id => id !== plan.id));
-              } else {
-                setSelectedPlans([...selectedPlans, plan.id]);
-              }
-            }}
-          >
-
-            {/* LEFT: CHECKBOX + NAME */}
-            <div className="flex items-center gap-2">
-
-              {/* <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={() => {}}
-              /> */}
-
-              {editingPlanId === plan.id ? (
-                <input
-                  value={editingPlanName}
-                  onChange={(e) => setEditingPlanName(e.target.value)}
-                  className="border px-2 py-1 rounded text-sm w-28"
-                  onClick={(e) => e.stopPropagation()}
-                />
-              ) : (
-                <span className="font-medium text-sm">
-                  {plan.plan_name}
-                </span>
-              )}
-
-            </div>
-
-            {/* RIGHT: ACTIONS */}
-            <div className="flex gap-2 items-center">
-
-              {editingPlanId === plan.id ? (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleUpdatePlan(plan.id);
-                  }}
-                  className="text-green-600 text-xs font-semibold"
-                >
-                  Save
-                </button>
-              ) : (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingPlanId(plan.id);
-                    setEditingPlanName(plan.plan_name);
-                  }}
-                  className="text-blue-600 text-xs"
-                >
-                  Edit
-                </button>
-              )}
-
-            </div>
-
-          </div>
-        );
-      })}
+   {mappedPlans.map(plan => (
+  <div
+    key={plan.id}
+    className="p-3 rounded-lg border border-blue-500 bg-blue-50 flex items-center justify-between"
+  >
+    <div className="flex items-center gap-2">
+      {editingPlanId === plan.id ? (
+        <input
+          value={editingPlanName}
+          onChange={(e) => setEditingPlanName(e.target.value)}
+          className="border px-2 py-1 rounded text-sm w-28"
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span className="font-medium text-sm">
+          {plan.plan_name}
+        </span>
+      )}
+    </div>
+    <div className="flex gap-2 items-center">
+   
+      {/* Remove/Unmap button */}
+      <button
+        onClick={() => {
+          setMappedPlans(mappedPlans.filter(p => p.id !== plan.id));
+          setSelectedPlans(selectedPlans.filter(id => id !== plan.id));
+          setUnmappedPlans([...unmappedPlans, plan]);
+        }}
+        className="text-red-600 text-xs font-semibold"
+        title="Unmap this plan"
+      >
+        Remove
+      </button>
+    </div>
+  </div>
+))}
 
     </div>
 
     {/* ================= ADD NEW PLAN ================= */}
     <div className="mt-4 border-t pt-4">
 
-      <div className="flex gap-2">
+      
 
-        <input
-          type="text"
-          placeholder="Add new plan (Basic, Pro...)"
-          value={newPlanName}
-          onChange={(e) => setNewPlanName(e.target.value)}
-          className="border px-3 py-2 rounded w-full focus:outline-blue-400"
-        />
+       <div className="flex gap-2">
+<select
+  value={selectedPlanToAdd}
+  onChange={(e) => setSelectedPlanToAdd(e.target.value)}
+  className="border px-3 py-2 rounded w-full focus:outline-blue-400"
+>
+  <option value="">Select plan</option>
 
-        <button
-          onClick={handleCreatePlan}
-          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-        >
-          Add
-        </button>
-
-      </div>
-
-    </div>
-
-    {/* ================= ACTIONS ================= */}
-    <div className="flex justify-end gap-2 mt-5">
-
-      <button
-        onClick={() => setShowPlansModal(false)}
-        className="px-4 py-2 border rounded hover:bg-gray-100"
-      >
-        Cancel
-      </button>
-
-      <button
+  {unmappedPlans.slice(0, 5).map(plan => (
+    <option key={plan.id} value={plan.plan_name}>
+      {plan.plan_name}
+    </option>
+  ))}
+</select>
+  <button
+    onClick={async () => {
+      if (!selectedPlanToAdd.trim()) return;
+      // Check if the input matches an existing unmapped plan
+      const existing = unmappedPlans.find(
+        p => p.plan_name.toLowerCase() === selectedPlanToAdd.trim().toLowerCase()
+      );
+      let planToAdd;
+      if (existing) {
+        planToAdd = existing;
+      } else {
+        // Create new plan in master
+        try {
+          const res = await createMasterData("plans", {
+            plan_name: selectedPlanToAdd.trim()
+          }, activeUserEmail);
+          planToAdd = res.data;
+          setAllPlans(prev => [...prev, planToAdd]);
+        } catch (err) {
+          setValidationMessage("Error creating plan!");
+          setValidationType("error");
+          setShowValidatePopup(true);
+          return;
+        }
+      }
+      setMappedPlans([...mappedPlans, planToAdd]);
+      setSelectedPlans([...selectedPlans, planToAdd.id]);
+      setUnmappedPlans(unmappedPlans.filter(p => p.id !== planToAdd.id));
+      setSelectedPlanToAdd("");
+    }}
+    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+  >
+    Add
+  </button>
+   <button
         onClick={handleSavePlans}
         className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
       >
-        Save Changes
+        Save
       </button>
+</div>
+
+ 
 
     </div>
+
 
   </Modal>
 )}
