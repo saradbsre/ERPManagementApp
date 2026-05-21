@@ -1,18 +1,6 @@
 // utils/printHelper.js
 
-export const openPrintWindow = ({
-  content,
-  userName = "kumar",
-  title = "PRINT"
-}) => {
-  const printWindow = window.open("", "", "width=1200,height=800");
-
-  if (!printWindow) {
-    alert("Popup blocked! Please allow popups.");
-    return;
-  }
-
-  const now = new Date();
+ const now = new Date();
 
   const day = String(now.getDate()).padStart(2, '0');
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -26,6 +14,20 @@ export const openPrintWindow = ({
   hours = hours ? hours : 12;
 
   const printedDate = `${day}/${month}/${year} ${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+
+export const openPrintWindow = ({
+  content,
+  userName = "kumar",
+  title = "PRINT"
+}) => {
+  const printWindow = window.open("", "", "width=1200,height=800");
+
+  if (!printWindow) {
+    alert("Popup blocked! Please allow popups.");
+    return;
+  }
+
+ 
 
   printWindow.document.write(`
     <html>
@@ -118,4 +120,48 @@ export const openPrintWindow = ({
   `);
 
   printWindow.document.close();
+};
+
+export const previewPrintContent = ({ content, userName = "kumar", title = "PRINT" }) => {
+  const previewWindow = window.open("", "", "width=1200,height=800");
+  if (!previewWindow) {
+    alert("Popup blocked! Please allow popups.");
+    return;
+  }
+  previewWindow.document.write(`
+    <html>
+     
+      <body>
+        ${content}
+      </body>
+       <script>
+        (function () {
+          const style = document.createElement('style');
+          style.textContent = \`
+            @media print {
+              @page {
+                
+                @bottom-left {
+                  content: "User: ${userName} | Printed: ${printedDate}";
+                  font-size: 10px;
+                  margin-bottom: 20mm;
+                }
+                @bottom-right {
+                  content: "Page " counter(page) " of " counter(pages);
+                  font-size: 10px;
+                  margin-bottom: 20mm;
+                }
+              }
+            }\`;
+          document.head.appendChild(style);
+        })();
+
+        window.onload = function() {
+          window.focus();
+          window.print();
+        }
+      </script>
+    </html>
+  `);
+  previewWindow.document.close();
 };

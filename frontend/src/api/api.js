@@ -318,8 +318,24 @@ export const createPaymentRequest = (data, activeUserEmail) => {
   });
 }
 
-export const getPaymentRequests = (activeUserEmail) => {
+export const getPaymentRequests = (activeUserEmail, startDate, endDate) => {
   return API.get("/payment-requests", {
+    params: { activeUserEmail, startDate, endDate }
+  });
+}
+
+export const getLastPRFNumber = () => {
+  return API.get("/last-prf-number");
+}
+
+export const updatePaymentRequest = (id, data, activeUserEmail) => {
+  return API.put(`/payment-requests/${id}`, data, {
+    params: { activeUserEmail }
+  });
+}
+
+export const deletePaymentRequest = (id, activeUserEmail) => {
+  return API.delete(`/payment-requests/${id}`, {
     params: { activeUserEmail }
   });
 }
@@ -344,4 +360,24 @@ export const sessionHeartbeat = (email) => {
 
 export const getDbStatus = () => {
   return API.get("/db-status");
+};
+
+export const updateGenarateStatus = (prfNum, activeUserEmail) => {
+  return API.put(
+    `/payment-requests/${encodeURIComponent(prfNum)}/generate`,
+    {},
+    {
+      params: { activeUserEmail }
+    }
+  );
+};
+
+export const getVatPercentage = () => {
+  return API.get("/vat-percentage");
+};
+
+export const createprf = (data,activeUserEmail, selectedRow) => {
+  return API.post("/create-prf", data, {
+    params: { activeUserEmail, selectedRow }
+  });
 };

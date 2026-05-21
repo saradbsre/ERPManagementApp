@@ -467,6 +467,13 @@ useEffect(() => {
   setTotalPages(Math.ceil(sortedRows.length / pageSize));
 }, [sortedRows]);
 
+
+const getLabel = (key, value) => {
+  if (key === "is_vat") return value ? "YES" : "NO";
+  if (key === "is_active") return value ? "ACTIVE" : "INACTIVE";
+  return value ? "YES" : "NO";
+};
+
     return (
         <div className="h-full flex flex-col">
            <ValidatePopups
@@ -651,7 +658,7 @@ useEffect(() => {
 
     {columns.map(col => {
       const isDate = isDateColumn(col);
-      const isToggle = col.key.toLowerCase() === "is_active";
+      const isToggle = col.key.toLowerCase() === "is_active" || col.key.toLowerCase() === "is_vat";
       const inputType = "date";
       const isServiceMaster = col.key.toLowerCase() === "services";
 
@@ -659,23 +666,25 @@ useEffect(() => {
         <td key={col.key} className={`px-4 py-3 ${getAlignClass(col.key)}`}>
 
           {/* ================= TOGGLE ================= */}
-          {isToggle ? (
-            <button
-              onClick={() =>
-                setNewRow(prev => ({
-                  ...prev,
-                  [col.key]: prev[col.key] ? 0 : 1
-                }))
-              }
-              className={`w-12 h-6 flex items-center rounded-full p-1 transition 
-                ${newRow[col.key] ? "bg-green-500" : "bg-gray-300"}`}
-            >
-              <div
-                className={`bg-white w-4 h-4 rounded-full shadow transform transition 
-                  ${newRow[col.key] ? "translate-x-6" : ""}`}
-              />
-            </button>
-          ) : isServiceMaster ? (
+    {isToggle ? (
+  <button
+    onClick={() =>
+      setNewRow(prev => ({
+        ...prev,
+        [col.key]: prev[col.key] ? 0 : 1
+      }))
+    }
+    className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200
+      ${newRow[col.key] ? "bg-green-500" : "bg-gray-300"}
+    `}
+  >
+    <div
+      className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform duration-200
+        ${newRow[col.key] ? "translate-x-6" : "translate-x-0"}
+      `}
+    />
+  </button>
+) : isServiceMaster ? (
   // SERVICES MASTER DROPDOWN
   <div className="relative">
     <select
@@ -774,7 +783,7 @@ useEffect(() => {
       {/* ================= DYNAMIC COLUMNS ================= */}
       {columns.map(col => {
         const isDate = isDateColumn(col);
-        const isToggle = col.key.toLowerCase() === "is_active";
+        const isToggle = col.key.toLowerCase() === "is_active" || col.key.toLowerCase() === "is_vat";
         const isService = col.key.toLowerCase() === "services";
         const inputType = "date";
 
@@ -855,10 +864,11 @@ useEffect(() => {
 
               /* ================= VIEW MODE ================= */
               isToggle ? (
-                <span className={`px-2 py-1 text-xs rounded-full 
-                  ${row[col.key] ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-600"}`}>
-                  {row[col.key] ? "Active" : "Inactive"}
-                </span>
+                <span className={`px-2 py-1 text-xs rounded-full font-medium
+  ${row[col.key] ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-600"}
+`}>
+  {getLabel(col.key, row[col.key])}
+</span>
 
               ) : isDate ? (
                 formatDate(row[col.key])

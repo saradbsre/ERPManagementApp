@@ -12,13 +12,36 @@ import { formatDate } from "../utils/formatDate";
 import { Currency } from "lucide-react";
 import DateOnlyFilter from "../components/DateOnlyFilter";
 import PaymentRequestEntryForm from "../components/paymentreqform/PaymentRequestEntryForm";
-import { getPaymentRequests } from "../api/api";
-//import PaymentRequestPreview from "../components/paymentreqform/PaymentRequestPreview";
-
+import { getPaymentRequests, deletePaymentRequest } from "../api/api";
+import PaymentRequestPreview from "../components/paymentreqform/PaymentRequestPreview";
+import { previewPrintContent } from "../utils/PrintHelper";
+import Loader from "../components/Loader";
+import { formatDateTime } from "../utils/formatDateTime";
+import ConfirmModal from "../components/ConfirmationPopups";
+import ValidatePopups from "../components/Validatepopups";
 
 
 
 export default function PaymentReqForm() {
+    const getCurrentMonth = () => {
+      const now = new Date();
+
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+      const format = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, "0");
+        const d = String(date.getDate()).padStart(2, "0");
+
+        return `${y}-${m}-${d}`;
+      };
+
+      return {
+        startDate: format(start),
+        endDate: format(end),
+      };
+    };
     const { id } = useParams();
     const location = useLocation();
     const [columns, setColumns] = useState([]);
@@ -36,12 +59,25 @@ export default function PaymentReqForm() {
     const dropdownRefs = useRef([]);
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email;
-    const [dateFilters, setDateFilters] = useState({});
+    const [dateFilters, setDateFilters] = useState(getCurrentMonth());
     const [activeDateFilter, setActiveDateFilter] = useState(null);
     const [showForm, setShowForm] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
     const [previewData, setPreviewData] = useState(null);
+    const [editData, setEditData] = useState(null);
+    const [pendingDateFilters, setPendingDateFilters] = useState(dateFilters);
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [popupMessage, setPopupMessage] = useState("");
+    const [popupType, setPopupType] = useState("");
+    const [confirmData, setConfirmData] = useState({
+      title: "Are you sure?",
+      message: "This action cannot be undone.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      type: "danger",
+      onConfirm: null,
+    });
     const [sortConfig, setSortConfig] = useState({
     key: null,
     direction: "asc",
@@ -85,6 +121,8 @@ export default function PaymentReqForm() {
   );
 });
 
+
+
     const handleSort = (key) => {
   let direction = "asc";
 
@@ -98,15 +136,21 @@ export default function PaymentReqForm() {
   setSortConfig({ key, direction });
 };
     // ================= SEARCH FILTER =================
-    const finalRows = sortedRows;
+    const filteredRows = sortedRows.filter(row =>
+      Object.values(row)
+        .join(" ")
+        .toLowerCase()
+        .includes(search.toLowerCase())
+    );
+    const finalRows = filteredRows;
 
     // ================= PAGINATION =================
     const totalPages = Math.ceil(finalRows.length / pageSize);
 
-    const getPaymentRequestsData = async () => {
+    const getPaymentRequestsData = async (startDate, endDate) => {
         setLoading(true);
         try {
-            const res = await getPaymentRequests(activeUserEmail);
+            const res = await getPaymentRequests(activeUserEmail, startDate, endDate);
             setRows(res.data || []);
         } catch (err) {
             console.error(err);
@@ -115,39 +159,121 @@ export default function PaymentReqForm() {
     };
 
     useEffect(() => {
-        getPaymentRequestsData();
+        getPaymentRequestsData(dateFilters.startDate, dateFilters.endDate);
     }, []);
 
+   const handleDelete = async (id) => {
+  setConfirmData({
+    title: "Confirm Deletion",
+    message: "Are you sure you want to delete this payment request? This action cannot be undone.",
+    confirmText: "Delete",
+    cancelText: "Cancel",
+    type: "danger",
+    onConfirm: async () => {
+      setLoading(true); // <-- Move here
+      setConfirmOpen(false);
+      try {
+        await deletePaymentRequest(id, activeUserEmail);
+        await getPaymentRequestsData(dateFilters.startDate, dateFilters.endDate);
+        setPopupMessage("Payment request deleted successfully.");
+        setPopupType("success");
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    },
+  });
+  setConfirmOpen(true);
+};
 
+   const handleClear = async () => {
+  const defaults = getCurrentMonth();
 
+  setDateFilters(defaults);
+  setPendingDateFilters(defaults); // <-- Add this line
+
+  try {
+    setLoading(true);
+    const res = await getPaymentRequests(activeUserEmail, defaults.startDate, defaults.endDate);
+    setRows(res.data || []);
+  } catch (err) {
+    console.error(err);
+    setRows([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+    const handleApplyDateFilter = () => {
+  setDateFilters(pendingDateFilters);
+  getPaymentRequestsData(pendingDateFilters.startDate, pendingDateFilters.endDate);
+};
+const onPendingInputChange = (e) => {
+  const { name, value } = e.target;
+  setPendingDateFilters(prev => ({
+    ...prev,
+    [name]: value,
+  }));
+};
+
+const handleSaveAndPreview = (savedData) => {
+  setShowForm(false);
+  setEditData(null);
+  setPreviewData(savedData); // savedData should have {header, details}
+  setShowPreview(true);
+};
 
 
   return (
   <div className="h-full flex flex-col">
 
+
+
     {/* ================= HEADER ================= */}
     <div className="flex justify-between items-center mb-4">
-
+      <ValidatePopups
+                    type={popupType}
+                    message={popupMessage}
+                    onClose={() => {
+                      setPopupMessage("");
+                      setPopupType("success");
+                    }}
+                  />
       <h1 className="text-xl font-semibold text-gray-800">
         Payment Request Form
       </h1>
 
       <div className="flex items-center gap-2">
-       <PermissionButton
-        user={activeUser}
-        permission="add"
-        onClick={() => setShowForm(prev => !prev)}
-        className={`px-3 py-1.5 text-sm rounded-md text-white transition
-        ${showForm ? "bg-gray-600 hover:bg-gray-700" : "bg-green-600 hover:bg-green-700"}
-        `}
-        >
-        {showForm ? "← Back" : "+ New"}
-        </PermissionButton>
+      {!showPreview && (
+  <PermissionButton
+    user={activeUser}
+    permission="add"
+    onClick={() => setShowForm(prev => !prev)}
+    className={`px-3 py-1.5 text-sm rounded-md text-white transition
+    ${showForm ? "bg-gray-600 hover:bg-gray-700" : "bg-green-600 hover:bg-green-700"}
+    `}
+  >
+    {showForm ? "← Back" : "+ New"}
+  </PermissionButton>
+)}
       </div>
     </div>
-
-    {/* ================= CONDITIONAL RENDER ================= */}
-    {!showForm ? (
+{showPreview ? (
+  <>
+    
+   <div className="print-area" ref={printRef}>
+  <PaymentRequestPreview
+  data={previewData}
+  onBack={() => {
+    setShowPreview(false);
+    getPaymentRequestsData(dateFilters.startDate, dateFilters.endDate); // <-- Add this line
+  }}
+  hideBackPrint
+/>
+</div>
+  </>
+) : !showForm ? (
 
       <>
         {/* ================= CONTROL BAR ================= */}
@@ -162,27 +288,69 @@ export default function PaymentReqForm() {
             onChange={(e) => setSearch(e.target.value)}
           />
 
-          {/* FILTER BUTTON */}
-          <TableFilters
-            masterList={masterList}
-            filters={filters}
-            setFilters={setFilters}
-            currencies={currencies}
-          />
+ 
 
-          {/* DATE FILTER */}
-          <button
-            onClick={() =>
-              setActiveDateFilter(
-                activeDateFilter === "date" ? null : "date"
-              )
-            }
-            className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
-          >
-            <div className="flex flex-col items-start">
-              Date Filters
-            </div>
-          </button>
+<div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+  <input
+    type="date"
+    name="startDate"
+    value={pendingDateFilters.startDate}
+    onChange={onPendingInputChange}
+    style={{
+      padding: "8px 12px",
+      borderRadius: 6,
+      border: "1px solid #ccc",
+      fontSize: 14,
+      minWidth: 150,
+      maxWidth: 180,
+      background: "#f8fafc",
+      textAlign: "center",
+    }}
+  />
+
+  <span style={{ fontSize: 14, color: "#666" }}>to</span>
+
+  <input
+    type="date"
+    name="endDate"
+    value={pendingDateFilters.endDate}
+    onChange={onPendingInputChange}
+    style={{
+      padding: "8px 12px",
+      borderRadius: 6,
+      border: "1px solid #ccc",
+      fontSize: 14,
+      minWidth: 150,
+      maxWidth: 180,
+      background: "#f8fafc",
+      textAlign: "center",
+    }}
+  />
+</div>
+<button
+  onClick={handleApplyDateFilter}
+  className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
+>
+  Apply
+</button>
+<button
+    onClick={handleClear}
+  className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
+>
+  Clear
+</button>
+ <button
+  onClick={() =>
+    setActiveDateFilter(
+      activeDateFilter === "custom" ? null : "custom"
+    )
+  }
+  className={`px-3 py-2 border rounded-lg text-sm hover:bg-gray-100 ${
+    activeDateFilter === "custom" ? "bg-gray-100" : ""
+  }`}
+>
+  Custom Range
+</button>
 
           {/* PAGINATION */}
           <div className="flex items-center gap-2 text-sm ml-4">
@@ -222,168 +390,37 @@ export default function PaymentReqForm() {
             <DateOnlyFilter
               onApply={(range) => {
                 if (!range?.start || !range?.end) return;
-
-                setDateFilters(prev => ({
-                  ...prev,
-                  [activeDateFilter]: {
-                    start: range.start,
-                    end: range.end,
-                    source: "picker"
-                  }
-                }));
-
+                setPendingDateFilters({
+                  startDate: range.start,
+                  endDate: range.end,
+                });
+                getPaymentRequestsData(range.start, range.end);
+              
                 setActiveDateFilter(null);
               }}
             />
           </div>
         )}
 
-        {/* ACTIVE FILTER CHIPS */}
-        <div className="flex flex-wrap gap-2 mt-0 mb-4">
-
-          {filters.map((f, i) => {
-
-            const masterName = normalize(f.master);
-
-            const options =
-              masterName === "currency"
-                ? currencies.map(c => c.currency_code)
-                : (masterDataMap?.[masterName] || []).map(normalize);
-
-            const selectedValues = (f.values || []).map(normalize);
-
-            return (
-              <div
-                key={i}
-                className="relative flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-3 py-1 shadow-sm"
-              >
-
-                {/* MASTER NAME */}
-                <span className="text-sm font-medium text-gray-700">
-                  {masterName}
-                </span>
-
-                {/* SELECTED VALUES */}
-                <div className="flex gap-1 flex-wrap">
-                  {selectedValues.map((val, idx) => (
-                    <span
-                      key={idx}
-                      className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
-                    >
-                      {val}
-
-                      <button
-                        onClick={() => {
-                          const updated = [...filters];
-
-                          updated[i].values =
-                            updated[i].values
-                              .map(normalize)
-                              .filter(v => v !== val);
-
-                          setFilters(updated);
-                        }}
-                        className="text-blue-500 hover:text-red-500"
-                      >
-                        ✕
-                      </button>
-
-                    </span>
-                  ))}
-                </div>
-
-                {/* ADD BUTTON */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenIndex(openIndex === i ? null : i);
-                  }}
-                  className="text-xs text-gray-500 hover:text-gray-700"
-                >
-                  + Add
-                </button>
-
-                {/* DROPDOWN */}
-                {openIndex === i && (
-                  <div
-                    ref={el => (dropdownRefs.current[i] = el)}
-                    className="absolute top-8 left-0 bg-white border rounded-lg shadow-lg w-56 max-h-60 overflow-auto z-50"
-                    onClick={e => e.stopPropagation()}
-                  >
-
-                    {options.map((opt, idx) => {
-
-                      const label = normalize(opt);
-
-                      const checked = selectedValues.includes(label);
-
-                      return (
-                        <label
-                          key={idx}
-                          className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                        >
-
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-
-                              const updated = [...filters];
-
-                              const current =
-                                (updated[i].values || []).map(normalize);
-
-                              if (checked) {
-                                updated[i].values =
-                                  current.filter(v => v !== label);
-                              } else {
-                                updated[i].values = [...current, label];
-                              }
-
-                              setFilters(updated);
-                            }}
-                          />
-
-                          <span className="text-sm">{label}</span>
-
-                        </label>
-                      );
-                    })}
-
-                  </div>
-                )}
-
-                {/* REMOVE FILTER */}
-                <button
-                  onClick={() =>
-                    setFilters(filters.filter((_, index) => index !== i))
-                  }
-                  className="text-gray-400 hover:text-red-500 ml-1"
-                >
-                  ✕
-                </button>
-
-              </div>
-            );
-          })}
-
-        </div>
+    
+       
         {/* ================= TABLE ================= */}
-<div className="bg-white rounded-xl shadow flex-1 flex flex-col overflow-hidden">
-
-  <div className="flex-1 w-full overflow-auto">
-
-    <table className="min-w-full text-sm">
-
-      <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
-  <tr>
-
-    <th className="px-4 py-3 text-left">S.No</th>
+            <div className="bg-white rounded-xl shadow flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 w-full overflow-auto">
+                  {loading ? (
+                    <div className="flex items-center justify-center h-64">
+                      <Loader type="orbit" />
+                    </div>
+                  ) : (
+                    <table className="min-w-max w-full text-sm">
+                        <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
+                            <tr>
+                                <th className="px-4 py-3 border-b text-left">S.No</th> 
 
     {[
       { label: "Paid To", key: "paid_to" },
       { label: "PRF No", key: "prf_number" },
-      { label: "Date", key: "prf_date" },
+      { label: "Date", key: "prf_date", format: formatDate },
       { label: "Division", key: "division" },
       { label: "Amount", key: "amount" },
       { label: "Currency", key: "currency" },
@@ -393,7 +430,7 @@ export default function PaymentReqForm() {
       <th
         key={col.key}
         onClick={() => handleSort(col.key)}
-        className={`px-4 py-3 cursor-pointer select-none hover:bg-gray-200 ${
+        className={`px-4 py-3 cursor-pointer border-b select-none hover:bg-gray-200 ${
           col.key === "amount" ? "text-right" : "text-left"
         }`}
       >
@@ -413,14 +450,14 @@ export default function PaymentReqForm() {
       </th>
     ))}
 
-    <th className="px-4 py-3 text-right">Actions</th>
+    <th className="px-4 py-3 text-right border-b">Actions</th>
 
   </tr>
 </thead>
 
       <tbody>
 
-        {sortedRows.map((row, index) => (
+        {finalRows.map((row, index) => (
           <tr key={row.id} className="border-b hover:bg-gray-50">
 
             <td className="px-4 py-2">{index + 1}</td>
@@ -430,13 +467,13 @@ export default function PaymentReqForm() {
             <td className="px-4 py-2">{row.prf_number}</td>
 
             <td className="px-4 py-2">
-              {new Date(row.prf_date).toLocaleDateString()}
+              {formatDate(row.created_at)}
             </td>
 
             <td className="px-4 py-2">{row.division}</td>
 
             <td className="px-4 py-2 text-right font-medium">
-              {row.amount}
+              {Number(row.amount).toFixed(2)}
             </td>
 
             <td className="px-4 py-2">{row.currency}</td>
@@ -449,21 +486,38 @@ export default function PaymentReqForm() {
             <td className="px-4 py-2 text-right flex justify-end gap-2">
 
               {/* PREVIEW */}
-              <button
-                onClick={() => console.log("preview", row)}
+             <button
+                onClick={() => {
+                  setPreviewData({
+                    header: row,
+                    details: Array.isArray(row.details) ? row.details : []
+                  });
+                  setShowPreview(true);
+                }}
                 className="px-3 py-1.5 text-sm rounded-md border border-green-300 bg-white 
-              hover:bg-green-100 hover:border-green-500 transition"
+                  hover:bg-green-100 hover:border-green-500 transition"
               >
                 Preview
               </button>
 
               {/* EDIT */}
               <button
-                onClick={() => console.log("edit", row)}
+                 onClick={() => {
+                  setEditData(row);
+                  setShowForm(true);
+                }}
                 className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
               hover:bg-blue-100 hover:border-blue-500 transition"
               >
                 Edit
+              </button>
+
+              <button
+                 onClick={() => handleDelete(row.id)}
+                className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
+              hover:bg-red-100 hover:border-red-500 transition"
+              >
+                Delete
               </button>
 
             </td>
@@ -474,7 +528,7 @@ export default function PaymentReqForm() {
       </tbody>
 
     </table>
-
+                  )}
   </div>
 
 </div>
@@ -483,10 +537,27 @@ export default function PaymentReqForm() {
     ) : (
 
       <PaymentRequestEntryForm
-        onBack={() => setShowForm(false)}
-      />
+  onBack={() => {
+    setShowForm(false);
+    setEditData(null); // clear edit data when closing form
+  }}
+  editData={editData}
+  onRefresh={getPaymentRequestsData}
+  onSaveAndPreview={handleSaveAndPreview}
+/>
 
     )}
+
+     <ConfirmModal
+      open={confirmOpen}
+      title={confirmData.title}
+      message={confirmData.message}
+      confirmText={confirmData.confirmText}
+      cancelText={confirmData.cancelText}
+      type={confirmData.type}
+      onClose={() => setConfirmOpen(false)}
+      onConfirm={confirmData.onConfirm}
+    />
 
   </div>
 );

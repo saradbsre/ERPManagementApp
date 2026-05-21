@@ -6,7 +6,6 @@ export const isNumericColumn = (key = "") => {
     k.includes("cost") ||
     k.includes("price") ||
     k.includes("total") ||
-    k.includes("rate") ||
     k.includes("amt") 
   );
 };

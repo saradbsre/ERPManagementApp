@@ -13,13 +13,31 @@ const masterTableConfig = {
     ]
   },
 
-  service_providers: {
+  vendors: {
     displayName: "Service Providers Master",
 
     columns: [
-      { key: "provider_name", label: "Name", data_type: "string" },
+      { key: "vendor_name", label: "Vendor Name", data_type: "string" },
+      { key: "vendor_type", label: "Vendor Type", data_type: "string" },
+      { key: "website", label: "Website", data_type: "string" },
+      { key: "is_vat", label: "VAT Applicable", data_type: "boolean" },
+      { key: "currency", label: "Currency", data_type: "string" },
+      { key: "address", label: "Address", data_type: "string" },
+      { key: "country", label: "Country", data_type: "string" },
+      { key: "email", label: "Email", data_type: "string" },
+      { key: "phone_number", label: "Phone", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
-      { key: "services", label: "Services", data_type: "string" },
+    ]
+  },
+    service_providers: {
+    displayName: "Service Providers Master",
+
+    columns: [
+      { key: "product", label: "Product Name", data_type: "string" },
+      { key: "vendor", label: "Vendor", data_type: "string" },
+      { key: "services", label: "Product Type", data_type: "string" },
+      // { key: "is_vat", label: "VAT Applicable", data_type: "boolean" },
+      { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
   },
 
@@ -58,8 +76,13 @@ const masterTableConfig = {
       { key: "licence_no", label: "Licence Number", data_type: "string" },
       { key: "sector_brand", label: "Sector/Brand", data_type: "string" },
       { key: "trade_name", label: "Trade Name", data_type: "string" },
+      { key: "address", label: "Address", data_type: "string" },
+      { key: "area", label: "Location", data_type: "string" },
+      { key: "emirate", label: "Emirate", data_type: "string" },
+      { key: "country", label: "Country", data_type: "string" },
+      { key: "email", label: "Email", data_type: "string" },
+      { key: "phn_number", label: "Phone", data_type: "string" },
       { key: "legal_status", label: "Legal Status", data_type: "string" },
-      { key: "location_brand", label: "Location", data_type: "string" },
       { key: "issue_date", label: "Issue Date", data_type: "datetime" },
       { key: "expiry_date", label: "Expiry Date", data_type: "datetime" },
       { key: "trn", label: "TRN", data_type: "string" }

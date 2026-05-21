@@ -28,7 +28,7 @@ export default function DbStatusOverlay({ dbStatus, onRetry }) {
           <div className="text-red-500 text-5xl">⚠️</div>
 
           <h1 className="text-2xl font-bold text-red-400">
-            Network Issue
+            Network / Database Issue
           </h1>
 
           <p className="text-sm text-black max-w-md">

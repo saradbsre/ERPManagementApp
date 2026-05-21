@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, act } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow  } from "../../api/api";
+import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf  } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -19,6 +19,20 @@ import Loader from "../Loader";
 import ConfirmModal from "../ConfirmationPopups";
 import PrintableTable from "../PrintableTable";
 import ValidatePopups from "../Validatepopups";
+import PaymentRequestPreview from "../paymentreqform/PaymentRequestPreview"
+import {
+  DndContext,
+  closestCenter
+} from "@dnd-kit/core";
+
+import {
+  arrayMove,
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable
+} from "@dnd-kit/sortable";
+
+import { CSS } from "@dnd-kit/utilities";
 
 
 const Modal = ({ title, children, onClose }) => (
@@ -36,6 +50,62 @@ const Modal = ({ title, children, onClose }) => (
         </div>
     </div>
 );
+
+function SortableColumnItem({ col, checked, toggleTempColumn}) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: col.column_name });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`
+        flex items-center justify-between px-4 py-3 rounded-2xl border transition
+        ${checked
+          ? "bg-blue-50 border-blue-300 shadow-sm"
+          : "hover:bg-gray-50 border-gray-100"
+        }
+      `}
+    >
+
+      {/* LEFT */}
+      <div
+        className="flex items-center gap-3 flex-1 cursor-pointer"
+        onClick={() => toggleTempColumn(col.column_name)}
+      >
+
+        {/* checkbox */}
+        <div
+          className={`
+            w-5 h-5 flex items-center justify-center rounded-md border transition
+            ${checked
+              ? "bg-blue-600 border-blue-600 text-white"
+              : "border-gray-300"
+            }
+          `}
+        >
+          {checked && "✓"}
+        </div>
+
+        <span className="text-sm text-gray-700">
+          {col.display_name}
+        </span>
+
+      </div>
+
+      {/* DRAG HANDLE */}
+      <button
+        {...attributes}
+        {...listeners}
+        className="text-gray-400 hover:text-gray-700 cursor-grab active:cursor-grabbing px-2"
+      >
+        ☰
+      </button>
+
+    </div>
+  );
+}
 
 
 export default function DynamicTablePage() {
@@ -74,6 +144,8 @@ export default function DynamicTablePage() {
     const [printLogo, setPrintLogo] = useState(null);
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email;
+    const activeUserName = activeUser?.name;
+    const [vatPercent, setVatPercent] = useState(0);
     const [providerPlansMap, setProviderPlansMap] = useState({});
     const [providerPlans, setProviderPlans] = useState([]);
     const [autoFilledFields, setAutoFilledFields] = useState({});
@@ -96,28 +168,65 @@ export default function DynamicTablePage() {
     const [confirmData, setConfirmData] = useState({});
     const [popupMessage, setPopupMessage] = useState("");
     const [popupType, setPopupType] = useState("");
-    // const [confirmData, setConfirmData] = useState({
-    //   title: "Are you sure?",
-    //   message: "This action cannot be undone.",
-    //   confirmText: "Delete",
-    //   cancelText: "Cancel",
-    //   type: "danger",
-    //   onConfirm: null,
-    // });
+    const [vendors, setVendors] = useState([]);
+    const [serviceProviders, setServiceProviders] = useState([]);
+    const [creditCards, setCreditCards] = useState([]);
+    const [serviceTypes, setServiceTypes] = useState([]);
+    const [showGenerateModal, setShowGenerateModal] = useState(false);
+    const [selectedRow, setSelectedRow] = useState(null);
+    const [modalItems, setModalItems] = useState([]);
+    const [prfNumber, setPrfNumber] = useState("");
+    const [showPreview, setShowPreview] = useState(false);
+    const [previewData, setPreviewData] = useState(null);
     const [sortConfig, setSortConfig] = useState({
       key: null,
       direction: "asc",
     });
+    const [form, setForm] = useState({
+      paid_by: "",
+      prepared_by: "",
+      checked_by: "",
+      verified_by: "",
+      signed_by: "",
+      approved_by: ""
+    });
+    const removeRow = (index) => {
+  setModalItems((prev) => prev.filter((_, i) => i !== index));
+};
 
     useEffect(() => {
-  if (!columns.length) return;
+      if (!columns.length) return;
 
-  setSelectedColumns(prev => {
-    if (prev && prev.length > 0) return prev;
+      setSelectedColumns(prev => {
+        if (prev && prev.length > 0) return prev;
 
-    return columns.map(c => c.column_name);
-  });
-}, [columns]);
+        return columns.map(c => c.column_name);
+      });
+    }, [columns]);
+
+    useEffect(() => {
+    getMasterData("service_providers", activeUserEmail).then(res => {
+      const result = Array.isArray(res.data) ? res.data : [];
+      //console.log("Raw Service Providers:", result);
+      setServiceProviders(result);
+      console.log("Service Providers:", result);
+    });
+     getMasterData("vendors", activeUserEmail).then(res => {
+        const result = Array.isArray(res?.data) ? res.data : [];
+        setVendors(result);
+        //console.log("Vendors:", result);
+      });
+        getMasterData("services", activeUserEmail).then(res => {
+        const result = Array.isArray(res?.data) ? res.data : [];
+        setServiceTypes(result);
+      //  console.log("Service Types:", result);
+      });
+        getMasterData("credit_card", activeUserEmail).then(res => {
+        const result = Array.isArray(res?.data) ? res.data : [];
+        setCreditCards(result);
+      //  console.log("Credit Cards:", result);
+      });
+    }, []);
 
 const getCurrentMonth = () => {
   const now = new Date();
@@ -137,6 +246,24 @@ const getCurrentMonth = () => {
     startDate: format(start),
     endDate: format(end),
   };
+};
+
+const handleDragEnd = (event) => {
+  const { active, over } = event;
+
+  if (!over || active.id === over.id) return;
+
+  const oldIndex = columns.findIndex(
+    c => c.column_name === active.id
+  );
+
+  const newIndex = columns.findIndex(
+    c => c.column_name === over.id
+  );
+
+  const reordered = arrayMove(columns, oldIndex, newIndex);
+
+  setColumns(reordered);
 };
 
 const [dateFilters, setDateFilters] = useState(getCurrentMonth());
@@ -310,6 +437,28 @@ const addMasterValue = async (masterName, value) => {
         console.error("Master add failed:", err); } 
     };
 
+  const generateNextPrfNumber = async () => {
+  // Option 1: If you have an API endpoint to get the latest PRF number:
+  const res = await getLastPRFNumber(); // implement this API if needed
+  const latest = res.data?.lastPRFNumber || "IT/000325";
+  console.log("Latest PRF from API:", latest);
+  // Extract the numeric part and increment
+  const match = latest.match(/IT\/(\d{6})/);
+  let nextNum = 1;
+  if (match) {
+    nextNum = parseInt(match[1], 10) + 1;
+  }
+  return `IT/${String(nextNum).padStart(6, "0")}`;
+};
+
+useEffect(() => {
+  const fetchPrf = async () => {
+    const num = await generateNextPrfNumber();
+    setPrfNumber(num);
+  };
+  fetchPrf();
+}, []);
+
 
 const handleSaveFilter = async () => {
   if (!saveFilterName.trim()) {
@@ -458,6 +607,35 @@ const loadProviderPlans = async (providerId) => {
     setProviderPlans([]);
   }
 };
+
+useEffect(() => {
+
+  const fetchVat = async () => {
+
+    try {
+
+      const res = await getVatPercentage();
+
+      const vat =
+        parseFloat(res.data?.vatPercentage) || 0;
+
+      setVatPercent(vat);
+
+    } catch (err) {
+
+      console.error(
+        "Failed to fetch VAT percentage:",
+        err
+      );
+
+      setVatPercent(0);
+    }
+  };
+
+  fetchVat();
+
+}, []);
+
     
 
    const getVisibleColumns = () => {
@@ -554,6 +732,46 @@ const normalizeCreateColumns = (cols) => {
   return [...rest,...ordered];
 };
 
+const handleItemChange = (index, field, value) => {
+  const updated = [...modalItems];
+  updated[index][field] = value;
+  setModalItems(updated);
+};
+
+const handleGenerate = async () => {
+  // Collect all payloads for preview
+  const detailsArray = [];
+  for (const item of modalItems) {
+    const payload = {
+      doc_date: item.doc_date,
+      prf_num: prfNumber,
+      doc_no: item.doc_no,
+      product: item.product || item.narration,
+      amount: item.amount,
+      vat_amount: item.vat,
+      total_amount: item.total_amount,
+      paid_by: form.paid_by,
+      prepared_by: form.prepared_by,
+      checked_by: form.checked_by,
+      verified_by: form.verified_by,
+      signed_by: form.signed_by,
+      approved_by: form.approved_by,
+      userid: activeUserEmail,
+      // sysdate is handled by SQL default
+    };
+    
+    await createprf(payload, activeUserEmail, selectedRow); // Replace with your actual API call
+    detailsArray.push(payload);
+  }
+  setShowGenerateModal(false);
+  setPreviewData({
+    header: selectedRow, // or use the API response if available
+    details: detailsArray, // always an array
+    paidBy: form.paid_by,
+  });
+  setShowPreview(true);
+  // Optionally refresh data or show a success message
+};
 
 const getExcelColumns = (mode, savedCols = [], groupBy = "service") => {
 
@@ -727,7 +945,8 @@ const loadModule = async (
   }
 };
 
-
+const isGenerated = rows.some(r => !!r.prf_generate);
+console.log("Is Generated row:", isGenerated);
 
 useEffect(() => {
   loadModule();
@@ -1272,16 +1491,19 @@ const handleClear = async () => {
         return () => window.removeEventListener("click", close);
     }, []);
 
-    const handlePrint = (mode, savedCols = []) => {
+    const handlePrint = (mode, savedCols = [], groupBy) => {
     const cols = getColumnsToUse(mode, savedCols);
-
+   // console.log("Print columns:", cols);
     openPrintWindow({
         content: generateTableHTML(cols),
         userName: activeUser?.email || "User",
+        groupBy,
     });
-
+    setColumns(cols); // Ensure columns are set for the print view
     setShowPrintModal(false);
     };
+
+   
 
 // const handlePrint = (
 //   mode = "default",
@@ -1363,7 +1585,7 @@ const handleClear = async () => {
   }
 
   if (mode === "default") return columns;
-
+ 
   return columns;
 };
     // ================= SEARCH FILTER =================
@@ -2477,918 +2699,1093 @@ onClick={handleCreate}
 
                         {/* TABLE BODY */}
                     <tbody className="divide-y">
-{isCreating && (
-  <tr className="bg-blue-50">
-    <td className="px-4 py-3 whitespace-nowrap"></td>
-
-    {visibleColumns.map((col) => {
-      const isMaster = !!col.master;
-      const isDate = col.data_type?.toLowerCase().includes("date");
-      const isAmount = col.data_type?.toLowerCase().includes("decimal")
-
-      // ✅ normalize value (IMPORTANT FIX)
-      const rawValue = newRow[col.column_name];
-     let value =
-  typeof rawValue === "object"
-    ? rawValue?.value ?? ""
-    : rawValue ?? "";
-
-// 🔐 CREDIT CARD MASKING (CREATE MODE)
-if (col.master === "credit_card" && value) {
-  const raw = String(value);
-  const last4 = raw.slice(-4);
-  value = `**** **** **** ${last4}`;
-}
-
-      return (
-        <td
-          key={col.column_id}
-          className={`px-4 py-2 ${getAlignClass(col.display_name)} whitespace-nowrap`}
-        >
-          <div className="relative">
-
-          <input
-  autoComplete="off"
-  type={isNumericColumn(col) ? "number" : isDate ? "date" : "text"}
-  className="
-    w-full
-    rounded-xl
-    border border-gray-300
-    bg-white
-    px-3 py-2
-    text-sm
-    outline-none
-    transition-all duration-200
-
-    focus:border-blue-500
-    focus:ring-4
-    focus:ring-blue-100
-  "
-  value={
-    inputValues[col.column_name] ??
-    (
-      col.column_name === "total_amount_aed"
-        ? newRow.total_amount_aed || ""
-        : isDate
-        ? formatForInput(value)
-        : value
-    )
-  }
-  disabled={col.column_name === "total_amount_aed"}
-
-  onChange={(e) => {
-    let val = e.target.value;
-
-    if (isNumericColumn(col.column_name)) {
-      val = handleNumericInput(val);
-    }
-
-
-
-    if (isMaster) {
-      setInputValues(prev => ({
-        ...prev,
-        [col.column_name]: val
-      }));
-
-      setActiveField(col.column_name);
-    } else {
-      handleNewRowChange(
-        col.column_name,
-        val,
-        col.master
-      );
-    }
-  }}
-
-   onFocus={() => {
-  setActiveField(col.column_name);
-
-  if (col.master) {
-    fetchMasterDataForColumn(col.master);
-  }
-
-  if (col.master1) {
-    fetchMasterDataForColumn(col.master1);
-  }
-}}
-
-  onBlur={(e) => {
-    if (isAmount && e.target.value !== "") {
-      handleNewRowChange(
-        col.column_name,
-        Number(e.target.value).toFixed(2),
-        col.master
-      );
-    }
-
-    setActiveField(null);
-  }}
-/>
-    {isMaster &&
-                loadingMaster === col.master && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Loader type="dots" />
-                  </div>
-              )}
-            {/* MASTER DROPDOWN */}
-          {/* ================= MASTER DROPDOWN ================= */}
-{isMaster &&
-  activeField === col.column_name &&
-  (() => {
-
-    const typedValue =
-      inputValues[col.column_name] || "";
-
-    const rawOptions = getMasterOptions(
-      col,
-      typedValue,
-      newRow
-    ).slice(0, 20);
-
-    const filteredOptions = rawOptions.filter((val) => {
-
-      const raw =
-        typeof val === "object"
-          ? val.value
-          : val;
-
-      return String(raw || "")
-        .toLowerCase()
-        .includes(typedValue.toLowerCase());
-    });
-
-   const showAdd =
-    typedValue &&
-    filteredOptions.length === 0 &&
-    loadingMaster !== col.master;
-
-    return (
-      <div className="
-        absolute z-50 mt-2 w-full overflow-hidden
-        rounded-2xl border border-gray-200
-        bg-white/95 backdrop-blur-xl
-        shadow-[0_10px_35px_rgba(0,0,0,0.12)]
-        max-h-64 overflow-y-auto
-      ">
-         {loadingMaster ===
-                        col.master && (
-                        <div className="flex items-center justify-center py-6">
-                          <Loader type="dots" />
-                        </div>
-                      )}
-
-
-        {/* OPTIONS */}
-        {filteredOptions.map((val, i) => {
-
-          let display =
-            typeof val === "object"
-              ? val.value
-              : val;
-
-          // CREDIT CARD MASKING (DISPLAY ONLY)
-          if (col.column_name === "credit_card" && display) {
-            const raw = String(display).replace(/\D/g, "");
-            const last4 = raw.slice(-4);
-            display = `**** **** **** ${last4}`;
-          }
-
-          const rawValue =
-            typeof val === "object"
-              ? val.value
-              : val;
-
-          return (
-            <div
-              key={i}
-              className="
-                flex items-center justify-between
-                px-4 py-3
-                text-sm text-gray-700
-                cursor-pointer
-                hover:bg-blue-50
-                transition-all duration-150
-                border-b border-gray-100 last:border-0
-              "
-              onMouseDown={() => {
-
-                setInputValues(prev => ({
-                  ...prev,
-                  [col.column_name]: display
-                }));
-
-                handleNewRowChange(
-                  col.column_name,
-                  rawValue,
-                  col.master
-                );
-
-                setAutoFilledFields(prev => ({
-                  ...prev,
-                  [col.column_name]: true
-                }));
-
-                setActiveField(null);
-              }}
-            >
-              <span className="truncate">
-                {display}
-              </span>
-            </div>
-          );
-        })}
-
-        {/* EMPTY */}
-        {loadingMaster !== col.master &&
-          filteredOptions.length === 0 &&
-          !showAdd && (
-            <div className="px-4 py-3 text-sm text-gray-400 text-center">
-              No results found
-            </div>
-        )}
-
-        {/* ADD NEW */}
-        {showAdd && (
-          <div
-            className="
-              sticky bottom-0
-              bg-green-50
-              border-t border-green-200
-              px-4 py-3
-              text-sm font-medium text-green-700
-              cursor-pointer
-              hover:bg-green-100
-              transition
-            "
-            onMouseDown={async () => {
-
-              const newValue =
-                inputValues[col.column_name];
-
-              await addMasterValue(
-                col.master,
-                newValue
-              );
-
-              setInputValues(prev => ({
-                ...prev,
-                [col.column_name]: newValue
-              }));
-
-              handleNewRowChange(
-                col.column_name,
-                newValue,
-                col.master
-              );
-
-              setAutoFilledFields(prev => ({
-                ...prev,
-                [col.column_name]: true
-              }));
-
-              setActiveField(null);
-            }}
-          >
-            + Add "{typedValue}"
-          </div>
-        )}
-
-      </div>
-    );
-  })()}
-
-          </div>
-        </td>
-      );
-    })}
-
-    {/* ACTIONS */}
-    <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
-      <button onClick={handleSave} className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-              hover:bg-blue-100 hover:border-blue-500 transition">Save</button>
-      <button onClick={handleCancel} className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-              hover:bg-red-100 hover:border-red-500 transition">Cancel</button>
-    </td>
-  </tr>
-)}
-{sortedRows.map((row, i) => (
-  <tr
-    key={row.id ?? i}
-    className="hover:bg-gray-50 transition-colors"
-  >
-    {/* ================= SERIAL NO ================= */}
-    <td className="px-4 py-3 whitespace-nowrap">
-      {(page - 1) * pageSize + i + 1}
-    </td>
-
-    {/* ================= COLUMNS ================= */}
-    {visibleColumns.map((col) => {
-
-      const isMaster = !!col.master;
-
-      const editKey = `edit-${row.id}-${col.column_name}`;
-
-      const isDate = col.data_type
-        ?.toLowerCase()
-        .includes("date");
-
-      const isAmount = col.data_type
-        ?.toLowerCase()
-        .includes("decimal");
-
-      const rawValue = row?.[col.column_name];
-
-      let value =
-        typeof rawValue === "object"
-          ? rawValue?.value ?? ""
-          : rawValue ?? "";
-
-      // ================= MASK DISPLAY =================
-      if (col.master === "credit_card" && value) {
-        const raw = String(value);
-        const last4 = raw.slice(-4);
-
-        value = `**** **** **** ${last4}`;
-      }
-
-      return (
-        <td
-          key={col.column_id}
-          className={`px-4 py-3 whitespace-nowrap ${getAlignClass(
-            col.display_name
-          )}`}
-        >
-
-          {/* ================================================= */}
-          {/* ================= EDIT MODE ===================== */}
-          {/* ================================================= */}
-
-          {editRowId === row.id ? (
-
-            <div className="relative">
-
-              {/* ================= INPUT ================= */}
-              <input
-                type={isNumericColumn(col) ? "number" : isDate ? "date" : "text"}
-                disabled={
-                  col.column_name === "total_amount_aed"
-                }
-                className="
-                  w-full
-                  rounded-xl
-                  border border-gray-300
-                  bg-white
-                  px-3 py-2
-                  pr-10
-                  text-sm
-                  outline-none
-                  transition-all duration-200
-                  focus:border-blue-500
-                  focus:ring-4
-                  focus:ring-blue-100
-                  disabled:bg-gray-100
-                  disabled:text-gray-500
-                "
-                value={(() => {
-
-                  // ================= AED =================
-                  if (
-                    col.column_name === "total_amount_aed"
-                  ) {
-                    return (
-                      editRow.total_amount_aed || ""
-                    );
-                  }
-
-                  // ================= DATE =================
-                  if (isDate) {
-                    return formatForInput(
-                      editRow[col.column_name]
-                    );
-                  }
-
-                  // ================= CREDIT CARD =================
-                  if (
-                    col.master === "credit_card"
-                  ) {
-
-                    const raw =
-                      typeof editRow[
-                        col.column_name
-                      ] === "object"
-                        ? editRow[col.column_name]
-                            ?.value ?? ""
-                        : editRow[
-                            col.column_name
-                          ] ?? "";
-
-                    if (!raw) return "";
-
-                    const last4 =
-                      String(raw).slice(-4);
-
-                    return `**** **** **** ${last4}`;
-                  }
-
-                  // ================= NORMAL =================
-                  return typeof editRow[
-                    col.column_name
-                  ] === "object"
-                    ? editRow[col.column_name]
-                        ?.value ?? ""
-                    : editRow[col.column_name] ??
-                        "";
-
-                })()}
-                onChange={(e) => {
-
-                  let val = e.target.value;
-
-                  // ================= REMOVE MASK =================
-                  if (
-                    col.master === "credit_card"
-                  ) {
-                    val = val.replace(/\D/g, "");
-                  }
-
-                  // ================= NUMERIC =================
-                  if (
-                    isNumericColumn(
-                      col.column_name
-                    )
-                  ) {
-                    val = handleNumericInput(val);
-                  }
-
-                  setEditRow({
-                    ...editRow,
-                    [col.column_name]: val,
-                  });
-
-                  setActiveDropdown(editKey);
-                }}
-                onFocus={() => {
-
-                  setActiveDropdown(editKey);
-
-                  // ================= FETCH MASTER =================
-                  if (
-                    isMaster &&
-                    col.master
-                  ) {
-                    fetchMasterDataForColumn(
-                      col.master
-                    );
-                  }
-
-                  if (
-                    isMaster &&
-                    col.master1
-                  ) {
-                    fetchMasterDataForColumn(
-                      col.master1
-                    );
-                  }
-                }}
-                onBlur={(e) => {
-
-                  // ================= DECIMAL FORMAT =================
-                  if (
-                    isAmount &&
-                    e.target.value !== ""
-                  ) {
-
-                    setEditRow((prev) => ({
-                      ...prev,
-                      [col.column_name]:
-                        Number(
-                          e.target.value
-                        ).toFixed(2),
-                    }));
-                  }
-
-                  setTimeout(() => {
-                    setActiveDropdown(null);
-                  }, 150);
-                }}
-              />
-
-              {/* ================= LOADER ================= */}
-              {isMaster &&
-                loadingMaster === col.master && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Loader type="dots" />
-                  </div>
-              )}
-
-              {/* ================================================= */}
-              {/* ================= DROPDOWN ===================== */}
-              {/* ================================================= */}
-
-              {isMaster &&
-                activeDropdown === editKey &&
-                (() => {
-
-                  const currentValue =
-                    typeof editRow[
-                      col.column_name
-                    ] === "object"
-                      ? editRow[col.column_name]
-                          ?.value || ""
-                      : editRow[col.column_name] ||
-                        "";
-
-                  const rawOptions =
-                    getMasterOptions(
-                      col,
-                      currentValue,
-                      editRow
-                    ).slice(0, 20);
-
-                  const filteredOptions =
-                    rawOptions.filter((val) => {
-
-                      const display =
-                        typeof val === "object"
-                          ? val.value
-                          : val;
-
-                      return display
-                        ?.toLowerCase()
-                        .includes(
-                          currentValue.toLowerCase()
-                        );
-                    });
-
-                  // ================= EXACT MATCH =================
-                  const exactMatch =
-                    filteredOptions.some(
-                      (val) => {
-
-                        const display =
-                          typeof val ===
-                          "object"
-                            ? val.value
-                            : val;
-
-                        return (
-                          display?.toLowerCase() ===
-                          currentValue.toLowerCase()
-                        );
+                      {isCreating && (
+                        <tr className="bg-blue-50">
+                          <td className="px-4 py-3 whitespace-nowrap"></td>
+
+                          {visibleColumns.map((col) => {
+                            const isMaster = !!col.master;
+                            const isDate = col.data_type?.toLowerCase().includes("date");
+                            const isAmount = col.data_type?.toLowerCase().includes("decimal")
+
+                            // ✅ normalize value (IMPORTANT FIX)
+                            const rawValue = newRow[col.column_name];
+                          let value =
+                        typeof rawValue === "object"
+                          ? rawValue?.value ?? ""
+                          : rawValue ?? "";
+
+                      // 🔐 CREDIT CARD MASKING (CREATE MODE)
+                      if (col.master === "credit_card" && value) {
+                        const raw = String(value);
+                        const last4 = raw.slice(-4);
+                        value = `**** **** **** ${last4}`;
                       }
-                    );
 
-                  const showAdd =
-                    currentValue &&
-                    !exactMatch &&
-                    loadingMaster !==
-                      col.master;
+                            return (
+                              <td
+                                key={col.column_id}
+                                className={`px-4 py-2 ${getAlignClass(col.display_name)} whitespace-nowrap`}
+                              >
+                                <div className="relative">
 
-                  return (
-                    <div
-                      className="
-                        absolute z-50 mt-2 w-full overflow-hidden
-                        rounded-2xl border border-gray-200
-                        bg-white/95 backdrop-blur-xl
-                        shadow-[0_10px_35px_rgba(0,0,0,0.12)]
-                        max-h-64 overflow-y-auto
-                      "
-                    >
+                                <input
+                        autoComplete="off"
+                        type={isNumericColumn(col) ? "number" : isDate ? "date" : "text"}
+                        className="
+                          w-full
+                          rounded-xl
+                          border border-gray-300
+                          bg-white
+                          px-3 py-2
+                          text-sm
+                          outline-none
+                          transition-all duration-200
 
-                      {/* ================= LOADING ================= */}
-                      {loadingMaster ===
-                        col.master && (
-                        <div className="flex items-center justify-center py-6">
-                          <Loader type="dots" />
-                        </div>
-                      )}
+                          focus:border-blue-500
+                          focus:ring-4
+                          focus:ring-blue-100
+                        "
+                        value={
+                          inputValues[col.column_name] ??
+                          (
+                            col.column_name === "total_amount_aed"
+                              ? newRow.total_amount_aed || ""
+                              : isDate
+                              ? formatForInput(value)
+                              : value
+                          )
+                        }
+                        disabled={col.column_name === "total_amount_aed"}
 
-                      {/* ================= OPTIONS ================= */}
-                      {loadingMaster !==
-                        col.master &&
-                        filteredOptions.map(
-                          (val, idx) => {
+                        onChange={(e) => {
+                          let val = e.target.value;
 
-                            const display =
-                              typeof val ===
-                              "object"
+                          if (isNumericColumn(col.column_name)) {
+                            val = handleNumericInput(val);
+                          }
+
+
+
+                          if (isMaster) {
+                            setInputValues(prev => ({
+                              ...prev,
+                              [col.column_name]: val
+                            }));
+
+                            setActiveField(col.column_name);
+                          } else {
+                            handleNewRowChange(
+                              col.column_name,
+                              val,
+                              col.master
+                            );
+                          }
+                        }}
+
+                        onFocus={() => {
+                        setActiveField(col.column_name);
+
+                        if (col.master) {
+                          fetchMasterDataForColumn(col.master);
+                        }
+
+                        if (col.master1) {
+                          fetchMasterDataForColumn(col.master1);
+                        }
+                      }}
+
+                        onBlur={(e) => {
+                          if (isAmount && e.target.value !== "") {
+                            handleNewRowChange(
+                              col.column_name,
+                              Number(e.target.value).toFixed(2),
+                              col.master
+                            );
+                          }
+
+                          setActiveField(null);
+                        }}
+                      />
+                          {isMaster &&
+                                      loadingMaster === col.master && (
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                          <Loader type="dots" />
+                                        </div>
+                                    )}
+                                  {/* MASTER DROPDOWN */}
+                                {/* ================= MASTER DROPDOWN ================= */}
+                      {isMaster &&
+                        activeField === col.column_name &&
+                        (() => {
+
+                          const typedValue =
+                            inputValues[col.column_name] || "";
+
+                          const rawOptions = getMasterOptions(
+                            col,
+                            typedValue,
+                            newRow
+                          ).slice(0, 20);
+
+                          const filteredOptions = rawOptions.filter((val) => {
+
+                            const raw =
+                              typeof val === "object"
                                 ? val.value
                                 : val;
 
-                            // ================= MASK DROPDOWN =================
-                            let displayValue =
-                              display;
+                            return String(raw || "")
+                              .toLowerCase()
+                              .includes(typedValue.toLowerCase());
+                          });
 
-                            if (
-                              col.master ===
-                              "credit_card"
-                            ) {
-                              const last4 =
-                                String(
-                                  display
-                                ).slice(-4);
+                        const showAdd =
+                          typedValue &&
+                          filteredOptions.length === 0 &&
+                          loadingMaster !== col.master;
 
-                              displayValue = `**** **** **** ${last4}`;
-                            }
+                          return (
+                            <div className="
+                              absolute z-50 mt-2 w-full overflow-hidden
+                              rounded-2xl border border-gray-200
+                              bg-white/95 backdrop-blur-xl
+                              shadow-[0_10px_35px_rgba(0,0,0,0.12)]
+                              max-h-64 overflow-y-auto
+                            ">
+                              {loadingMaster ===
+                                              col.master && (
+                                              <div className="flex items-center justify-center py-6">
+                                                <Loader type="dots" />
+                                              </div>
+                                            )}
 
-                            return (
-                              <div
-                                key={idx}
-                                className="
-                                  flex items-center justify-between
-                                  px-4 py-3
-                                  text-sm text-gray-700
-                                  cursor-pointer
-                                  hover:bg-blue-50
-                                  transition-all duration-150
-                                  border-b border-gray-100
-                                  last:border-0
-                                "
-                                onMouseDown={() => {
 
-                                  setEditRow({
-                                    ...editRow,
-                                    [col.column_name]:
-                                      display,
-                                  });
+                              {/* OPTIONS */}
+                              {filteredOptions.map((val, i) => {
 
-                                  setActiveDropdown(
-                                    null
-                                  );
-                                }}
-                              >
-                                <span className="truncate">
-                                  {displayValue}
-                                </span>
-                              </div>
+                                let display =
+                                  typeof val === "object"
+                                    ? val.value
+                                    : val;
+
+                                // CREDIT CARD MASKING (DISPLAY ONLY)
+                                if (col.column_name === "credit_card" && display) {
+                                  const raw = String(display).replace(/\D/g, "");
+                                  const last4 = raw.slice(-4);
+                                  display = `**** **** **** ${last4}`;
+                                }
+
+                                const rawValue =
+                                  typeof val === "object"
+                                    ? val.value
+                                    : val;
+
+                                return (
+                                  <div
+                                    key={i}
+                                    className="
+                                      flex items-center justify-between
+                                      px-4 py-3
+                                      text-sm text-gray-700
+                                      cursor-pointer
+                                      hover:bg-blue-50
+                                      transition-all duration-150
+                                      border-b border-gray-100 last:border-0
+                                    "
+                                 onMouseDown={() => {
+
+  const selectedVendor =
+    typeof val === "object"
+      ? val.value
+      : val;
+
+  // SET VENDOR
+  handleNewRowChange(
+    col.column_name,
+    selectedVendor,
+    col.master
+  );
+
+  setInputValues(prev => ({
+    ...prev,
+    [col.column_name]: selectedVendor
+  }));
+
+  // AUTO SELECT PRODUCT
+  const matchedProvider = serviceProviders.find(
+    sp =>
+      String(sp.vendor || "").trim().toLowerCase() ===
+      String(selectedVendor || "").trim().toLowerCase()
+  );
+
+  console.log("Matched Provider:", matchedProvider);
+
+if (matchedProvider) {
+
+  // AUTO PRODUCT
+  handleNewRowChange(
+    "products",
+    matchedProvider.product
+  );
+
+  setInputValues(prev => ({
+    ...prev,
+    products: matchedProvider.product
+  }));
+
+
+  // =========================
+  // AUTO SERVICE
+  // =========================
+
+  const matchedService = serviceTypes.find(
+    st =>
+      String(st.id) ===
+      String(matchedProvider.services)
+  );
+
+  console.log("Matched Service:", matchedService);
+
+  if (matchedService) {
+
+    handleNewRowChange(
+      "product_types",
+      matchedService.service_name
+    );
+
+    setInputValues(prev => ({
+      ...prev,
+      product_types: matchedService.service_name
+    }));
+  }
+}
+
+  setActiveField(null);
+}}
+                                  >
+                                    <span className="truncate">
+                                      {display}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+
+                              {/* EMPTY */}
+                              {loadingMaster !== col.master &&
+                                filteredOptions.length === 0 &&
+                                !showAdd && (
+                                  <div className="px-4 py-3 text-sm text-gray-400 text-center">
+                                    No results found
+                                  </div>
+                              )}
+
+                              {/* ADD NEW */}
+                              {showAdd && (
+                                <div
+                                  className="
+                                    sticky bottom-0
+                                    bg-green-50
+                                    border-t border-green-200
+                                    px-4 py-3
+                                    text-sm font-medium text-green-700
+                                    cursor-pointer
+                                    hover:bg-green-100
+                                    transition
+                                  "
+                                  onMouseDown={async () => {
+
+                                    const newValue =
+                                      inputValues[col.column_name];
+
+                                    await addMasterValue(
+                                      col.master,
+                                      newValue
+                                    );
+
+                                    setInputValues(prev => ({
+                                      ...prev,
+                                      [col.column_name]: newValue
+                                    }));
+
+                                    handleNewRowChange(
+                                      col.column_name,
+                                      newValue,
+                                      col.master
+                                    );
+
+                                    setAutoFilledFields(prev => ({
+                                      ...prev,
+                                      [col.column_name]: true
+                                    }));
+
+                                    setActiveField(null);
+                                  }}
+                                >
+                                  + Add "{typedValue}"
+                                </div>
+                              )}
+
+                            </div>
+                          );
+                        })()}
+
+                                </div>
+                              </td>
                             );
-                          }
+                          })}
+
+                          {/* ACTIONS */}
+                          <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
+                            <button onClick={handleSave} className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
+                                    hover:bg-blue-100 hover:border-blue-500 transition">Save</button>
+                            <button onClick={handleCancel} className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
+                                    hover:bg-red-100 hover:border-red-500 transition">Cancel</button>
+                          </td>
+                        </tr>
                       )}
+                      {sortedRows.map((row, i) => (
+                        <tr
+                          key={row.id ?? i}
+                          className="hover:bg-gray-50 transition-colors"
+                        >
+                          {/* ================= SERIAL NO ================= */}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {(page - 1) * pageSize + i + 1}
+                          </td>
 
-                      {/* ================= EMPTY ================= */}
-                      {loadingMaster !==
-                        col.master &&
-                        filteredOptions.length ===
-                          0 &&
-                        !showAdd && (
-                          <div className="px-4 py-3 text-sm text-gray-400 text-center">
-                            No results found
-                          </div>
-                      )}
+                          {/* ================= COLUMNS ================= */}
+                          {visibleColumns.map((col) => {
 
-                      {/* ================= ADD NEW ================= */}
-                      {loadingMaster !==
-                        col.master &&
-                        showAdd && (
-                          <div
-                            className="
-                              sticky bottom-0
-                              bg-green-50
-                              border-t border-green-200
-                              px-4 py-3
-                              text-sm font-medium text-green-700
-                              cursor-pointer
-                              hover:bg-green-100
-                              transition
-                            "
-                            onMouseDown={async () => {
+                            const isMaster = !!col.master;
 
-                              await addMasterValue(
-                                col.master,
-                                currentValue
-                              );
+                            const editKey = `edit-${row.id}-${col.column_name}`;
 
-                              setEditRow({
-                                ...editRow,
-                                [col.column_name]:
-                                  currentValue,
-                              });
+                            const isDate = col.data_type
+                              ?.toLowerCase()
+                              .includes("date");
 
-                              setActiveDropdown(
-                                null
-                              );
-                            }}
-                          >
-                            + Add "{currentValue}"
-                          </div>
-                      )}
+                            const isAmount = col.data_type
+                              ?.toLowerCase()
+                              .includes("decimal");
 
-                    </div>
-                  );
-                })()}
-            </div>
+                            const rawValue = row?.[col.column_name];
 
-          ) : (
+                            let value =
+                              typeof rawValue === "object"
+                                ? rawValue?.value ?? ""
+                                : rawValue ?? "";
 
-            (() => {
+                            // ================= MASK DISPLAY =================
+                            if (col.master === "credit_card" && value) {
+                              const raw = String(value);
+                              const last4 = raw.slice(-4);
 
-              // ================= DATE =================
-              if (isDate) {
-                return formatDate(value);
+                              value = `**** **** **** ${last4}`;
+                            }
+                           if (col.column_name === "prf_generate") {
+
+  const val = row[col.column_name];
+
+  if (val && String(val).trim() !== "") {
+
+    return (
+      <td
+        key={col.column_id}
+        className="px-4 py-3 whitespace-nowrap"
+      >
+        <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+          Already Generated ({val})
+        </span>
+      </td>
+    );
+
+  } else {
+
+    return (
+      <td
+        key={col.column_id}
+        className="px-4 py-3 whitespace-nowrap"
+      >
+
+        <button
+          className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 transition"
+          onClick={() => {
+
+            console.log("Generating for row:", row);
+
+            const paidBy = creditCards.find(
+              cc => cc.card_4number === row.credit_card
+            );
+
+            const amount = parseFloat(row.amount || 0);
+
+            const vatAmount =
+              (amount * parseFloat(vatPercent || 0)) / 100;
+
+            const totalAmount =
+              amount + vatAmount;
+
+            const items = [
+              {
+                product: row.products || "",
+
+                doc_date: row.date || "",
+                doc_no: row.doc_no || "",
+                narration: row.products || "",
+
+                amount: amount || "",
+                vat: vatAmount || "",
+                total_amount: totalAmount || "",
+
+                isSelected: true,
+
+                paidBy: paidBy?.card_holder_name || ""
               }
+            ];
 
-              // ================= AED =================
-              if (
-                col.column_name ===
-                "total_amount_aed"
-              ) {
-                return value
-                  ? Number(value).toFixed(2)
-                  : "-";
-              }
+            setForm(prev => ({
+              ...prev,
+              paid_by: paidBy?.card_holder_name || ""
+            }));
 
-              // ================= DECIMAL =================
-              if (
-                col.data_type
-                  ?.toLowerCase()
-                  .includes("decimal") &&
-                value !== ""
-              ) {
-                return Number(value).toLocaleString(
-                  undefined,
-                  {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  }
-                );
-              }
+            setSelectedRow(row);
+            setModalItems(items);
+            setShowGenerateModal(true);
 
-              // ================= AMOUNT =================
-              if (
-                col.column_name
-                  .toLowerCase()
-                  .includes("amount")
-              ) {
-                return value
-                  ? Number(value).toLocaleString()
-                  : "-";
-              }
+          }}
+        >
+          Generate
+        </button>
 
-              // ================= CREDIT CARD =================
-              if (
-                col.master === "credit_card"
-              ) {
-                const raw = String(value ?? "");
-                const last4 = raw.slice(-4);
+      </td>
+    );
+  }
+}
+                            return (
+                              <td
+                                key={col.column_id}
+                                className={`px-4 py-3 whitespace-nowrap ${getAlignClass(
+                                  col.display_name
+                                )}`}
+                              >
 
-                return raw
-                  ? `**** **** **** ${last4}`
-                  : "-";
-              }
+                                {/* ================================================= */}
+                                {/* ================= EDIT MODE ===================== */}
+                                {/* ================================================= */}
 
-              // ================= NORMAL =================
-              return typeof value === "object"
-                ? value.value
-                : value;
+                                {editRowId === row.id ? (
 
-            })()
-          )}
-        </td>
-      );
-    })}
+                                  <div className="relative">
 
-    {/* ================================================= */}
-    {/* ================= ACTIONS ======================= */}
-    {/* ================================================= */}
+                                    {/* ================= INPUT ================= */}
+                                    <input
+                                      type={isNumericColumn(col) ? "number" : isDate ? "date" : "text"}
+                                      disabled={
+                                        col.column_name === "total_amount_aed"
+                                      }
+                                      className="
+                                        w-full
+                                        rounded-xl
+                                        border border-gray-300
+                                        bg-white
+                                        px-3 py-2
+                                        pr-10
+                                        text-sm
+                                        outline-none
+                                        transition-all duration-200
+                                        focus:border-blue-500
+                                        focus:ring-4
+                                        focus:ring-blue-100
+                                        disabled:bg-gray-100
+                                        disabled:text-gray-500
+                                      "
+                                      value={(() => {
 
-    <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
+                                        // ================= AED =================
+                                        if (
+                                          col.column_name === "total_amount_aed"
+                                        ) {
+                                          return (
+                                            editRow.total_amount_aed || ""
+                                          );
+                                        }
 
-      {editRowId === row.id ? (
-        <>
-          {/* SAVE */}
-          <button
-            onClick={handleSaveEdit}
-            className="
-              px-3 py-1.5 text-sm rounded-md
-              border border-blue-300
-              bg-white
-              hover:bg-blue-100
-              hover:border-blue-500
-              transition
-            "
-          >
-            Save
-          </button>
+                                        // ================= DATE =================
+                                        if (isDate) {
+                                          return formatForInput(
+                                            editRow[col.column_name]
+                                          );
+                                        }
 
-          {/* CANCEL EDIT */}
-          <button
-            onClick={handleCancelEdit}
-            className="
-              px-3 py-1.5 text-sm rounded-md
-              border border-red-300
-              bg-white
-              hover:bg-red-100
-              hover:border-red-500
-              transition
-            "
-          >
-            Cancel
-          </button>
+                                        // ================= CREDIT CARD =================
+                                        if (
+                                          col.master === "credit_card"
+                                        ) {
 
-          {/* UNDO CANCEL */}
-          {!row.is_active && (
-            <PermissionButton
-              user={activeUser}
-              permission="modify"
-              onClick={() =>
-                handleUndoCancelRow(row)
-              }
-              className="
-                px-3 py-1.5 text-sm rounded-md
-                border border-gray-400
-                bg-gray-100
-                hover:bg-gray-200
-                hover:border-gray-500
-                transition
-              "
-            >
-              Undo Cancel
-            </PermissionButton>
-          )}
-        </>
-      ) : (
-        <>
-          {/* EDIT */}
-          <PermissionButton
-            user={activeUser}
-            permission="modify"
-            onClick={() => {
+                                          const raw =
+                                            typeof editRow[
+                                              col.column_name
+                                            ] === "object"
+                                              ? editRow[col.column_name]
+                                                  ?.value ?? ""
+                                              : editRow[
+                                                  col.column_name
+                                                ] ?? "";
 
-              setEditRowId(row.id);
+                                          if (!raw) return "";
 
-              setEditRow({
-                ...row,
-              });
+                                          const last4 =
+                                            String(raw).slice(-4);
 
-              setOriginalRow(row);
-            }}
-            className="
-              px-3 py-1.5 text-sm rounded-md
-              border border-blue-300
-              bg-white
-              hover:bg-blue-100
-              hover:border-blue-500
-              transition
-            "
-          >
-            Edit
-          </PermissionButton>
+                                          return `**** **** **** ${last4}`;
+                                        }
 
-          {/* CANCEL */}
-          {row.is_active ? (
-            <PermissionButton
-              user={activeUser}
-              permission="delete"
-              onClick={() =>
-                handleCancelRow(row)
-              }
-              className="
-                px-3 py-1.5 text-sm rounded-md
-                border border-red-300
+                                        // ================= NORMAL =================
+                                        return typeof editRow[
+                                          col.column_name
+                                        ] === "object"
+                                          ? editRow[col.column_name]
+                                              ?.value ?? ""
+                                          : editRow[col.column_name] ??
+                                              "";
+
+                                      })()}
+                                      onChange={(e) => {
+
+                                        let val = e.target.value;
+
+                                        // ================= REMOVE MASK =================
+                                        if (
+                                          col.master === "credit_card"
+                                        ) {
+                                          val = val.replace(/\D/g, "");
+                                        }
+
+                                        // ================= NUMERIC =================
+                                        if (
+                                          isNumericColumn(
+                                            col.column_name
+                                          )
+                                        ) {
+                                          val = handleNumericInput(val);
+                                        }
+
+                                        setEditRow({
+                                          ...editRow,
+                                          [col.column_name]: val,
+                                        });
+
+                                        setActiveDropdown(editKey);
+                                      }}
+                                      onFocus={() => {
+
+                                        setActiveDropdown(editKey);
+
+                                        // ================= FETCH MASTER =================
+                                        if (
+                                          isMaster &&
+                                          col.master
+                                        ) {
+                                          fetchMasterDataForColumn(
+                                            col.master
+                                          );
+                                        }
+
+                                        if (
+                                          isMaster &&
+                                          col.master1
+                                        ) {
+                                          fetchMasterDataForColumn(
+                                            col.master1
+                                          );
+                                        }
+                                      }}
+                                      onBlur={(e) => {
+
+                                        // ================= DECIMAL FORMAT =================
+                                        if (
+                                          isAmount &&
+                                          e.target.value !== ""
+                                        ) {
+
+                                          setEditRow((prev) => ({
+                                            ...prev,
+                                            [col.column_name]:
+                                              Number(
+                                                e.target.value
+                                              ).toFixed(2),
+                                          }));
+                                        }
+
+                                        setTimeout(() => {
+                                          setActiveDropdown(null);
+                                        }, 150);
+                                      }}
+                                    />
+
+                                    {/* ================= LOADER ================= */}
+                                    {isMaster &&
+                                      loadingMaster === col.master && (
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                          <Loader type="dots" />
+                                        </div>
+                                    )}
+
+                                    {/* ================================================= */}
+                                    {/* ================= DROPDOWN ===================== */}
+                                    {/* ================================================= */}
+
+                                    {isMaster &&
+                                      activeDropdown === editKey &&
+                                      (() => {
+
+                                        const currentValue =
+                                          typeof editRow[
+                                            col.column_name
+                                          ] === "object"
+                                            ? editRow[col.column_name]
+                                                ?.value || ""
+                                            : editRow[col.column_name] ||
+                                              "";
+
+                                        const rawOptions =
+                                          getMasterOptions(
+                                            col,
+                                            currentValue,
+                                            editRow
+                                          ).slice(0, 20);
+
+                                        const filteredOptions =
+                                          rawOptions.filter((val) => {
+
+                                            const display =
+                                              typeof val === "object"
+                                                ? val.value
+                                                : val;
+
+                                            return display
+                                              ?.toLowerCase()
+                                              .includes(
+                                                currentValue.toLowerCase()
+                                              );
+                                          });
+
+                                        // ================= EXACT MATCH =================
+                                        const exactMatch =
+                                          filteredOptions.some(
+                                            (val) => {
+
+                                              const display =
+                                                typeof val ===
+                                                "object"
+                                                  ? val.value
+                                                  : val;
+
+                                              return (
+                                                display?.toLowerCase() ===
+                                                currentValue.toLowerCase()
+                                              );
+                                            }
+                                          );
+
+                                        const showAdd =
+                                          currentValue &&
+                                          !exactMatch &&
+                                          loadingMaster !==
+                                            col.master;
+
+                                        return (
+                                          <div
+                                            className="
+                                              absolute z-50 mt-2 w-full overflow-hidden
+                                              rounded-2xl border border-gray-200
+                                              bg-white/95 backdrop-blur-xl
+                                              shadow-[0_10px_35px_rgba(0,0,0,0.12)]
+                                              max-h-64 overflow-y-auto
+                                            "
+                                          >
+
+                                            {/* ================= LOADING ================= */}
+                                            {loadingMaster ===
+                                              col.master && (
+                                              <div className="flex items-center justify-center py-6">
+                                                <Loader type="dots" />
+                                              </div>
+                                            )}
+
+                                            {/* ================= OPTIONS ================= */}
+                                            {loadingMaster !==
+                                              col.master &&
+                                              filteredOptions.map(
+                                                (val, idx) => {
+
+                                                  const display =
+                                                    typeof val ===
+                                                    "object"
+                                                      ? val.value
+                                                      : val;
+
+                                                  // ================= MASK DROPDOWN =================
+                                                  let displayValue =
+                                                    display;
+
+                                                  if (
+                                                    col.master ===
+                                                    "credit_card"
+                                                  ) {
+                                                    const last4 =
+                                                      String(
+                                                        display
+                                                      ).slice(-4);
+
+                                                    displayValue = `**** **** **** ${last4}`;
+                                                  }
+
+                                                  return (
+                                                    <div
+                                                      key={idx}
+                                                      className="
+                                                        flex items-center justify-between
+                                                        px-4 py-3
+                                                        text-sm text-gray-700
+                                                        cursor-pointer
+                                                        hover:bg-blue-50
+                                                        transition-all duration-150
+                                                        border-b border-gray-100
+                                                        last:border-0
+                                                      "
+                                                      onMouseDown={() => {
+
+                                                        setEditRow({
+                                                          ...editRow,
+                                                          [col.column_name]:
+                                                            display,
+                                                        });
+
+                                                        setActiveDropdown(
+                                                          null
+                                                        );
+                                                      }}
+                                                    >
+                                                      <span className="truncate">
+                                                        {displayValue}
+                                                      </span>
+                                                    </div>
+                                                  );
+                                                }
+                                            )}
+
+                                            {/* ================= EMPTY ================= */}
+                                            {loadingMaster !==
+                                              col.master &&
+                                              filteredOptions.length ===
+                                                0 &&
+                                              !showAdd && (
+                                                <div className="px-4 py-3 text-sm text-gray-400 text-center">
+                                                  No results found
+                                                </div>
+                                            )}
+
+                                            {/* ================= ADD NEW ================= */}
+                                            {loadingMaster !==
+                                              col.master &&
+                                              showAdd && (
+                                                <div
+                                                  className="
+                                                    sticky bottom-0
+                                                    bg-green-50
+                                                    border-t border-green-200
+                                                    px-4 py-3
+                                                    text-sm font-medium text-green-700
+                                                    cursor-pointer
+                                                    hover:bg-green-100
+                                                    transition
+                                                  "
+                                                  onMouseDown={async () => {
+
+                                                    await addMasterValue(
+                                                      col.master,
+                                                      currentValue
+                                                    );
+
+                                                    setEditRow({
+                                                      ...editRow,
+                                                      [col.column_name]:
+                                                        currentValue,
+                                                    });
+
+                                                    setActiveDropdown(
+                                                      null
+                                                    );
+                                                  }}
+                                                >
+                                                  + Add "{currentValue}"
+                                                </div>
+                                            )}
+
+                                          </div>
+                                        );
+                                      })()}
+                                  </div>
+
+                                ) : (
+
+                                  (() => {
+
+                                    // ================= DATE =================
+                                    if (isDate) {
+                                      return formatDate(value);
+                                    }
+
+                                    // ================= AED =================
+                                    if (
+                                      col.column_name ===
+                                      "total_amount_aed"
+                                    ) {
+                                      return value
+                                        ? Number(value).toFixed(2)
+                                        : "-";
+                                    }
+
+                                    // ================= DECIMAL =================
+                                    if (
+                                      col.data_type
+                                        ?.toLowerCase()
+                                        .includes("decimal") &&
+                                      value !== ""
+                                    ) {
+                                      return Number(value).toLocaleString(
+                                        undefined,
+                                        {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2,
+                                        }
+                                      );
+                                    }
+
+                                    // ================= AMOUNT =================
+                                    if (
+                                      col.column_name
+                                        .toLowerCase()
+                                        .includes("amount")
+                                    ) {
+                                      return value
+                                        ? Number(value).toLocaleString()
+                                        : "-";
+                                    }
+
+                                    // ================= CREDIT CARD =================
+                                    if (
+                                      col.master === "credit_card"
+                                    ) {
+                                      const raw = String(value ?? "");
+                                      const last4 = raw.slice(-4);
+
+                                      return raw
+                                        ? `**** **** **** ${last4}`
+                                        : "-";
+                                    }
+
+                                    // ================= NORMAL =================
+                                    return typeof value === "object"
+                                      ? value.value
+                                      : value;
+
+                                  })()
+                                )}
+                              </td>
+                            );
+                          })}
+
+                         <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
+
+  {editRowId === row.id ? (
+
+    <>
+      {/* SAVE */}
+      <button
+        onClick={handleSaveEdit}
+        disabled={!!row.prf_generate}
+        className={`
+          px-3 py-1.5 text-sm rounded-md border transition
+          ${
+            row.prf_generate
+              ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+              : `
+                border-blue-300
+                bg-white
+                hover:bg-blue-100
+                hover:border-blue-500
+              `
+          }
+        `}
+      >
+        Save
+      </button>
+
+      {/* CANCEL EDIT */}
+      <button
+        onClick={handleCancelEdit}
+        disabled={!!row.prf_generate}
+        className={`
+          px-3 py-1.5 text-sm rounded-md border transition
+          ${
+            row.prf_generate
+              ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+              : `
+                border-red-300
                 bg-white
                 hover:bg-red-100
                 hover:border-red-500
-                transition
-              "
-            >
-              Cancel
-            </PermissionButton>
-          ) : (
-            <span
-              className="
-                px-3 py-1.5 text-sm rounded-md
-                bg-gray-100 text-gray-500
-              "
-            >
-              Cancelled
-            </span>
-          )}
+              `
+          }
+        `}
+      >
+        Cancel
+      </button>
 
-          {/* DELETE */}
-          <PermissionButton
-            user={activeUser}
-            permission="delete"
-            onClick={() =>
-              handleDelete(row)
+      {/* UNDO CANCEL */}
+      {!row.is_active && (
+        <PermissionButton
+          user={activeUser}
+          permission="modify"
+          onClick={() => handleUndoCancelRow(row)}
+          disabled={!!row.prf_generate}
+          className={`
+            px-3 py-1.5 text-sm rounded-md border transition
+            ${
+              row.prf_generate
+                ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+                : `
+                  border-gray-400
+                  bg-gray-100
+                  hover:bg-gray-200
+                  hover:border-gray-500
+                `
             }
-            className="
-              px-3 py-1.5 text-sm rounded-md
-              border border-red-300
-              bg-white
-              hover:bg-red-100
-              hover:border-red-500
-              transition
-            "
-          >
-            Delete
-          </PermissionButton>
-        </>
+          `}
+        >
+          Undo Cancel
+        </PermissionButton>
       )}
-    </td>
-  </tr>
-))}
-</tbody>
+    </>
+
+  ) : (
+
+    <>
+      {/* EDIT */}
+      <PermissionButton
+        user={activeUser}
+        permission="modify"
+        disabled={!!row.prf_generate}
+        onClick={() => {
+
+          if (row.prf_generate) return;
+
+          setEditRowId(row.id);
+
+          setEditRow({
+            ...row,
+          });
+
+          setOriginalRow(row);
+
+        }}
+        className={`
+          px-3 py-1.5 text-sm rounded-md border transition
+          ${
+            row.prf_generate
+              ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+              : `
+                border-blue-300
+                bg-white
+                hover:bg-blue-100
+                hover:border-blue-500
+              `
+          }
+        `}
+      >
+        Edit
+      </PermissionButton>
+
+      {/* CANCEL */}
+      {row.is_active ? (
+        <PermissionButton
+          user={activeUser}
+          permission="delete"
+          disabled={!!row.prf_generate}
+          onClick={() => {
+
+            if (row.prf_generate) return;
+
+            handleCancelRow(row);
+
+          }}
+          className={`
+            px-3 py-1.5 text-sm rounded-md border transition
+            ${
+              row.prf_generate
+                ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+                : `
+                  border-red-300
+                  bg-white
+                  hover:bg-red-100
+                  hover:border-red-500
+                `
+            }
+          `}
+        >
+          Cancel
+        </PermissionButton>
+      ) : (
+        <span
+          className="
+            px-3 py-1.5 text-sm rounded-md
+            bg-gray-100 text-gray-500
+          "
+        >
+          Cancelled
+        </span>
+      )}
+
+      {/* DELETE */}
+      <PermissionButton
+        user={activeUser}
+        permission="delete"
+        disabled={!!row.prf_generate}
+        onClick={() => {
+
+          if (row.prf_generate) return;
+
+          handleDelete(row);
+
+        }}
+        className={`
+          px-3 py-1.5 text-sm rounded-md border transition
+          ${
+            row.prf_generate
+              ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+              : `
+                border-red-300
+                bg-white
+                hover:bg-red-100
+                hover:border-red-500
+              `
+          }
+        `}
+      >
+        Delete
+      </PermissionButton>
+
+    </>
+
+  )}
+
+</td>
+                        </tr>
+                      ))}
+                      </tbody>
 
                     </table>
                   )}
@@ -3634,7 +4031,7 @@ if (col.master === "credit_card" && value) {
       setTableColumnMode("saved");
 
       // ✅ print using saved columns
-      handlePrint("saved", cols);
+   //   handlePrint("saved", cols);
 
     } catch (err) {
       console.error(err);
@@ -3718,55 +4115,43 @@ if (col.master === "credit_card" && value) {
       </div>
 
       {/* List */}
-      <div className="max-h-72 overflow-auto p-4 space-y-2">
+     {/* List */}
+<DndContext
+  collisionDetection={closestCenter}
+  onDragEnd={handleDragEnd}
+>
+  <SortableContext
+    items={columns.map(c => c.column_name)}
+    strategy={verticalListSortingStrategy}
+  >
 
-        {columns
-          .filter(col =>
-            col.display_name
-              .toLowerCase()
-              .includes(columnSearch.toLowerCase())
-          )
-          .map(col => {
+    <div className="max-h-72 overflow-auto p-4 space-y-2">
 
-            const checked = tempSelectedColumns.includes(col.column_name);
+      {columns
+        .filter(col =>
+          col.display_name
+            .toLowerCase()
+            .includes(columnSearch.toLowerCase())
+        )
+        .map(col => {
 
-            return (
-              <div
-                key={col.column_id}
-                onClick={() => toggleTempColumn(col.column_name)}
-                className={`
-                  flex items-center justify-between px-4 py-3 rounded-2xl border cursor-pointer transition
-                  ${checked
-                    ? "bg-blue-50 border-blue-300 shadow-sm"
-                    : "hover:bg-gray-50 border-gray-100"
-                  }
-                `}
-              >
+          const checked =
+            tempSelectedColumns.includes(col.column_name);
 
-                <div className="flex items-center gap-3">
+          return (
+            <SortableColumnItem
+              key={col.column_name}
+              col={col}
+              checked={checked}
+              toggleTempColumn={toggleTempColumn}
+            />
+          );
+        })}
 
-                  {/* custom checkbox */}
-                  <div className={`
-                    w-5 h-5 flex items-center justify-center rounded-md border transition
-                    ${checked
-                      ? "bg-blue-600 border-blue-600 text-white"
-                      : "border-gray-300"
-                    }
-                  `}>
-                    {checked && "✓"}
-                  </div>
+    </div>
 
-                  <span className="text-sm text-gray-700">
-                    {col.display_name}
-                  </span>
-
-                </div>
-
-              </div>
-            );
-          })}
-
-      </div>
+  </SortableContext>
+</DndContext>
 
       {/* Footer */}
       <div className="flex justify-end gap-2 px-6 py-4 border-t bg-white">
@@ -3958,6 +4343,324 @@ if (col.master === "credit_card" && value) {
 
   </div>
 )}
+{showGenerateModal && (
+
+  <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center px-4 py-6">
+
+  {/* ================= MAIN POPUP ================= */}
+<div className="w-full max-w-6xl max-h-[92vh] overflow-y-auto rounded-[26px] bg-gradient-to-br from-white to-slate-50 shadow-[0_20px_60px_rgba(0,0,0,0.18)] border border-slate-200">
+
+  {/* HEADER */}
+  <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-xl border-b border-slate-200 px-6 py-4 flex items-center justify-between rounded-t-[26px]">
+
+    <div>
+
+      <h2 className="text-xl font-bold text-slate-800">
+        Payment Request Form
+      </h2>
+
+      <p className="text-sm text-slate-500 mt-1">
+        PRF NUMBER : {prfNumber}
+      </p>
+
+    </div>
+
+    <button
+      onClick={() => setShowGenerateModal(false)}
+      className="h-10 w-10 rounded-xl border border-slate-200 hover:bg-red-50 hover:text-red-500 transition"
+    >
+      ✕
+    </button>
+
+  </div>
+
+  {/* BODY */}
+  <div className="p-6 space-y-6">
+
+    {/* ================= TABLE ================= */}
+    <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+
+      <div className="flex items-center justify-between px-5 py-4 border-b bg-gradient-to-r from-slate-50 to-blue-50">
+
+        <div>
+
+          <h3 className="font-semibold text-slate-800">
+            Invoice / PO Details
+          </h3>
+
+          <p className="text-xs text-slate-500 mt-1">
+            Add invoice details
+          </p>
+
+        </div>
+
+        <button
+           onClick={() =>
+                setModalItems([
+                  ...modalItems,
+                  {
+                    doc_date: "",
+                    doc_no: "",
+                    narration: "",
+                    amount: "",
+                    vat: "",
+                    total_amount: "",
+                    isSelected: true
+                  }
+                ])
+              }
+          className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
+        >
+          + Add Row
+        </button>
+
+      </div>
+
+      <div className="overflow-auto">
+
+        <table className="w-full text-sm">
+
+          <thead className="bg-slate-100 text-slate-700">
+
+            <tr>
+
+              <th className="p-3 border-b text-center">#</th>
+              <th className="p-3 border-b text-left">Date</th>
+              <th className="p-3 border-b text-left">Doc No</th>
+              <th className="p-3 border-b text-left">Product</th>
+              <th className="p-3 border-b text-right">Amount</th>
+              <th className="p-3 border-b text-right">
+                VAT ({vatPercent}%)
+              </th>
+              <th className="p-3 border-b text-right">Total</th>
+              <th className="p-3 border-b text-center">Action</th>
+
+            </tr>
+
+          </thead>
+
+          <tbody>
+
+            {modalItems.map((item, i) => (
+
+              <tr
+                key={i}
+                className={`hover:bg-blue-50/40 transition ${
+                  item.isSelected ? "bg-blue-50/60" : ""
+                }`}
+              >
+
+                {/* SNO */}
+                <td className="p-3 border-b text-center font-medium">
+                  {i + 1}
+                </td>
+
+                {/* DATE */}
+                <td className="p-3 border-b min-w-[150px]">
+
+                  <input
+                    type="date"
+                    value={
+                      item.doc_date
+                        ? new Date(item.doc_date)
+                            .toISOString()
+                            .split("T")[0]
+                        : ""
+                    }
+                    onChange={(e) =>
+                      handleItemChange(i, "doc_date", e.target.value)
+                    }
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none"
+                  />
+
+                </td>
+
+                {/* DOC NO */}
+                <td className="p-3 border-b min-w-[160px]">
+
+                  <input
+                    value={item.doc_no}
+                    onChange={(e) =>
+                      handleItemChange(i, "doc_no", e.target.value)
+                    }
+                    placeholder="Enter doc no"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none"
+                  />
+
+                </td>
+
+                {/* PRODUCT */}
+                <td className="p-3 border-b min-w-[220px]">
+
+                  <input
+                    value={item.product}
+                    readOnly
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium"
+                  />
+
+                </td>
+
+                {/* AMOUNT */}
+                <td className="p-3 border-b min-w-[140px]">
+
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={Number(item.amount || 0).toFixed(2)}
+                    onChange={(e) => {
+
+                      const amount =
+                        parseFloat(e.target.value || 0);
+
+                      const vat =
+                        (amount * parseFloat(vatPercent || 0)) / 100;
+
+                      const total =
+                        amount + vat;
+
+                      const updatedItems = [...modalItems];
+
+                      updatedItems[i].amount =
+                        amount.toFixed(2);
+
+                      updatedItems[i].vat =
+                        vat.toFixed(2);
+
+                      updatedItems[i].total_amount =
+                        total.toFixed(2);
+
+                      setModalItems(updatedItems);
+
+                    }}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-right focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none"
+                  />
+
+                </td>
+
+                {/* VAT */}
+                <td className="p-3 border-b min-w-[140px]">
+
+                  <input
+                    value={Number(item.vat || 0).toFixed(2)}
+                    readOnly
+                    className="w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-right font-medium"
+                  />
+
+                </td>
+
+                {/* TOTAL */}
+                <td className="p-3 border-b min-w-[150px]">
+
+                  <input
+                    value={Number(item.total_amount || 0).toFixed(2)}
+                    readOnly
+                    className="w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-right font-semibold"
+                  />
+
+                </td>
+
+                {/* ACTION */}
+                <td className="p-3 border-b text-center">
+
+                  <button
+                    onClick={() => removeRow(i)}
+                    className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-sm transition"
+                  >
+                    Delete
+                  </button>
+
+                </td>
+
+              </tr>
+
+            ))}
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+    {/* ================= APPROVAL ================= */}
+  <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+
+  <div className="px-5 py-4 border-b bg-gradient-to-r from-slate-50 to-indigo-50">
+
+    <h3 className="font-semibold text-slate-800">
+      Approval Workflow
+    </h3>
+
+  </div>
+
+  <div className="p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+
+    {[
+      { label: "Paid By", key: "paid_by" },
+      { label: "Prepared By", key: "prepared_by" },
+      { label: "Checked By", key: "checked_by" },
+      { label: "Verified By", key: "verified_by" },
+      { label: "Signed By", key: "signed_by" },
+      { label: "Approved By", key: "approved_by" }
+    ].map((field, idx) => (
+
+      <div key={idx}>
+
+        <label className="text-xs font-medium text-slate-500 mb-1 block">
+          {field.label}
+        </label>
+
+        <input
+          value={
+            field.key === "prepared_by"
+              ? (form[field.key] || activeUserName || "")
+              : (form[field.key] || "")
+          }
+          onChange={(e) =>
+            setForm({
+              ...form,
+              [field.key]: e.target.value
+            })
+          }
+          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none"
+        />
+
+      </div>
+
+    ))}
+
+  </div>
+
+</div>
+
+  </div>
+
+  {/* FOOTER */}
+  <div className="sticky bottom-0 bg-white/90 backdrop-blur-xl border-t border-slate-200 px-6 py-4 flex justify-end gap-3 rounded-b-[26px]">
+
+    <button
+      onClick={() => setShowGenerateModal(false)}
+      className="px-5 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-sm"
+    >
+      Cancel
+    </button>
+
+    <button
+      onClick={handleGenerate}
+      className="px-6 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-md text-sm font-medium"
+    >
+      Save & Generate
+    </button>
+
+  </div>
+
+</div>
+
+  </div>
+
+)}
+
 <ConfirmModal
   open={confirmOpen}
   title={confirmData.title}
@@ -3975,6 +4678,7 @@ if (col.master === "credit_card" && value) {
                 </div>
             </div>
          <div ref={printRef} className="hidden print:block">
+          
   <PrintableTable
     columns={columns}
     finalRows={finalRows}
@@ -3993,6 +4697,31 @@ if (col.master === "credit_card" && value) {
   onClose={() => setConfirmOpen(false)}
   onConfirm={confirmData.onConfirm}
 />
+{showPreview && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+
+    <div className="w-[95%] max-w-6xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl">
+
+      {/* CLOSE BUTTON */}
+      {/* <div className="flex justify-end p-3 border-b">
+        <button
+          onClick={() => setShowPreview(false)}
+          className="px-3 py-1 text-sm rounded-md border hover:bg-gray-100"
+        >
+          Close
+        </button>
+      </div> */}
+
+      {/* YOUR COMPONENT */}
+      <PaymentRequestPreview
+        data={previewData}
+        onBack={() => setShowPreview(false)}
+      />
+
+    </div>
+
+  </div>
+)}
 
         </div>
 
