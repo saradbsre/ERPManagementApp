@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import JsBarcode from "jsbarcode";
 import { getMasterData, createPaymentRequest  } from "../../api/api";
 export default function PaymentRequestPreview({ data, onBack }) {
-  console.log("PaymentRequestPreview data:", data);
+ // console.log("PaymentRequestPreview data:", data);
   if (!data) {
     return (
       <div className="p-10 text-center text-gray-500">
@@ -16,26 +16,33 @@ export default function PaymentRequestPreview({ data, onBack }) {
   }
 
   const { header, details } = data;
-  console.log("Header:", header);
-  console.log("Details:", details);
+//   console.log("Header:", header);
+//   console.log("Details:", details);
   const activeUser = JSON.parse(localStorage.getItem("user"));
   const [creditCards, setCreditCards] = useState([]);
   const [company, setCompany] = useState([]);
   const [vendor, setVendor] = useState(null);
   const barcodeRef = useRef(null);
 
-    useEffect(() => {
-    if (header?.prf_generate && barcodeRef.current) {
-        JsBarcode(barcodeRef.current, header.prf_generate, {
-        format: "CODE128",
-        height: 20,
-        width: 1,
-        fontSize: 9,
-        margin: 2,
-        displayValue: true
-        });
+   useEffect(() => {
+  if (details?.[0]?.prf_num && barcodeRef.current) {
+    const svg = barcodeRef.current;
+
+    // 🔥 IMPORTANT: clear old barcode
+    while (svg.firstChild) {
+      svg.removeChild(svg.firstChild);
     }
-    }, [header?.prf_generate]);
+
+    JsBarcode(svg, details[0].prf_num, {
+      format: "CODE128",
+      height: 20,
+      width: 1,
+      fontSize: 9,
+      margin: 2,
+      displayValue: false
+    });
+  }
+}, [details?.[0]?.prf_num]);
 function numberToWords(num) {
   if (num == null || isNaN(num)) return "ZERO";
 
@@ -275,7 +282,8 @@ const expiryDate = details?.[0]?.doc_date ? formatDate(details[0].doc_date) : "N
             <span className="font-normal">PRF NUMBER</span>
             <span>:</span>
             <span className="font-semibold">
-              {header.prf_generate}
+               
+              {details?.[0]?.prf_num}
             </span>
           </div>
            </div>
@@ -399,40 +407,96 @@ const expiryDate = details?.[0]?.doc_date ? formatDate(details[0].doc_date) : "N
 
           <tbody>
 
-            {details?.map((item, index) => (
-              <tr key={index} className=" h-[200px] text-center align-top">
+          <tr className="text-center align-top h-[200px]">
 
-                <td className="border border-black p-2 text-center align-top">
-                  {index + 1}.
-                </td>
+    {/* S/N */}
+    <td className="border border-black p-2 align-top">
+      {details?.map((_, i) => (
+        <div key={i} className="py-1">
+          {i + 1}.
+        </div>
+      ))}
+    </td>
 
-                <td className="border border-black p-2 align-top">
-                    {item.doc_date ? formatDate(item.doc_date) : ""}    
-                </td>
+    {/* DATE */}
+    <td className="border border-black p-2 align-top text-center">
+      {details?.map((item, i) => (
+        <div key={i} className="py-1">
+          {item.doc_date ? formatDate(item.doc_date) : ""}
+        </div>
+      ))}
+    </td>
 
-                <td className="border border-black p-2 align-top">
-                  {item.doc_no}
-                </td>
+    {/* DOC NO */}
+    <td className="border border-black p-2 align-top text-center">
+      {details?.map((item, i) => (
+        <div key={i} className="py-1">
+          {item.doc_no}
+        </div>
+      ))}
+    </td>
 
-                <td className="border border-black p-2 align-top">
-                  {item.product}
-                </td>
+    {/* PRODUCT */}
+    <td className="border border-black p-2 align-top text-center">
+      {details?.map((item, i) => (
+        <div key={i} className="py-1">
+          {item.product}
+        </div>
+      ))}
+    </td>
 
-                <td className="border border-black p-2 text-right align-top">
-                  {header.currency} {formatDecimal(item.amount)}
-                </td>
+    {/* AMOUNT */}
+    <td className="border border-black p-2 align-top text-right">
+   {details?.map((item, i) => {
 
-                <td className="border border-black p-2 text-right align-top">
-                  {header.currency} {formatDecimal(item.vat_amount)}
-                </td>
+  const hasHeader = item.doc_date || item.doc_no;
 
-                <td className="border border-black p-2 text-right align-top">
-                  {header.currency} {formatDecimal(item.total_amount)}
-                </td>
+  return (
+    <div key={i} className="py-1">
+      {hasHeader
+        ? `${header.currency} ${formatDecimal(item.amount ?? 0)}`
+        : ""
+      }
+    </div>
+  );
+})}
+    </td>
 
-              </tr>
-              
-            ))}
+    {/* VAT */}
+    <td className="border border-black p-2 align-top text-right">
+ {details?.map((item, i) => {
+
+  const hasHeader = item.doc_date || item.doc_no;
+
+  return (
+    <div key={i} className="py-1">
+      {hasHeader
+        ? `${header.currency} ${formatDecimal(item.vat_amount ?? 0)}`
+        : ""
+      }
+    </div>
+  );
+})}
+    </td>
+
+    {/* TOTAL */}
+    <td className="border border-black p-2 align-top text-right">
+  {details?.map((item, i) => {
+
+  const hasHeader = item.doc_date || item.doc_no;
+
+  return (
+    <div key={i} className="py-1">
+      {hasHeader
+        ? `${header.currency} ${formatDecimal(item.total_amount ?? 0)}`
+        : ""
+      }
+    </div>
+  );
+})}
+    </td>
+
+  </tr>
 
          
 
@@ -594,7 +658,7 @@ const expiryDate = details?.[0]?.doc_date ? formatDate(details[0].doc_date) : "N
         </table>
 
         <table
-  className="w-full mt-10"
+  className="w-full mt-20"
   style={{
     borderCollapse: "collapse",
     border: "none",

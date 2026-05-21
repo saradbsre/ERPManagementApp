@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef, act } from "react";
+import { useEffect, useState, useRef, act, use } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf  } from "../../api/api";
+import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow  } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -178,6 +178,9 @@ export default function DynamicTablePage() {
     const [prfNumber, setPrfNumber] = useState("");
     const [showPreview, setShowPreview] = useState(false);
     const [previewData, setPreviewData] = useState(null);
+    const [workflow, setWorkflow] = useState({});
+    const [availableProducts, setAvailableProducts] = useState([]);
+    const [availableServices, setAvailableServices] = useState([]);
     const [sortConfig, setSortConfig] = useState({
       key: null,
       direction: "asc",
@@ -459,7 +462,47 @@ useEffect(() => {
   fetchPrf();
 }, []);
 
+const ApprovalWorkflow = async () => {
+  try {
+    const res = await getApprovalWorkflow();
+    return res.data || {};
+  } catch (err) {
+    console.error("Failed to fetch approval workflow:", err);
+    return {};
+  }
+};
 
+useEffect(() => {
+  const workflowAuth = async () => {
+    try {
+      const result = await ApprovalWorkflow();
+
+      const raw = result?.approvalWorkflow;
+
+      let parsed = {};
+
+      if (raw) {
+        try {
+          parsed =
+            typeof raw === "string"
+              ? JSON.parse(raw)
+              : raw;
+        } catch (err) {
+          console.error("Invalid JSON in approvalWorkflow:", err);
+          parsed = {};
+        }
+      }
+
+      setWorkflow(parsed);
+
+    } catch (err) {
+      console.error("Failed to load workflow:", err);
+      setWorkflow({});
+    }
+  };
+
+  workflowAuth();
+}, []);
 const handleSaveFilter = async () => {
   if (!saveFilterName.trim()) {
     alert("Filter name is required");
@@ -733,44 +776,63 @@ const normalizeCreateColumns = (cols) => {
 };
 
 const handleItemChange = (index, field, value) => {
-  const updated = [...modalItems];
-  updated[index][field] = value;
-  setModalItems(updated);
+  setModalItems(prev =>
+    prev.map((item, i) =>
+      i === index
+        ? { ...item, [field]: value }
+        : item
+    )
+  );
 };
 
+useEffect(() => {
+  if (workflow) {
+    setForm(prev => ({
+      ...prev,
+      checked_by: workflow.checked_by || prev.checked_by,
+      verified_by: workflow.verified_by || prev.verified_by,
+      signed_by: workflow.signed_by || prev.signed_by,
+      approved_by: workflow.approved_by || prev.approved_by,
+    }));
+  }
+}, [workflow]);
 const handleGenerate = async () => {
-  // Collect all payloads for preview
+  const snapshot = [...modalItems]; // IMPORTANT
+
   const detailsArray = [];
-  for (const item of modalItems) {
+  
+  for (const item of snapshot) {
+
     const payload = {
-      doc_date: item.doc_date,
+      doc_date: item.doc_date || null,
       prf_num: prfNumber,
-      doc_no: item.doc_no,
-      product: item.product || item.narration,
-      amount: item.amount,
-      vat_amount: item.vat,
-      total_amount: item.total_amount,
+      doc_no: item.doc_no || null,
+      product: item.product || "",
+      amount: item.amount || 0,
+      vat_amount: item.vat || 0,
+      total_amount: item.total_amount || 0,
       paid_by: form.paid_by,
-      prepared_by: form.prepared_by,
+      prepared_by: activeUserName,
       checked_by: form.checked_by,
       verified_by: form.verified_by,
       signed_by: form.signed_by,
       approved_by: form.approved_by,
       userid: activeUserEmail,
-      // sysdate is handled by SQL default
     };
-    
-    await createprf(payload, activeUserEmail, selectedRow); // Replace with your actual API call
+
+    await createprf(payload, activeUserEmail, selectedRow);
+
     detailsArray.push(payload);
   }
+
   setShowGenerateModal(false);
   setPreviewData({
-    header: selectedRow, // or use the API response if available
-    details: detailsArray, // always an array
+    header: selectedRow,
+    details: detailsArray,
     paidBy: form.paid_by,
   });
+
   setShowPreview(true);
-  // Optionally refresh data or show a success message
 };
 
 const getExcelColumns = (mode, savedCols = [], groupBy = "service") => {
@@ -946,7 +1008,7 @@ const loadModule = async (
 };
 
 const isGenerated = rows.some(r => !!r.prf_generate);
-console.log("Is Generated row:", isGenerated);
+//console.log("Is Generated row:", isGenerated);
 
 useEffect(() => {
   loadModule();
@@ -1018,40 +1080,87 @@ const fetchMasterDataForColumn = async (master) => {
 
 const getMasterOptions = (col, searchText = "") => {
 
+  const selectedVendor =
+    newRow?.vendors || editRow?.vendors || null;
+
+  // ================= PRODUCTS =================
+ if (col.column_name === "products") {
+
+  let list = [];
+  //  console.log("selectedVendor:", selectedVendor);
+  //   console.log("Master data map for service providers:", masterDataMap?.service_providers);
+  // vendor selected
+  if (selectedVendor && availableProducts?.length) {
+    
+    list = availableProducts;
+  }
+ 
+  // all products
+ 
+  else if (masterDataMap?.service_providers) {
+   
+    list = masterDataMap.service_providers
+      .map(sp => sp.value || [])
+      .filter(Boolean);
+   // console.log("Products from master data:", list);
+  }
+
+  // remove duplicates
+  const unique = [...new Set(list)];
+
+  return unique.map((v, i) => ({
+    id: i,
+    value: v
+  }));
+}
+
+  // ================= PRODUCT TYPES =================
+if (col.column_name === "product_types") {
+
+  let list = [];
+  //console.log("masterDataMap for service types:", masterDataMap?.services);
+  // vendor filtered
+  if (selectedVendor && availableServices?.length) {
+    list = availableServices;
+  }
+
+  // all services fallback
+  else if (masterDataMap?.services?.length) {
+
+    list = masterDataMap.services
+      .map(st => st.value)   // ✅ correct field
+      .filter(Boolean);      // ✅ remove empty/null
+  }
+
+  // remove duplicates
+  const unique = [...new Set(list)];
+
+  return unique.map((v, i) => ({
+    id: i,
+    value: v
+  }));
+}
+
+  // ================= BASE OPTIONS =================
   let options = [];
 
-  const master1 = col.master;
-  const master2 = col.master1;
-
-  // ================= 1️⃣ LOAD MASTER 1 =================
-  if (master1 && masterDataMap?.[master1]) {
-    options = [
-      ...options,
-      ...masterDataMap[master1]
-    ];
+  if (col.master && masterDataMap?.[col.master]) {
+    options = [...masterDataMap[col.master]];
   }
 
-  // ================= 2️⃣ LOAD MASTER 2 =================
-  if (master2 && masterDataMap?.[master2]) {
-    options = [
-      ...options,
-      ...masterDataMap[master2]
-    ];
+  if (col.master1 && masterDataMap?.[col.master1]) {
+    options = [...options, ...masterDataMap[col.master1]];
   }
 
- // ================= 3️⃣ REMOVE DUPLICATES =================
- options = options.filter(
-   (item, index, self) =>
-     index === self.findIndex(
-       t =>
-         t.id === item.id &&
-         JSON.stringify(t) === JSON.stringify(item)
-     )
- );
+  // ================= REMOVE DUPLICATES =================
+  options = options.filter(
+    (item, index, self) =>
+      index === self.findIndex(
+        t => t.id === item.id
+      )
+  );
 
-
-
-  // ================= 4️⃣ FILTER PLANS BY PROVIDER =================
+  // ================= PLANS FILTER =================
   if (
     (
       col.master === "plans" ||
@@ -1061,43 +1170,27 @@ const getMasterOptions = (col, searchText = "") => {
     providerPlans?.length
   ) {
 
-    const allowedIds = providerPlans.map(p => p.plan_id);
+    const allowedIds = providerPlans.map(p =>
+      Number(p.plan_id)
+    );
 
-    options = options.filter(p => {
+    options = options.filter(p =>
+      allowedIds.includes(Number(p.id))
+    );
+  }
 
-      // keep providers always
-      if (!allowedIds.includes(p.id)) {
+  // ================= SEARCH =================
+  if (searchText) {
 
-        // allow providers
-        if (
-          masterDataMap?.service_providers?.some(
-            sp => sp.id === p.id
-          )
-        ) {
-          return true;
-        }
-      }
+    const search = searchText.toLowerCase();
 
-      return allowedIds.includes(p.id);
+    options = options.filter(v => {
+      const val = typeof v === "object" ? v.value : v;
+      return String(val).toLowerCase().includes(search);
     });
   }
 
-  // ================= 5️⃣ SEARCH FILTER =================
-  if (!searchText) return options;
-  
-  const search = searchText.toString().toLowerCase();
-  console.log("Filtering options with search:", search, options);
-  return options.filter(v => {
-
-    const valStr =
-      typeof v === "object"
-        ? (v.value || "")
-        : v;
-
-    return valStr
-      ?.toLowerCase()
-      .includes(search);
-  });
+  return options;
 };
 
 
@@ -2893,73 +2986,89 @@ onClick={handleCreate}
                                       transition-all duration-150
                                       border-b border-gray-100 last:border-0
                                     "
-                                 onMouseDown={() => {
+                               onMouseDown={() => {
 
-  const selectedVendor =
+  const selectedValue =
     typeof val === "object"
       ? val.value
       : val;
 
-  // SET VENDOR
+  // =========================
+  // SET VALUE GENERIC
+  // =========================
   handleNewRowChange(
     col.column_name,
-    selectedVendor,
+    selectedValue,
     col.master
   );
 
   setInputValues(prev => ({
     ...prev,
-    [col.column_name]: selectedVendor
-  }));
-
-  // AUTO SELECT PRODUCT
-  const matchedProvider = serviceProviders.find(
-    sp =>
-      String(sp.vendor || "").trim().toLowerCase() ===
-      String(selectedVendor || "").trim().toLowerCase()
-  );
-
-  console.log("Matched Provider:", matchedProvider);
-
-if (matchedProvider) {
-
-  // AUTO PRODUCT
-  handleNewRowChange(
-    "products",
-    matchedProvider.product
-  );
-
-  setInputValues(prev => ({
-    ...prev,
-    products: matchedProvider.product
+    [col.column_name]: selectedValue
   }));
 
 
   // =========================
-  // AUTO SERVICE
+  // VENDOR SELECTED
   // =========================
+  if (col.column_name === "vendors") {
 
-  const matchedService = serviceTypes.find(
-    st =>
-      String(st.id) ===
-      String(matchedProvider.services)
-  );
-
-  console.log("Matched Service:", matchedService);
-
-  if (matchedService) {
-
-    handleNewRowChange(
-      "product_types",
-      matchedService.service_name
+    const matchedProviders = serviceProviders.filter(
+      sp =>
+        String(sp.vendor || "").trim().toLowerCase() ===
+        String(selectedValue || "").trim().toLowerCase()
     );
 
-    setInputValues(prev => ({
-      ...prev,
-      product_types: matchedService.service_name
-    }));
+    // -------------------------
+    // PRODUCTS LIST
+    // -------------------------
+    if (matchedProviders.length > 0) {
+
+      const allProducts = matchedProviders.flatMap(sp =>
+        String(sp.product || "")
+          .split(",")
+          .map(p => p.trim())
+      );
+
+      const uniqueProducts = [...new Set(allProducts)];
+
+      setAvailableProducts(uniqueProducts);
+    }
+
+    // -------------------------
+    // SERVICES LIST
+    // -------------------------
+    const matchedServices = serviceTypes.filter(
+      st =>
+        matchedProviders.some(mp =>
+          String(st.id) === String(mp.services)
+        )
+    );
+
+    if (matchedServices.length > 0) {
+
+      const serviceNames = matchedServices.map(
+        s => s.service_name
+      );
+
+      setAvailableServices([...new Set(serviceNames)]);
+    }
   }
-}
+
+
+  // =========================
+  // PRODUCT SELECTED
+  // =========================
+  if (col.column_name === "products") {
+    const matchedProduct = serviceProviders.find(
+      sp =>
+        String(sp.product || "").trim().toLowerCase() ===
+        String(selectedValue || "").trim().toLowerCase()
+    );
+    console.log("Product selected:", selectedValue, matchedProduct);
+    loadProviderPlans(matchedProduct?.id);
+  }
+
 
   setActiveField(null);
 }}
@@ -3108,55 +3217,65 @@ if (matchedProvider) {
         className="px-4 py-3 whitespace-nowrap"
       >
 
-        <button
-          className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 transition"
-          onClick={() => {
+       <button
+  className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 transition"
+  onClick={() => {
 
-            console.log("Generating for row:", row);
+    console.log("Generating for row:", row);
 
-            const paidBy = creditCards.find(
-              cc => cc.card_4number === row.credit_card
-            );
+    const paidBy = creditCards.find(
+      cc => cc.card_4number === row.credit_card
+    );
+    // console.log("row.vendors:", row.vendors);
+    // console.log("Available vendors:", vendors);
+   const vendor = vendors.find(
+  v => v.vendor_name === row.vendors
+);
 
-            const amount = parseFloat(row.amount || 0);
+console.log("Matched Vendor:", vendor);
 
-            const vatAmount =
-              (amount * parseFloat(vatPercent || 0)) / 100;
+const amount = parseFloat(row.amount || 0);
 
-            const totalAmount =
-              amount + vatAmount;
+// VAT check
+const isVAT = vendor?.is_vat === true || vendor?.is_vat === 1;
 
-            const items = [
-              {
-                product: row.products || "",
+const vatAmount = isVAT
+  ? (amount * parseFloat(vatPercent || 0)) / 100
+  : 0;
 
-                doc_date: row.date || "",
-                doc_no: row.doc_no || "",
-                narration: row.products || "",
+const totalAmount = amount + vatAmount;
 
-                amount: amount || "",
-                vat: vatAmount || "",
-                total_amount: totalAmount || "",
+    const items = [
+      {
+        product: row.products || "",
+        doc_date: row.date || "",
+        doc_no: row.doc_no || "",
+        narration: row.products || "",
 
-                isSelected: true,
+        amount: amount || "",
+        vat: vatAmount || "",
+        total_amount: totalAmount || "",
 
-                paidBy: paidBy?.card_holder_name || ""
-              }
-            ];
+        isSelected: true,
+        paidBy: paidBy?.card_holder_name || "",
 
-            setForm(prev => ({
-              ...prev,
-              paid_by: paidBy?.card_holder_name || ""
-            }));
+        isVAT
+      }
+    ];
 
-            setSelectedRow(row);
-            setModalItems(items);
-            setShowGenerateModal(true);
+    setForm(prev => ({
+      ...prev,
+      paid_by: paidBy?.card_holder_name || ""
+    }));
 
-          }}
-        >
-          Generate
-        </button>
+    setSelectedRow(row);
+    setModalItems(items);
+    setShowGenerateModal(true);
+
+  }}
+>
+  Generate
+</button>
 
       </td>
     );
@@ -4401,7 +4520,7 @@ if (matchedProvider) {
                   {
                     doc_date: "",
                     doc_no: "",
-                    narration: "",
+                    product: "",
                     amount: "",
                     vat: "",
                     total_amount: "",
@@ -4430,7 +4549,7 @@ if (matchedProvider) {
               <th className="p-3 border-b text-left">Product</th>
               <th className="p-3 border-b text-right">Amount</th>
               <th className="p-3 border-b text-right">
-                VAT ({vatPercent}%)
+                VAT Amount
               </th>
               <th className="p-3 border-b text-right">Total</th>
               <th className="p-3 border-b text-center">Action</th>
@@ -4492,11 +4611,13 @@ if (matchedProvider) {
                 {/* PRODUCT */}
                 <td className="p-3 border-b min-w-[220px]">
 
-                  <input
-                    value={item.product}
-                    readOnly
-                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium"
-                  />
+                 <input
+  value={item.product || ""}
+  onChange={(e) =>
+    handleItemChange(i, "product", e.target.value)
+  }
+  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium"
+/>
 
                 </td>
 
@@ -4594,43 +4715,41 @@ if (matchedProvider) {
 
   </div>
 
-  <div className="p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+<div className="p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 
-    {[
-      { label: "Paid By", key: "paid_by" },
-      { label: "Prepared By", key: "prepared_by" },
-      { label: "Checked By", key: "checked_by" },
-      { label: "Verified By", key: "verified_by" },
-      { label: "Signed By", key: "signed_by" },
-      { label: "Approved By", key: "approved_by" }
-    ].map((field, idx) => (
+  {[
+    { label: "Paid By", key: "paid_by" },
+    { label: "Prepared By", key: "prepared_by" },
+    { label: "Checked By", key: "checked_by" },
+    { label: "Verified By", key: "verified_by" },
+    { label: "Signed By", key: "signed_by" },
+    { label: "Approved By", key: "approved_by" }
+  ].map((field, idx) => (
 
-      <div key={idx}>
+    <div key={idx}>
+      <label className="text-xs font-medium text-slate-500 mb-1 block">
+        {field.label}
+      </label>
 
-        <label className="text-xs font-medium text-slate-500 mb-1 block">
-          {field.label}
-        </label>
+      <input
+        value={
+          field.key === "prepared_by"
+            ? (form[field.key] || activeUserName || "")
+            : (form[field.key] || workflow?.[field.key] || "")
+        }
+        onChange={(e) =>
+          setForm((prev) => ({
+            ...prev,
+            [field.key]: e.target.value
+          }))
+        }
+        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none"
+      />
+    </div>
 
-        <input
-          value={
-            field.key === "prepared_by"
-              ? (form[field.key] || activeUserName || "")
-              : (form[field.key] || "")
-          }
-          onChange={(e) =>
-            setForm({
-              ...form,
-              [field.key]: e.target.value
-            })
-          }
-          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none"
-        />
+  ))}
 
-      </div>
-
-    ))}
-
-  </div>
+</div>
 
 </div>
 
@@ -4715,7 +4834,10 @@ if (matchedProvider) {
       {/* YOUR COMPONENT */}
       <PaymentRequestPreview
         data={previewData}
-        onBack={() => setShowPreview(false)}
+         onBack={() => {
+          setShowPreview(false);
+          loadModule(); // <-- refresh table data after closing preview
+        }}
       />
 
     </div>

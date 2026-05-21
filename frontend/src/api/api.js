@@ -376,6 +376,10 @@ export const getVatPercentage = () => {
   return API.get("/vat-percentage");
 };
 
+export const getApprovalWorkflow = () => {
+  return API.get("/approval-workflow");
+};
+
 export const createprf = (data,activeUserEmail, selectedRow) => {
   return API.post("/create-prf", data, {
     params: { activeUserEmail, selectedRow }

@@ -642,7 +642,7 @@ const getLabel = (key, value) => {
                                         </th>
                                     ))}
                                     {masterName === "service_providers" && (
-  <th className="px-4 py-3 text-center">Plans / Providers</th>
+  <th className="px-4 py-3 text-center">Plans</th>
 )}
                                     <th className="px-4 py-3 text-right">Actions</th>
                                 </tr>
@@ -887,58 +887,37 @@ const getLabel = (key, value) => {
       })}
 
       {/* ================= SERVICE ACTION COLUMN ================= */}
-      {masterName === "service_providers" && (
-        <td className="px-4 py-3 text-center">
+{masterName === "service_providers" && (
+  <td className="px-4 py-3 text-center">
 
-          {/* ================= EDIT MODE ================= */}
-          {editRowId === rowKey ? (
+    {editRowId === rowKey ? (
 
-            <select
-              className="border px-2 py-1 text-xs rounded w-full"
-              value={editRow.providers || ""}
-              onChange={(e) =>
-                setEditRow(prev => ({
-                  ...prev,
-                  providers: e.target.value
-                }))
-              }
-            >
-              <option value="">Select Provider</option>
+      null
 
-              {providersList.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.provider_name}
-                </option>
-              ))}
-            </select>
+    ) : (
 
-          ) : (
+      <>
+        {Number(row.services) === 1 ? (
 
-            /* ================= VIEW MODE ================= */
-            <>
-              {Number(row.services) === 1 ? (
+          <button
+            onClick={() => openPlansModal(row)}
+            className="px-2 py-1 text-xs rounded border border-blue-300 hover:bg-blue-100"
+          >
+            Manage Plans
+          </button>
 
-                /* ===== MANAGE PLANS ===== */
-                <button
-                  onClick={() => openPlansModal(row)}
-                  className="px-2 py-1 text-xs rounded border border-blue-300 hover:bg-blue-100"
-                >
-                  Manage Plans
-                </button>
+        ) : (
 
-              ) : (
+          <span className="text-sm text-black-700">
+            {providersList.find(p => p.id == row.providers)?.provider_name || "-"}
+          </span>
 
-                /* ===== PROVIDER DISPLAY ===== */
-                <span className="text-sm text-black-700">
-                  {providersList.find(p => p.id == row.providers)?.provider_name || "-"}
-                </span>
+        )}
+      </>
+    )}
 
-              )}
-            </>
-          )}
-
-        </td>
-      )}
+  </td>
+)}
 
       {/* ================= ACTIONS ================= */}
       <td className="px-4 py-3 flex justify-end gap-2">
