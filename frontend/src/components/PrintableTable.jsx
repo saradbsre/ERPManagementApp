@@ -17,7 +17,7 @@ const PrintableTable = ({
 
   const normalize = (v) =>
     String(v || "")
-      .replace(/^service\s*types?:?\s*/i, "") // removes "Service Types:"
+      .replace(/^product\s*types?:?\s*/i, "") // removes "Product Types:"
       .trim();
   if (groupBy === "terms") {
     return normalize(
@@ -27,12 +27,16 @@ const PrintableTable = ({
     );
   }
 
-  // DEFAULT → SERVICE TYPES
+  // console.log("Row in getGroupKey:", row);
+  // console.log("GroupBy in getGroupKey:", groupBy);
+
+  // DEFAULT → PRODUCT TYPES
   return normalize(
-    row.service_types?.value ||
-    row.service_types ||
+    row.product_types?.value ||
+    row.product_types ||
     "UNKNOWN"
   );
+ 
 };
 const groupedRows = finalRows.reduce((acc, row) => {
 

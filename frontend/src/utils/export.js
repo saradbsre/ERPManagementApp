@@ -42,9 +42,9 @@ export const exportToExcel = async (
 
   if (groupBy === "service") {
     return (
-      row["Service Types"] ||
-      row["service_types"]?.value ||
-      row["service_types"] ||
+      row["Product Types"] ||
+      row["product_types"]?.value ||
+      row["product_types"] ||
       "UNKNOWN"
     );
   }

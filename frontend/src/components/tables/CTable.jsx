@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, act, use } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow  } from "../../api/api";
+import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow, getPreviewPRF  } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -835,6 +835,25 @@ const handleGenerate = async () => {
   setShowPreview(true);
 };
 
+const handlePreview = async (prfNum) => {
+  try {
+    const res = await getPreviewPRF(prfNum);
+    // The API returns: { data: [ { header, details } ] }
+    const previewObj = Array.isArray(res.data) ? res.data[0] : res.data;
+    console.log("API Response for preview:", res.data);
+    console.log("header:", previewObj?.header);
+    console.log("details:", previewObj?.details);
+    setPreviewData({
+      header: previewObj?.header,
+      details: previewObj?.details,
+    });
+    setShowPreview(true);
+  } catch (err) {
+    setPopupMessage("Failed to load preview data");
+    setPopupType("error");
+  }
+};
+
 const getExcelColumns = (mode, savedCols = [], groupBy = "service") => {
 
   const cols = getColumnsToUse(mode, savedCols);
@@ -1589,7 +1608,7 @@ const handleClear = async () => {
    // console.log("Print columns:", cols);
     openPrintWindow({
         content: generateTableHTML(cols),
-        userName: activeUser?.email || "User",
+        userName: activeUser?.name || "User",
         groupBy,
     });
     setColumns(cols); // Ensure columns are set for the print view
@@ -1766,7 +1785,7 @@ const finalRows = filtered.filter(row => {
             const res = await exportPdf({
                 rows: normalizedRows,
                 columns: cols,
-                userName: activeUser?.email || "User",
+                userName: activeUser?.name || "User",
 
                 // ✅ SEND BOTH TO BACKEND
                 moduleName: moduleTitle,
@@ -2058,7 +2077,7 @@ const getGroupKey = (row, groupBy = "service") => {
 
   const normalize = (v) =>
     String(v || "")
-      .replace(/^service\s*types?:?\s*/i, "") // removes "Service Types:"
+      .replace(/^product\s*types?:?\s*/i, "") // removes "Product Types:"
       .trim();
 
   if (groupBy === "terms") {
@@ -2069,10 +2088,10 @@ const getGroupKey = (row, groupBy = "service") => {
     );
   }
 
-  // DEFAULT → SERVICE TYPES
+  // DEFAULT → PRODUCT TYPES
   return normalize(
-    row.service_types?.value ||
-    row.service_types ||
+    row.product_types?.value ||
+    row.product_types ||
     "UNKNOWN"
   );
 };
@@ -3725,7 +3744,7 @@ const totalAmount = amount + vatAmount;
                             );
                           })}
 
-                         <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
+                      <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
 
   {editRowId === row.id ? (
 
@@ -3733,20 +3752,13 @@ const totalAmount = amount + vatAmount;
       {/* SAVE */}
       <button
         onClick={handleSaveEdit}
-        disabled={!!row.prf_generate}
-        className={`
+        className="
           px-3 py-1.5 text-sm rounded-md border transition
-          ${
-            row.prf_generate
-              ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-              : `
-                border-blue-300
-                bg-white
-                hover:bg-blue-100
-                hover:border-blue-500
-              `
-          }
-        `}
+          border-blue-300
+          bg-white
+          hover:bg-blue-100
+          hover:border-blue-500
+        "
       >
         Save
       </button>
@@ -3754,20 +3766,13 @@ const totalAmount = amount + vatAmount;
       {/* CANCEL EDIT */}
       <button
         onClick={handleCancelEdit}
-        disabled={!!row.prf_generate}
-        className={`
+        className="
           px-3 py-1.5 text-sm rounded-md border transition
-          ${
-            row.prf_generate
-              ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-              : `
-                border-red-300
-                bg-white
-                hover:bg-red-100
-                hover:border-red-500
-              `
-          }
-        `}
+          border-red-300
+          bg-white
+          hover:bg-red-100
+          hover:border-red-500
+        "
       >
         Cancel
       </button>
@@ -3778,24 +3783,31 @@ const totalAmount = amount + vatAmount;
           user={activeUser}
           permission="modify"
           onClick={() => handleUndoCancelRow(row)}
-          disabled={!!row.prf_generate}
-          className={`
+          className="
             px-3 py-1.5 text-sm rounded-md border transition
-            ${
-              row.prf_generate
-                ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-                : `
-                  border-gray-400
-                  bg-gray-100
-                  hover:bg-gray-200
-                  hover:border-gray-500
-                `
-            }
-          `}
+            border-gray-400
+            bg-gray-100
+            hover:bg-gray-200
+            hover:border-gray-500
+          "
         >
           Undo Cancel
         </PermissionButton>
       )}
+    </>
+
+  ) : row.prf_generate ? (
+
+    <>
+      {/* PREVIEW */}
+         {console.log("selected row", row)}
+     <button
+  
+  onClick={() => handlePreview(encodeURIComponent(row.prf_generate))}
+  className="btn btn-primary"
+>
+  Preview
+</button>
     </>
 
   ) : (
@@ -3805,10 +3817,7 @@ const totalAmount = amount + vatAmount;
       <PermissionButton
         user={activeUser}
         permission="modify"
-        disabled={!!row.prf_generate}
         onClick={() => {
-
-          if (row.prf_generate) return;
 
           setEditRowId(row.id);
 
@@ -3819,19 +3828,13 @@ const totalAmount = amount + vatAmount;
           setOriginalRow(row);
 
         }}
-        className={`
+        className="
           px-3 py-1.5 text-sm rounded-md border transition
-          ${
-            row.prf_generate
-              ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-              : `
-                border-blue-300
-                bg-white
-                hover:bg-blue-100
-                hover:border-blue-500
-              `
-          }
-        `}
+          border-blue-300
+          bg-white
+          hover:bg-blue-100
+          hover:border-blue-500
+        "
       >
         Edit
       </PermissionButton>
@@ -3841,27 +3844,16 @@ const totalAmount = amount + vatAmount;
         <PermissionButton
           user={activeUser}
           permission="delete"
-          disabled={!!row.prf_generate}
           onClick={() => {
-
-            if (row.prf_generate) return;
-
             handleCancelRow(row);
-
           }}
-          className={`
+          className="
             px-3 py-1.5 text-sm rounded-md border transition
-            ${
-              row.prf_generate
-                ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-                : `
-                  border-red-300
-                  bg-white
-                  hover:bg-red-100
-                  hover:border-red-500
-                `
-            }
-          `}
+            border-red-300
+            bg-white
+            hover:bg-red-100
+            hover:border-red-500
+          "
         >
           Cancel
         </PermissionButton>
@@ -3880,31 +3872,19 @@ const totalAmount = amount + vatAmount;
       <PermissionButton
         user={activeUser}
         permission="delete"
-        disabled={!!row.prf_generate}
         onClick={() => {
-
-          if (row.prf_generate) return;
-
           handleDelete(row);
-
         }}
-        className={`
+        className="
           px-3 py-1.5 text-sm rounded-md border transition
-          ${
-            row.prf_generate
-              ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-              : `
-                border-red-300
-                bg-white
-                hover:bg-red-100
-                hover:border-red-500
-              `
-          }
-        `}
+          border-red-300
+          bg-white
+          hover:bg-red-100
+          hover:border-red-500
+        "
       >
         Delete
       </PermissionButton>
-
     </>
 
   )}

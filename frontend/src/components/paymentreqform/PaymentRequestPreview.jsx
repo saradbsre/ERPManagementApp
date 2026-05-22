@@ -4,7 +4,7 @@ import { formatDateTime } from "../../utils/formatDateTime";
 import { formatDate } from "../../utils/formatDate";
 import { useEffect, useState, useRef } from "react";
 import JsBarcode from "jsbarcode";
-import { getMasterData, createPaymentRequest  } from "../../api/api";
+import { getMasterData, createPaymentRequest, incrementPRFExportCount  } from "../../api/api";
 export default function PaymentRequestPreview({ data, onBack }) {
  // console.log("PaymentRequestPreview data:", data);
   if (!data) {
@@ -18,11 +18,13 @@ export default function PaymentRequestPreview({ data, onBack }) {
   const { header, details } = data;
    console.log("Header:", header);
 //   console.log("Details:", details);
-  const activeUser = JSON.parse(localStorage.getItem("user"));
   const [creditCards, setCreditCards] = useState([]);
   const [company, setCompany] = useState([]);
   const [vendor, setVendor] = useState(null);
   const barcodeRef = useRef(null);
+  const activeUser = JSON.parse(localStorage.getItem("user"));
+  const activeUserEmail = activeUser?.email;
+  const activeUserName = activeUser?.name;
 
    useEffect(() => {
   if (details?.[0]?.prf_num && barcodeRef.current) {
@@ -105,6 +107,17 @@ function formatDecimal(num) {
   if (isNaN(num) || num === null) return "0.00";
   return Number(num).toFixed(2);
 }
+
+const handleExportPrf = async (prfNum) => {
+  try {
+    await incrementPRFExportCount(encodeURIComponent(prfNum), activeUserEmail); // pass the email!
+    setPopupMessage("Export count incremented successfully.");
+    setPopupType("success");
+  } catch (err) {
+    setPopupMessage("Failed to increment export count.");
+    setPopupType("error");
+  }
+};
 
 useEffect(() => {
    getMasterData("credit_card", activeUser.email).then(res => {
@@ -201,11 +214,11 @@ const expiryDate = header?.expiry_date ? formatDate(header.expiry_date) : "N/A";
     </p>
 
     <p className="text-[11px] text-gray-700">
-      {selectedCompany?.area || "Location"}, {selectedCompany?.emirate || "Emirate"}, {selectedCompany?.country || "Country"}, Tel {selectedCompany?.phn_number || "Phone Number"}, Email: {selectedCompany?.email || "Email"}
+      {selectedCompany?.area || ""}, {selectedCompany?.emirate || ""}, {selectedCompany?.country || "UAE"}, { selectedCompany?.phn_number ? `Tel ${selectedCompany?.phn_number || ""}` : ""},{selectedCompany?.email ? `Email: ${selectedCompany?.email || ""}` : ""}
     </p>
 
     <p className="text-[11px] text-gray-700 mb-2">
-      TRN : {selectedCompany?.trn || "100465394200003"}
+      TRN : {selectedCompany?.trn || ""}
     </p>
 
      <h1 className="font-bold text-[15px] uppercase">
@@ -215,7 +228,7 @@ const expiryDate = header?.expiry_date ? formatDate(header.expiry_date) : "N/A";
         {selectedVendor?.address || "Vendor Address"}
     </p>
       <p className="text-[11px] text-gray-700">
-       {selectedVendor?.country }, Tel {selectedVendor?.phone_number || "Vendor Phone Number"}, Email: {selectedVendor?.email }
+       {selectedVendor?.country || ""}, { selectedVendor?.phone_number ? `Tel ${selectedVendor?.phone_number || ""}` : ""},{selectedVendor?.email ? `Email: ${selectedVendor?.email || ""}` : ""}
     </p>
       <p className="text-[11px] text-gray-700">
         {selectedVendor?.website || "Vendor Address"}
@@ -694,7 +707,10 @@ const expiryDate = header?.expiry_date ? formatDate(header.expiry_date) : "N/A";
           </button>
 
           <button
-            onClick={() => window.print()}
+            onClick={() => {
+                window.print();
+                handleExportPrf(details?.[0]?.prf_num);
+            }}
             className="
               px-5 py-2
               bg-blue-600

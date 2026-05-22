@@ -13,7 +13,15 @@
   hours = hours % 12;
   hours = hours ? hours : 12;
 
-  const printedDate = `${day}/${month}/${year} ${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+  const printedDate = now.toLocaleString("en-GB", {
+  timeZone: "Asia/Dubai",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+});
 
 export const openPrintWindow = ({
   content,

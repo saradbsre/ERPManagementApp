@@ -385,3 +385,14 @@ export const createprf = (data,activeUserEmail, selectedRow) => {
     params: { activeUserEmail, selectedRow }
   });
 };
+
+export const getPreviewPRF = (prfNum) => {
+  return API.get(`/preview-prf/${prfNum}`);
+};
+
+export const incrementPRFExportCount = (prfNum, activeUserEmail) => {
+  return API.post(`/prf-export/${prfNum}`, {
+    success: true,
+    activeUserEmail
+  });
+};
