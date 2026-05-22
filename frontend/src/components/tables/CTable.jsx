@@ -2816,29 +2816,37 @@ onClick={handleCreate}
                       }
 
                             return (
-                              <td
-                                key={col.column_id}
-                                className={`px-4 py-2 ${getAlignClass(col.display_name)} whitespace-nowrap`}
-                              >
+                            <td
+  key={col.column_id}
+  className={`
+    px-4 py-2 whitespace-nowrap
+    ${getAlignClass(col.display_name)}
+    ${col.column_name === "company" ? "min-w-[450px]" : ""}
+  `}
+>
                                 <div className="relative">
 
                                 <input
                         autoComplete="off"
                         type={isNumericColumn(col) ? "number" : isDate ? "date" : "text"}
-                        className="
-                          w-full
-                          rounded-xl
-                          border border-gray-300
-                          bg-white
-                          px-3 py-2
-                          text-sm
-                          outline-none
-                          transition-all duration-200
+                         className={`
+    rounded-xl
+    border border-gray-300
+    bg-white
+    px-3 py-2
+    text-sm
+    outline-none
+    transition-all duration-200
+    focus:border-blue-500
+    focus:ring-4
+    focus:ring-blue-100
 
-                          focus:border-blue-500
-                          focus:ring-4
-                          focus:ring-blue-100
-                        "
+    ${
+      col.column_name === "company"
+        ? "w-[450px]"
+        : "w-full"
+    }
+  `}
                         value={
                           inputValues[col.column_name] ??
                           (
