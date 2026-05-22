@@ -16,7 +16,7 @@ export default function PaymentRequestPreview({ data, onBack }) {
   }
 
   const { header, details } = data;
-//   console.log("Header:", header);
+   console.log("Header:", header);
 //   console.log("Details:", details);
   const activeUser = JSON.parse(localStorage.getItem("user"));
   const [creditCards, setCreditCards] = useState([]);
@@ -164,7 +164,7 @@ const Total = Array.isArray(details)  ? details.reduce((sum, item) => sum + Numb
 const TotalVAT = Array.isArray(details)  ? details.reduce((sum, item) => sum + Number(item?.vat_amount || 0), 0)
   : 0;
 
-const expiryDate = details?.[0]?.doc_date ? formatDate(details[0].doc_date) : "N/A";
+const expiryDate = header?.expiry_date ? formatDate(header.expiry_date) : "N/A";
   return (
     <div className="bg-gray-200 min-h-screen py-10 px-4 overflow-auto">
 

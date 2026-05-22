@@ -443,7 +443,7 @@ const addMasterValue = async (masterName, value) => {
   const generateNextPrfNumber = async () => {
   // Option 1: If you have an API endpoint to get the latest PRF number:
   const res = await getLastPRFNumber(); // implement this API if needed
-  const latest = res.data?.lastPRFNumber || "IT/000325";
+  const latest = res.data?.lastPRFNumber || "IT/000334";
   console.log("Latest PRF from API:", latest);
   // Extract the numeric part and increment
   const match = latest.match(/IT\/(\d{6})/);
