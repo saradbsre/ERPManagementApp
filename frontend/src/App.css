@@ -138,3 +138,33 @@ input:checked + .slider:before {
     content: counter(page);
   }
 }
+
+@media print {
+
+  /* Force browser to print background colors */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Your gray backgrounds */
+  .bg-gray-100 {
+    background-color: #f3f4f6 !important;
+  }
+
+  .bg-gray-200 {
+    background-color: #e5e7eb !important;
+  }
+
+  .bg-\[\#f8fafc\] {
+    background-color: #f8fafc !important;
+  }
+
+  .bg-\[\#f1f5f9\] {
+    background-color: #f1f5f9 !important;
+  }
+
+  .bg-\[\#e5e7eb\] {
+    background-color: #e5e7eb !important;
+  }
+}

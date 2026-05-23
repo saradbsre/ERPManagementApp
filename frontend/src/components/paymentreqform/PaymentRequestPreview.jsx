@@ -22,7 +22,7 @@ const remarks = remarksList.join(", ");
 
 const header = data?.header?.[0] || data?.header || {};
 const details = data?.details || [];
-const paid_by = data?.paid_by || "";
+const paid_by = data?.paid_by || "SABAH";
 
 // console.log("Header:", header);
 //   console.log("Details:", details);

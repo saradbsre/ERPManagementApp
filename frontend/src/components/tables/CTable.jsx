@@ -819,16 +819,18 @@ useEffect(() => {
       ...prev,
       checked_by: workflow.checked_by || prev.checked_by,
       verified_by: workflow.verified_by || prev.verified_by,
+      verified_by_it: workflow.verified_by_it || prev.verified_by_it,
       signed_by: workflow.signed_by || prev.signed_by,
       approved_by: workflow.approved_by || prev.approved_by,
     }));
   }
 }, [workflow]);
 const handleGenerate = async () => {
-  const snapshot = [...modalItems]; // IMPORTANT
+
+  const snapshot = [...modalItems];
 
   const detailsArray = [];
-  
+
   for (const item of snapshot) {
 
     const payload = {
@@ -849,20 +851,39 @@ const handleGenerate = async () => {
       userid: activeUserEmail,
     };
 
-    await createprf(payload, activeUserEmail,selectedRow );
+    await createprf(payload, activeUserEmail, selectedRow);
 
     detailsArray.push(payload);
   }
 
-  setShowGenerateModal(false);
-  // console.log("selectedRow for header:", selectedRow);
+  // ✅ preview
   setPreviewData({
-   header: selectedRow,
+    header: selectedRow,
     details: detailsArray,
-    paidBy: form.paid_by,
+    paidBy: "SABAH",
   });
 
   setShowPreview(true);
+
+  // ✅ RESET EVERYTHING
+  setShowGenerateModal(false);
+
+  setModalItems([]);
+
+  setSelectedRow({});
+
+  setSelectedRowIds([]); // IMPORTANT
+
+  setForm({
+    paid_by: "",
+    prepared_by: "",
+    checked_by: "",
+    verified_by_it: "",
+    verified_by: "",
+    signed_by: "",
+    approved_by: "",
+  });
+
 };
 
 const handlePreview = async (prfNum) => {
@@ -2408,6 +2429,7 @@ return `
     total_amount: row.total_amount || "",
     isSelected: true
   })));
+  
   setShowGenerateModal(true);
 };
     return (
@@ -4669,7 +4691,7 @@ onClick={handleCreate}
 
         </div>
 
-        <button
+        {/* <button
            onClick={() =>
                 setModalItems([
                   ...modalItems,
@@ -4687,7 +4709,7 @@ onClick={handleCreate}
           className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
         >
           + Add Row
-        </button>
+        </button> */}
 
       </div>
 
@@ -4708,7 +4730,7 @@ onClick={handleCreate}
                 VAT Amount
               </th>
               <th className="p-3 border-b text-right">Total</th>
-              <th className="p-3 border-b text-center">Action</th>
+              {/* <th className="p-3 border-b text-center">Action</th> */}
 
             </tr>
 
@@ -4837,7 +4859,7 @@ onClick={handleCreate}
                 </td>
 
                 {/* ACTION */}
-                <td className="p-3 border-b text-center">
+                {/* <td className="p-3 border-b text-center">
 
                   <button
                     onClick={() => removeRow(i)}
@@ -4846,7 +4868,7 @@ onClick={handleCreate}
                     Delete
                   </button>
 
-                </td>
+                </td> */}
 
               </tr>
 
