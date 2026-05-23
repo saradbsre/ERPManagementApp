@@ -14,9 +14,17 @@ export default function PaymentRequestPreview({ data, onBack }) {
       </div>
     );
   }
+const remarksList = Array.isArray(data?.header)
+  ? data.header.map(h => h.remarks).filter(Boolean)
+  : [data?.header?.remarks].filter(Boolean);
 
-  const { header, details } = data;
-   console.log("Header:", header);
+const remarks = remarksList.join(", ");
+
+const header = data?.header?.[0] || data?.header || {};
+const details = data?.details || [];
+const paid_by = data?.paid_by || "";
+
+// console.log("Header:", header);
 //   console.log("Details:", details);
   const [creditCards, setCreditCards] = useState([]);
   const [company, setCompany] = useState([]);
@@ -29,7 +37,7 @@ export default function PaymentRequestPreview({ data, onBack }) {
    useEffect(() => {
   if (details?.[0]?.prf_num && barcodeRef.current) {
     const svg = barcodeRef.current;
-
+   // console.log("Generating barcode for PRF Number:", details[0].prf_num);
     // 🔥 IMPORTANT: clear old barcode
     while (svg.firstChild) {
       svg.removeChild(svg.firstChild);
@@ -37,11 +45,11 @@ export default function PaymentRequestPreview({ data, onBack }) {
 
     JsBarcode(svg, details[0].prf_num, {
       format: "CODE128",
-      height: 20,
+      height: 40,
       width: 1,
       fontSize: 9,
       margin: 2,
-      displayValue: false
+      displayValue: true
     });
   }
 }, [details?.[0]?.prf_num]);
@@ -148,6 +156,7 @@ const selectedVendor =
     : null;
 const isVatApplicable = selectedVendor ? selectedVendor.is_vat : false;
 //console.log("Selected Vendor:", selectedVendor, "VAT Applicable:", isVatApplicable);
+//console.log("Selected header:", header);
 const selectedCompany =
   Array.isArray(company) && header.company
     ? company.find(
@@ -199,479 +208,615 @@ const expiryDate = header?.expiry_date ? formatDate(header.expiry_date) : "N/A";
         "
       >
 
-        {/* ================= HEADER ================= */}
-        <div className="mb-3">
-
-  {/* COMPANY DETAILS */}
-  <div className="leading-5 mb-4">
-
+      <div className="flex justify-between items-start w-full ">
+  {/* Left: Company & Vendor Details */}
+  <div className="leading-4">
     <h1 className="font-bold text-[15px] uppercase">
       {header.company || "Company Name"}
     </h1>
-
     <p className="text-[11px] text-gray-700">
-        {selectedCompany?.address || "Company Address"}
+      {selectedCompany?.address || "Company Address"}
     </p>
-
     <p className="text-[11px] text-gray-700">
-      {selectedCompany?.area || ""}, {selectedCompany?.emirate || ""}, {selectedCompany?.country || "UAE"}, { selectedCompany?.phn_number ? `Tel ${selectedCompany?.phn_number || ""}` : ""},{selectedCompany?.email ? `Email: ${selectedCompany?.email || ""}` : ""}
+      {selectedCompany?.area || ""}, {selectedCompany?.emirate || ""}, {selectedCompany?.country || "UAE"}
+      {selectedCompany?.phn_number ? ` Tel ${selectedCompany?.phn_number}` : ""}
+      {selectedCompany?.email ? `, Email: ${selectedCompany?.email}` : ""}
     </p>
-
     <p className="text-[11px] text-gray-700 mb-2">
       TRN : {selectedCompany?.trn || ""}
     </p>
-
-     <h1 className="font-bold text-[15px] uppercase">
-      {selectedVendor?.vendor_name || "Vendor Name"}
-    </h1>
-     <p className="text-[11px] text-gray-700">
-        {selectedVendor?.address || "Vendor Address"}
-    </p>
-      <p className="text-[11px] text-gray-700">
-       {selectedVendor?.country || ""}, { selectedVendor?.phone_number ? `Tel ${selectedVendor?.phone_number || ""}` : ""},{selectedVendor?.email ? `Email: ${selectedVendor?.email || ""}` : ""}
-    </p>
-      <p className="text-[11px] text-gray-700">
-        {selectedVendor?.website || "Vendor Address"}
-    </p>
+   
   </div>
-
-  {/* TITLE */}
-<div className="flex justify-between items-center w-full">
-
-  {/* BARCODE */}
-  <div>
+  {/* Right: Barcode */}
+ 
+  <div className="pl-8 flex items-start">
     <svg ref={barcodeRef}></svg>
   </div>
+</div>
+<div className="w-full border-t border-gray-500 mb-3"></div>
+
+<div className=" items-center w-full mb-5">
 
   {/* TITLE SECTION */}
-  <div className="text-right leading-tight">
+  <div className="text-center leading-tight">
 
-    <h2 className="font-bold text-[20px] tracking-wide">
+    <h2 className="font-bold text-[20px] text-center">
       PAYMENT REQUEST FORM
     </h2>
-
-    {/* ADDED LINE */}
-    {/* <p className="text-[10px] text-gray-500 mt-1">
-      GENERATED
-    </p> */}
 
   </div>
 
 </div>
+
+  {/* COMPANY DETAILS */}
+<div className="grid grid-cols-2 border border-gray-400 mb-4">
+
+  {/* LEFT COLUMN */}
+  <div className="p-3 leading-4 border-r border-gray-300">
+
+    <h2 className="font-bold text-[12px] uppercase mb-1">
+      PAYEE / SUPPLIER
+    </h2>
+
+    <h1 className="font-bold text-[13px]">
+      {selectedVendor?.vendor_name || "Vendor Name"}
+      {isVatApplicable ? " (VAT Included)" : ""}
+    </h1>
+
+    <p className="text-[12px] text-gray-700">
+      {selectedVendor?.address || "Vendor Address"}
+    </p>
+
+    <p className="text-[12px] text-gray-700">
+      Email: {selectedVendor?.email || "-"}{" "}
+      {selectedVendor?.website
+        ? `| Website: ${selectedVendor.website}`
+        : ""}
+    </p>
+
+  </div>
+
+  {/* RIGHT COLUMN */}
+  <div className="p-3 leading-4">
+
+    <h2 className="font-bold text-[12px] uppercase mb-1">
+      REQUEST SUMMARY
+    </h2>
+
+    <h1 className="font-bold text-[13px]">
+      {header.term} Subscription Fees
+    </h1>
+
+    <p className="text-[12px] text-gray-700">
+      Subscription expiry on {expiryDate}
+    </p>
+
+    <p className="text-[12px] text-gray-700">
+      Paid by {paid_by} using credit card ending with ****
+      {(() => {
+        let paidBy = (paid_by || "")
+          .toString()
+          .trim()
+          .toUpperCase();
+
+        const card = creditCards.find(
+          c =>
+            (c.card_holder_name || "")
+              .toString()
+              .trim()
+              .toUpperCase() === paidBy
+        );
+
+        return card?.card_number || card?.card_4number || "";
+      })()}
+    </p>
+
+  </div>
+
+</div>
+
+
+
+
+        <div className="mb-3">
+
+
+
+  {/* TITLE */}
+
 
 </div>
 
         {/* ================= TOP INFO TABLE ================= */}
+{/* ================= REQUEST DETAILS ================= */}
+
 <table className="w-full border border-black border-collapse mb-5 text-[10px]">
+
+  {/* HEADER */}
+  <thead>
+    <tr className="bg-gray-200 text-black">
+      <th
+        colSpan={4}
+        className="text-left px-2 py-1 border border-black text-[14px] font-bold"
+      >
+        REQUEST DETAILS
+      </th>
+    </tr>
+  </thead>
 
   <tbody>
 
     {/* ROW 1 */}
-    <tr>
+    <tr className="bg-[#f8fafc]">
 
-      {/* LEFT COLUMN */}
-      <td className="border border-black p-2 w-[34%] align-top">
-
-         <div className="grid grid-cols-[80px_18px_1fr] gap-y-1">
-
-          <span className="font-normal">DATE</span>
-          <span>:</span>
-          <span className="font-semibold">
-            {header.created_at ? formatDate(header.created_at) : ""}
-          </span>
-
-        </div>
-
+      {/* DATE */}
+      <td className="border border-gray-800 px-2 py-1 w-[18%] font-bold">
+        DATE
       </td>
-      
 
-      {/* RIGHT COLUMN */}
-      <td className="border border-black p-2 align-top">
+      <td className="border border-gray-800 px-2 py-1 w-[32%] font-semibold">
+        {header.created_at ? formatDate(header.created_at) : ""}
+      </td>
 
-        {/* PRF + DATE */}
-        <div className="flex justify-between">
+      {/* CURRENCY */}
+      <td className="border border-gray-800 px-2 py-1 w-[18%] font-bold">
+        CURRENCY
+      </td>
 
-          <div className="grid grid-cols-[120px_10px_1fr]">
-            <span className="font-normal">PRF NUMBER</span>
-            <span>:</span>
-            <span className="font-semibold">
-               
-              {details?.[0]?.prf_num}
-            </span>
-          </div>
-           </div>
- </td>
+      <td className="border border-gray-800 px-2 py-1 font-semibold">
+        {header.currency}
+      </td>
 
     </tr>
-     <tr>
 
-      {/* LEFT COLUMN */}
-      <td className="border border-black p-2 w-[28%] align-top">
-
-         <div className="grid grid-cols-[80px_18px_1fr] gap-y-1">
-
-          <span className="font-normal">PAID TO</span>
-          <span>:</span>
-          <span className="font-semibold">
-            {header.vendors} {isVatApplicable ? "(VAT Included)" : ""}
-          </span>
-
-        </div>
-
-      </td>   
-
-      {/* RIGHT COLUMN */}
-      <td className="border border-black p-2 align-top">
-        {/* DIVISION */}
-        <div className="grid grid-cols-[120px_10px_1fr] mt-1">
-          <span className="font-normal">DEPARTMENT</span>
-          <span>:</span>
-          <span className="font-semibold">
-            {header.department}
-          </span>
-        </div>
-      </td>
-    </tr>
-      <tr>
-      {/* LEFT COLUMN */}
-      <td className="border border-black p-2 w-[28%] align-top">
-        <div className="grid grid-cols-[80px_18px_1fr] gap-y-1">
-          <span className="font-normal">CURRENCY</span>
-          <span>:</span>
-          <span className="font-semibold">
-            {header.currency}
-          </span>
-        </div>
-      </td>
-      {/* RIGHT COLUMN */}
-    <td className="border border-black p-2">
-        {/* DESCRIPTION */}
-        <div className="grid grid-cols-[120px_10px_1fr] mt-1">
-          <span className="font-normal">DESCRIPTION</span>
-          <span>:</span>
-          <span className="font-semibold">
-            {header.term} {header.product_types} fees ( expiry on {expiryDate} )
-          </span>
-        </div>
-      </td>
-    </tr>
     {/* ROW 2 */}
-    <tr>
-      <td className="border border-black p-2 w-[28%] align-top">
-        <div className="grid grid-cols-[80px_18px_1fr] gap-y-1">
-          <span className="font-normal">PAYMENT TYPE</span>
-          <span>:</span>
-          <span className="font-semibold">
-            {header.mode || "ONLINE"}
-          </span>
-        </div>
+    <tr className="bg-[#f8fafc]">
+
+      {/* PRF */}
+      <td className="border border-gray-800 px-2 py-1 font-bold">
+        PRF NUMBER
       </td>
-      <td className="border border-black p-2">
-        {/* PAYMENT MODE */}
-        <div className="grid grid-cols-[120px_10px_1fr] mt-1">
-          <span className="font-normal">PAYMENT METHOD</span>
-          <span>:</span>
-          <span className="font-semibold">
-            {header.payment_mode || "CREDIT CARD"}
-          </span>
-        </div>
+
+      <td className="border border-gray-800 px-2 py-1 font-semibold">
+        {details?.[0]?.prf_num}
       </td>
+
+      {/* PAYMENT TYPE */}
+      <td className="border border-gray-800 px-2 py-1 font-bold">
+        PAYMENT TYPE
+      </td>
+
+      <td className="border border-gray-800 px-2 py-1 font-semibold">
+        {header.mode || "ONLINE"}
+      </td>
+
     </tr>
+
+    {/* ROW 3 */}
+    <tr className="bg-[#f8fafc]">
+
+      {/* DEPARTMENT */}
+      <td className="border border-gray-800 px-2 py-1 font-bold">
+        DEPARTMENT
+      </td>
+
+      <td className="border border-gray-800 px-2 py-1 font-semibold">
+        {header.department}
+      </td>
+
+      {/* PAYMENT METHOD */}
+      <td className="border border-gray-800 px-2 py-1 font-bold">
+        PAYMENT METHOD
+      </td>
+
+      <td className="border border-gray-800 px-2 py-1 font-semibold">
+        {header.payment_mode || "CREDIT CARD"}
+      </td>
+
+    </tr>
+
+    {/* ROW 4 */}
+    <tr className="bg-[#f8fafc]">
+
+      {/* COST CENTER */}
+      <td className="border border-gray-800 px-2 py-1 font-bold">
+        COST CENTER
+      </td>
+
+      <td
+        colSpan={3}
+        className="border border-gray-800 px-2 py-1 font-semibold"
+      >
+        {header.cost_center || "____________________________"}
+      </td>
+
+    </tr>
+
   </tbody>
 
 </table>
 
-        {/* ================= DETAILS TABLE ================= */}
-        <table className="w-full border border-black border-collapse mb-5 text-[10px]">
 
-          <thead>
+{/* ================= DESCRIPTION ================= */}
 
-            <tr className="bg-gray-100">
+<table className="w-full border border-black border-collapse mb-5 text-[10px]">
 
-              <th className="border border-black p-2 w-[5%]">
-                S/N
-              </th>
+  <tbody>
 
-              <th className="border border-black p-2 w-[15%]">
-                INVOICE / PO DOC DATE
-              </th>
+    <tr>
 
-              <th className="border border-black p-2 w-[15%]">
-                INVOICE / PO DOC NO
-              </th>
+      <td className="border border-gray-800 p-2 bg-gray-200 font-bold w-[18%]">
+        DESCRIPTION
+      </td>
 
-              <th className="border border-black p-2">
-                PRODUCT DESCRIPTION
-              </th>
+      <td className="border border-gray-800 p-2 bg-gray-100 font-semibold">
+        {header.term} Subscription fees
+        ( expiry on {expiryDate} )
+      </td>
 
-              <th className="border border-black p-2 w-[10%] text-right">
-                AMOUNT
-              </th>
-              <th className="border border-black p-2 w-[13%] text-right">
-                VAT AMOUNT
-              </th>
-              <th className="border border-black p-2 w-[14%] text-right">
-                TOTAL AMOUNT
-              </th>
+    </tr>
 
-            </tr>
+  </tbody>
 
-          </thead>
+</table>
 
-          <tbody>
 
-          <tr className="text-center align-top h-[200px]">
+{/* ================= DETAILS TABLE ================= */}
 
-    {/* S/N */}
-    <td className="border border-black p-2 align-top">
-      {details?.map((_, i) => (
-        <div key={i} className="py-1">
-          {i + 1}.
-        </div>
-      ))}
-    </td>
+<table className="w-full border border-black-800 border-collapse mb-2 text-[10px]">
 
-    {/* DATE */}
-    <td className="border border-black p-2 align-top text-center">
-      {details?.map((item, i) => (
-        <div key={i} className="py-1">
-          {item.doc_date ? formatDate(item.doc_date) : ""}
-        </div>
-      ))}
-    </td>
+  {/* TABLE HEADER */}
+  <thead>
 
-    {/* DOC NO */}
-    <td className="border border-black p-2 align-top text-center">
-      {details?.map((item, i) => (
-        <div key={i} className="py-1">
-          {item.doc_no}
-        </div>
-      ))}
-    </td>
+    {/* TITLE */}
+    <tr className="bg-gray-200 text-black">
+      <th
+        colSpan={7}
+        className="text-left px-2 py-1 border border-gray-800 text-[14px] font-bold"
+      >
+        INVOICE / PAYMENT PARTICULARS
+      </th>
+    </tr>
 
-    {/* PRODUCT */}
-    <td className="border border-black p-2 align-top text-center">
-      {details?.map((item, i) => (
-        <div key={i} className="py-1">
-          {item.product}
-        </div>
-      ))}
-    </td>
+    {/* COLUMN HEADERS */}
+    <tr className="bg-gray-200 text-black">
 
-    {/* AMOUNT */}
-    <td className="border border-black p-2 align-top text-right">
-   {details?.map((item, i) => {
+      <th className="border border-gray-800 px-2 py-1 w-[5%]">
+        S/N
+      </th>
 
-  const hasHeader = item.doc_date || item.doc_no;
+      <th className="border border-gray-800 px-2 py-1 w-[15%]">
+        INVOICE / PO DOC DATE
+      </th>
 
-  return (
-    <div key={i} className="py-1">
-      {hasHeader
-        ? `${header.currency} ${formatDecimal(item.amount ?? 0)}`
-        : ""
-      }
-    </div>
-  );
-})}
-    </td>
+      <th className="border border-gray-800 px-2 py-1 w-[18%]">
+        INVOICE / PO DOC NO
+      </th>
 
-    {/* VAT */}
-    <td className="border border-black p-2 align-top text-right">
- {details?.map((item, i) => {
+      <th className="border border-gray-800 px-2 py-1">
+        PRODUCT DESCRIPTION
+      </th>
 
-  const hasHeader = item.doc_date || item.doc_no;
+      <th className="border border-gray-800 px-2 py-1 w-[12%] text-right">
+        AMOUNT
+      </th>
 
-  return (
-    <div key={i} className="py-1">
-      {hasHeader
-        ? `${header.currency} ${formatDecimal(item.vat_amount ?? 0)}`
-        : ""
-      }
-    </div>
-  );
-})}
-    </td>
+      <th className="border border-gray-800 px-2 py-1 w-[12%] text-right">
+        VAT AMOUNT
+      </th>
 
-    {/* TOTAL */}
-    <td className="border border-black p-2 align-top text-right">
-  {details?.map((item, i) => {
+      <th className="border border-gray-800 px-2 py-1 w-[14%] text-right">
+        TOTAL AMOUNT
+      </th>
 
-  const hasHeader = item.doc_date || item.doc_no;
+    </tr>
 
-  return (
-    <div key={i} className="py-1">
-      {hasHeader
-        ? `${header.currency} ${formatDecimal(item.total_amount ?? 0)}`
-        : ""
-      }
-    </div>
-  );
-})}
-    </td>
+  </thead>
 
-  </tr>
+  <tbody>
 
-         
+    {/* DATA ROW */}
+    <tr className="text-center align-top h-[120px] bg-[#f8fafc] border border-black-800">
 
-            {/* TOTAL */}
-            <tr >
+      {/* S/N */}
+      <td className="border border-gray-800 p-2 align-top">
+        {details?.map((_, i) => (
+          <div key={i} className="py-1">
+            {i + 1}.
+          </div>
+        ))}
+      </td>
 
-                 <td
-                colSpan={4}
-                 className="
-                  border border-black
-                  p-2
-                  font-bold
-                  text-left
-                "
-              >
-                TOTAL
-              </td>
+      {/* DATE */}
+      <td className="border border-gray-800 p-2 align-top">
+        {details?.map((item, i) => (
+          <div key={i} className="py-1">
+            {item.doc_date
+              ? formatDate(item.doc_date)
+              : ""}
+          </div>
+        ))}
+      </td>
 
-              <td
-                colSpan={1}
-                className="
-                  border border-black
-                  p-2
-                  font-bold
-                  text-right
-                "
-              >
-              {header.currency} {formatDecimal(Total)}
-              </td>
-               <td
-                colSpan={1}
-                 className="
-                  border border-black
-                  p-2
-                  font-bold
-                  text-right
-                "
-              >
-                {header.currency} {formatDecimal(TotalVAT)}
-              </td>
+      {/* DOC NO */}
+      <td className="border border-gray-800 p-2 align-top">
+        {details?.map((item, i) => (
+          <div key={i} className="py-1">
+            {item.doc_no}
+          </div>
+        ))}
+      </td>
 
-              <td className="border border-black p-2 text-right font-bold">
-                {header.currency} {formatDecimal(grandTotal)}
-              </td>
+      {/* PRODUCT */}
+      <td className="border border-gray-800 p-2 align-top text-center">
+        {details?.map((item, i) => (
+          <div key={i} className="py-1">
+            {item.product}
+          </div>
+        ))}
+      </td>
 
-            </tr>
-             <tr >
+      {/* AMOUNT */}
+      <td className="border border-gray-800 p-2 align-top text-right">
+        {details?.map((item, i) => (
+          <div key={i} className="py-1">
+            {header.currency}{" "}
+            {formatDecimal(item.amount ?? 0)}
+          </div>
+        ))}
+      </td>
 
-              <td
-                colSpan={7}
-                className="
-                  border border-black
-                  p-2
-                  font-bold
-                  text-left
-                "
-              >
-                TOTAL AMOUNT IN WORDS - {numberToWords(grandTotal)} ONLY
-              </td>
+      {/* VAT */}
+      <td className="border border-gray-800 p-2 align-top text-right">
+        {details?.map((item, i) => (
+          <div key={i} className="py-1">
+            {header.currency}{" "}
+            {formatDecimal(item.vat_amount ?? 0)}
+          </div>
+        ))}
+      </td>
 
-              {/* <td className="border border-black p-2 text-right font-bold">
-                {header.currency} {formatDecimal(grandTotal)}
-              </td> */}
+      {/* TOTAL */}
+      <td className="border border-gray-800 p-2 align-top text-right">
+        {details?.map((item, i) => (
+          <div key={i} className="py-1">
+            {header.currency}{" "}
+            {formatDecimal(item.total_amount ?? 0)}
+          </div>
+        ))}
+      </td>
 
-            </tr>
-            {/* PAID BY */}
-            <tr>
+    </tr>
 
-              <td colSpan={7} className="border border-black p-2 font-bold text-left">
-               PAID BY  {details?.[0]?.paid_by} using CREDIT CARD ending with **** 
-               {(() => {
-                 // Fix for SABAH/SABHA typo: try both, or use a mapping if needed
-                 let paidBy = (details?.[0]?.paid_by || "").toString().trim().toUpperCase();
-                 // Optionally, you can add a mapping or fuzzy match here
-                 const card = creditCards.find(
-                   c => (c.card_holder_name || "").toString().trim().toUpperCase() === paidBy
-                 );
-                 //console.log("Matching card for paid_by:", paidBy, card);
-                 const last4 = card?.card_number || card?.card_4number;
-                 return  last4 ;
-               })()}
-              </td>
-              </tr>
+    {/* TOTAL ROW */}
+    <tr className="bg-[#e5e7eb]">
 
-          </tbody>
+      <td
+        colSpan={4}
+        className="border border-gray-800 p-2 font-bold text-center"
+      >
+        TOTAL
+      </td>
 
-        </table>
+      <td className="border border-gray-800 p-2 text-right font-bold">
+        {header.currency} {formatDecimal(Total)}
+      </td>
+
+      <td className="border border-gray-800 p-2 text-right font-bold">
+        {header.currency} {formatDecimal(TotalVAT)}
+      </td>
+
+      <td className="border border-gray-800 p-2 text-right font-bold text-[12px]">
+        {header.currency} {formatDecimal(grandTotal)}
+      </td>
+
+    </tr>
+
+    {/* AMOUNT IN WORDS */}
+    <tr className="bg-[#f1f5f9]">
+
+      <td
+        colSpan={3}
+        className="border border-gray-800 p-2 font-bold"
+      >
+        TOTAL AMOUNT IN WORDS
+      </td>
+
+      <td
+        colSpan={4}
+        className="border border-gray-800 p-2 font-bold"
+      >
+        {numberToWords(grandTotal)} ONLY
+      </td>
+
+    </tr>
+
+
+  </tbody>
+
+</table>
 
    
 
-        {/* ================= SIGNATURE AREA ================= */}
-        {/* <div className="text-right font-bold mb-4 text-[15px] uppercase">
-          FOR {header.division}
-        </div> */}
+{/* ================= ADDITIONAL DETAILS ================= */}
 
-        <table className="w-full border border-black border-collapse text-center text-[10px]">
+<table className="w-full border border-gray-800 border-collapse mb-5 text-[10px]">
 
-          <thead>
+  {/* HEADER */}
+  <thead>
 
-            <tr className="bg-gray-100 text-[10px]">
+    <tr className="bg-gray-200 text-black">
 
-              <th className="border border-black p-2">
-                PREPARED BY
-              </th>
+      <th
+        colSpan={2}
+        className="text-left px-2 py-1 border border-gray-800 text-[14px] font-bold"
+      >
+        ADDITIONAL DETAILS
+      </th>
 
-              <th className="border border-black p-2">
-                CHECKED BY
-              </th>
+    </tr>
 
-              <th className="border border-black p-2">
-                VERIFIED / VALIDATED BY
-              </th>
+  </thead>
 
-              <th className="border border-black p-2">
-                SIGNED BY
-              </th>
+  <tbody>
 
-              <th className="border border-black p-2">
-                APPROVED BY
-              </th>
+    <tr className="bg-[#f8fafc]">
 
-            </tr>
+      <td className="border border-gray-800 px-2 py-1 font-bold w-[18%]">
+        REMARKS
+      </td>
 
-          </thead>
+      <td className="border border-gray-800 px-2 py-1 font-semibold">
+        {remarks || " - "}
+      </td>
 
-          <tbody>
+    </tr>
 
-            <tr className="h-[120px] align-bottom">
+  </tbody>
 
-              <td className="border border-black p-3 font-semibold">
-                <div>{details?.[0]?.prepared_by}</div>
-                <div className="">IT DEPARTMENT</div>
-              </td>
+</table>
 
-              <td className="border border-black p-3 font-semibold">
-                <div>{details?.[0]?.checked_by}</div>
-                <div>IT DEPARTMENT</div>
-              </td>
 
-              <td className="border border-black p-3 font-semibold">
-                <div>{details?.[0]?.verified_by}</div>
-                <div>ACCOUNTS</div>
-              </td>
+{/* ================= APPROVALS ================= */}
 
-              <td className="border border-black p-3 font-semibold">
-                <div>{details?.[0]?.signed_by}</div>
-                <div>FINANCE MANAGER</div>
-              </td>
+<table className="w-full table-fixed border border-gray-800 border-collapse text-center text-[10px]">
 
-              <td className="border border-black p-3 font-semibold">
-                <div>{details?.[0]?.approved_by}</div>
-                <div>FOUNDER & CEO</div>
-              </td>
+  {/* HEADER */}
+  <thead>
 
-            </tr>
+    {/* TITLE */}
+    <tr className="bg-gray-200 text-black">
 
-          </tbody>
+      <th
+        colSpan={6}
+        className="text-left px-2 py-1 border border-gray-800 text-[14px] font-bold"
+      >
+        APPROVALS
+      </th>
 
-        </table>
+    </tr>
+
+    {/* COLUMN HEADERS */}
+    <tr className="bg-gray-200 text-black text-[10px]">
+
+      <th className="border border-gray-800 px-2 py-1">
+        PREPARED BY
+      </th>
+
+      <th className="w-1/6 border border-gray-800 px-2 py-1">
+        CHECKED BY
+      </th>
+
+      <th className="w-1/6 border border-gray-800 px-2 py-1">
+        VERIFIED BY
+      </th>
+
+      <th className="w-1/6 border border-gray-800 px-2 py-1">
+        VERIFIED BY
+      </th>
+
+      <th className="w-1/6 border border-gray-800 px-2 py-1">
+        SIGNED BY
+      </th>
+
+      <th className="w-1/6 border border-gray-800 px-2 py-1">
+        APPROVED BY
+      </th>
+
+    </tr>
+
+  </thead>
+
+  <tbody>
+
+    <tr className="h-[130px] align-bottom bg-[#f8fafc]">
+
+      {/* PREPARED */}
+      <td className="border border-gray-800 px-2 py-1 font-semibold">
+
+        <div>
+          {details?.[0]?.prepared_by}
+        </div>
+
+        <div className="mt-2 text-[9px] text-gray-600">
+          IT DEPARTMENT
+        </div>
+
+      </td>
+
+      {/* CHECKED */}
+      <td className="border border-gray-800 px-2 py-1 font-semibold">
+
+        <div>
+          {details?.[0]?.checked_by}
+        </div>
+
+        <div className="mt-2 text-[9px] text-gray-600">
+          OPERATIONS
+        </div>
+
+      </td>
+
+      {/* VERIFIED */}
+      <td className="border border-gray-800 px-2 py-1 font-semibold">
+
+        <div>
+          {details?.[0]?.verified_by_it}
+        </div>
+
+        <div className="mt-2 text-[9px] text-gray-600">
+          IT DEPARTMENT
+        </div>
+
+      </td>
+
+      {/* VERIFIED */}
+      <td className="border border-gray-800 px-2 py-1 font-semibold">
+
+        <div>
+          {details?.[0]?.verified_by}
+        </div>
+
+        <div className="mt-2 text-[9px] text-gray-600">
+          ACCOUNTS
+        </div>
+
+      </td>
+
+      {/* SIGNED */}
+      <td className="border border-gray-800 px-2 py-1 font-semibold">
+
+        <div>
+          {details?.[0]?.signed_by}
+        </div>
+
+        <div className="mt-2 text-[9px] text-gray-600">
+          FINANCE MANAGER
+        </div>
+
+      </td>
+
+      {/* APPROVED */}
+      <td className="w-1/6 border border-gray-800 px-2 py-1 font-semibold">
+
+        <div>
+          {details?.[0]?.approved_by}
+        </div>
+
+        <div className="mt-2 text-[9px] text-gray-600">
+          FOUNDER & CEO
+        </div>
+
+      </td>
+
+    </tr>
+
+  </tbody>
+
+</table>
 
         <table
-  className="w-full mt-20"
+  className="w-full mt-8"
   style={{
     borderCollapse: "collapse",
     border: "none",

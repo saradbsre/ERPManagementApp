@@ -36,7 +36,8 @@ const masterTableConfig = {
       { key: "product", label: "Product Name", data_type: "string" },
       { key: "vendor", label: "Vendor", data_type: "string" },
       { key: "services", label: "Product Type", data_type: "string" },
-      // { key: "is_vat", label: "VAT Applicable", data_type: "boolean" },
+      { key: "approved", label: "Approved By", data_type: "boolean" },
+      { key: "is_vat", label: "VAT Applicable", data_type: "boolean" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
   },
@@ -119,6 +120,14 @@ const masterTableConfig = {
     displayName: "Department Master",
     columns: [
       { key: "department_name", label: "Department Name", data_type: "string" },
+      { key: "description", label: "Description", data_type: "string" },
+      { key: "is_active", label: "Active Status", data_type: "boolean" },
+    ]
+  },
+   division: {
+    displayName: "Division Master",
+    columns: [
+      { key: "division_name", label: "Division Name", data_type: "string" },
       { key: "description", label: "Description", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]

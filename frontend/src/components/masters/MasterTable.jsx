@@ -431,7 +431,7 @@ const handleCancelEdit = () => {
   setEditRow({});
 };
 
-const sortedRows = [...rows].sort((a, b) => {
+const sortedRows = [...filteredRows].sort((a, b) => {
   if (!sortConfig.key) return 0;
 
   let aValue = a[sortConfig.key];

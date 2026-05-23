@@ -108,6 +108,76 @@ useEffect(() => {
   };
 }, [user, setUser, navigate]);
 
+// useEffect(() => {
+
+//   if (!user) return;
+
+//   // helper to read cookies
+//   const getCookie = (name) => {
+
+//     const value = `; ${document.cookie}`;
+//     const parts = value.split(`; ${name}=`);
+
+//     if (parts.length === 2) {
+//       return parts.pop().split(";").shift();
+//     }
+
+//     return null;
+//   };
+
+//   const checkSession = async () => {
+
+//     const accessToken = getCookie("accessToken");
+//     const sessionId = getCookie("session_id");
+
+//     console.log("Checking session cookies:", {
+//       accessToken,
+//       sessionId
+//     });
+
+//     // logout if cookies missing
+//     if (!accessToken || !sessionId) {
+
+//       try {
+
+//         setInactiveMsg(
+//           "Your session has expired or you have been logged out from this session. Redirecting to login..."
+//         );
+
+//        // await logOut();
+
+//       } catch (err) {
+
+//         console.error("Logout failed:", err);
+
+//       } finally {
+
+//         setTimeout(() => {
+
+//          // setUser(null);
+
+//         //   localStorage.removeItem("user");
+
+//         //   navigate("/", { replace: true });
+
+//         }, 1500);
+
+//       }
+//     }
+//   };
+
+//   // initial check
+//   checkSession();
+
+//   // check every 1 minute
+//   const interval = setInterval(() => {
+//     checkSession();
+//   }, 60000);
+
+//   return () => clearInterval(interval);
+
+// }, [user, navigate, setUser]);
+
   return (
     <>
 

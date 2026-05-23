@@ -3,7 +3,6 @@ export const isNumericColumn = (key = "") => {
 
   return (
     k.includes("amount") ||
-    k.includes("cost") ||
     k.includes("price") ||
     k.includes("total") ||
     k.includes("amt") 

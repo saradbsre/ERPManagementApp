@@ -20,10 +20,8 @@ import ConfirmModal from "../ConfirmationPopups";
 import PrintableTable from "../PrintableTable";
 import ValidatePopups from "../Validatepopups";
 import PaymentRequestPreview from "../paymentreqform/PaymentRequestPreview"
-import {
-  DndContext,
-  closestCenter
-} from "@dnd-kit/core";
+import { DndContext, closestCenter } from "@dnd-kit/core";
+import mainTableConfig from "../../utils/mainTableConfig";
 
 import {
   arrayMove,
@@ -107,6 +105,25 @@ function SortableColumnItem({ col, checked, toggleTempColumn}) {
   );
 }
 
+function calculateRowTotals({ amount, currency, service_provider_id }) {
+  const provider = serviceProviders.find(p => p.id === service_provider_id);
+  const isVat = provider?.is_vat;
+  const amt = Number(amount) || 0;
+  const vat = isVat ? (amt * vatPercent) / 100 : 0;
+  const total = amt + vat;
+
+  // Find currency value (exchange rate)
+  const currencyObj = currencies.find(c => c.code === currency);
+  const currencyValue = currencyObj ? Number(currencyObj.value) : 1;
+  const totalAed = total * currencyValue;
+
+  return {
+    vat_amount: vat.toFixed(2),
+    total_amount: total.toFixed(2),
+    total_amount_aed: totalAed.toFixed(2),
+  };
+}
+
 
 export default function DynamicTablePage() {
     const { id } = useParams();
@@ -181,10 +198,10 @@ export default function DynamicTablePage() {
     const [workflow, setWorkflow] = useState({});
     const [availableProducts, setAvailableProducts] = useState([]);
     const [availableServices, setAvailableServices] = useState([]);
-    const [sortConfig, setSortConfig] = useState({
-      key: null,
-      direction: "asc",
-    });
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc", });
+    const configOrder = mainTableConfig[module.module_name];
+    const [selectedRowIds, setSelectedRowIds] = useState([]);
+    const tableContainerRef = useRef(null);
     const [form, setForm] = useState({
       paid_by: "",
       prepared_by: "",
@@ -194,9 +211,15 @@ export default function DynamicTablePage() {
       approved_by: ""
     });
     const removeRow = (index) => {
-  setModalItems((prev) => prev.filter((_, i) => i !== index));
-};
-
+      setModalItems((prev) => prev.filter((_, i) => i !== index));
+    };
+    
+    let orderedColumns = columns;
+if (configOrder) {
+  orderedColumns = [...columns].sort(
+    (a, b) => configOrder.indexOf(a.column_name) - configOrder.indexOf(b.column_name)
+  );
+}
     useEffect(() => {
       if (!columns.length) return;
 
@@ -212,7 +235,7 @@ export default function DynamicTablePage() {
       const result = Array.isArray(res.data) ? res.data : [];
       //console.log("Raw Service Providers:", result);
       setServiceProviders(result);
-      console.log("Service Providers:", result);
+      //console.log("Service Providers:", result);
     });
      getMasterData("vendors", activeUserEmail).then(res => {
         const result = Array.isArray(res?.data) ? res.data : [];
@@ -265,7 +288,7 @@ const handleDragEnd = (event) => {
   );
 
   const reordered = arrayMove(columns, oldIndex, newIndex);
-
+  setTempSelectedColumns(reordered.map(c => c.column_name));
   setColumns(reordered);
 };
 
@@ -295,6 +318,7 @@ const saveColumnSelection = async () => {
   try {
 
     // 1️⃣ Save to DB (use TEMP state)
+    console.log("Saving columns for module", currentModule?.module_id, ":", tempSelectedColumns);
     await upsertCustomizedColumns(
       currentModule?.module_id,
       activeUserEmail,
@@ -546,7 +570,7 @@ const applyTermMultiplier = (value, term) => {
 };
 
 useEffect(() => {
-  const amount = Number(newRow.amount);
+  const amount = Number(newRow.total_amount);
 
   const currency =
     typeof newRow.currency === "object"
@@ -574,9 +598,9 @@ useEffect(() => {
 
 useEffect(() => {
   if (!editRowId) return;
-  if (!editRow.amount || !editRow.currency) return;
+  if (!editRow.total_amount || !editRow.currency) return;
   const calc = calculateCost(
-    editRow.amount,
+    editRow.total_amount,
     editRow.currency,
     editRow.term
   );
@@ -588,7 +612,7 @@ useEffect(() => {
     total_amount_aed: calc.toFixed(2)
   }));
 
-}, [editRow.amount, editRow.currency, editRow.term]);
+}, [editRow.total_amount, editRow.currency, editRow.term]);
 
  const formatForInput = (value) => {
   if (!value) return "";
@@ -632,8 +656,15 @@ useEffect(() => {
 
   setNewRow(empty);
 
+    if (tableContainerRef.current) {
+    tableContainerRef.current.scrollTo({
+  left: 0,
+  behavior: "smooth"
+});
+  }
+
   // ✅ RESET autofill tracking
-  setAutoFilledFields({});
+ // setAutoFilledFields({});
 };
 
 const loadProviderPlans = async (providerId) => {
@@ -682,7 +713,7 @@ useEffect(() => {
     
 
    const getVisibleColumns = () => {
-  let cols = columns;
+  let cols = orderedColumns;
 
   // ✅ APPLY CURRENCY FILTER ON COLUMNS
   const currencyFilter = filters.find(f => f.master === "currency");
@@ -706,19 +737,16 @@ useEffect(() => {
   }
 
   // ✅ existing modes (keep your logic)
-  if (tableColumnMode === "saved") {
-    cols = cols.filter(c =>
-      savedTableColumns.includes(c.column_name)
-    );
+   if (tableColumnMode === "saved" && savedTableColumns.length) {
+    cols = savedTableColumns
+      .map(colName => columns.find(c => c.column_name === colName))
+      .filter(Boolean);
+  } else if (tableColumnMode === "custom" && selectedColumns.length) {
+    cols = selectedColumns
+      .map(colName => columns.find(c => c.column_name === colName))
+      .filter(Boolean);
   }
 
- if (tableColumnMode === "custom") {
-  cols = cols.filter(c =>
-    selectedColumns?.length
-      ? selectedColumns.includes(c.column_name)
-      : true   // 🔥 fallback
-  );
-}
 
   return cols;
 };
@@ -814,20 +842,22 @@ const handleGenerate = async () => {
       paid_by: form.paid_by,
       prepared_by: activeUserName,
       checked_by: form.checked_by,
+      verified_by_it: form.verified_by_it,
       verified_by: form.verified_by,
       signed_by: form.signed_by,
       approved_by: form.approved_by,
       userid: activeUserEmail,
     };
 
-    await createprf(payload, activeUserEmail, selectedRow);
+    await createprf(payload, activeUserEmail,selectedRow );
 
     detailsArray.push(payload);
   }
 
   setShowGenerateModal(false);
+  // console.log("selectedRow for header:", selectedRow);
   setPreviewData({
-    header: selectedRow,
+   header: selectedRow,
     details: detailsArray,
     paidBy: form.paid_by,
   });
@@ -846,6 +876,7 @@ const handlePreview = async (prfNum) => {
     setPreviewData({
       header: previewObj?.header,
       details: previewObj?.details,
+      paid_by: previewObj?.paid_by || "",
     });
     setShowPreview(true);
   } catch (err) {
@@ -1345,10 +1376,17 @@ useEffect(() => {
     }
 };
 
-    const handleCancel = () => {
-        setIsCreating(false);
-        setNewRow({});
-    };
+ const handleCancel = () => {
+    setIsCreating(false);
+
+    setNewRow({});
+    setInputValues({});
+    setActiveDropdown(null);
+    setAutoFilledFields({});
+
+    setEditRow({});
+    setEditRowId(null);
+};
 
     const handleEdit = (row) => {
         setEditRowId(row.id);
@@ -1663,30 +1701,6 @@ const handleClear = async () => {
         );
     };
 
-//    const saveColumnSelection = async () => {
-//   try {
-//     // 1️⃣ Save locally (optional but fast UX)
-//     // localStorage.setItem(
-//     //   `table_columns_${id}`,
-//     //   JSON.stringify(selectedColumns)
-//     // );
-
-//     // 2️⃣ Save to DB
-//     await upsertCustomizedColumns(
-//       currentModule?.module_id,
-//       activeUserEmail,
-//       selectedColumns
-//     );
-
-//     // 3️⃣ Update state
-//     setSavedTableColumns(selectedColumns);
-//     setShowColumnSelector(false);
-//     setTableColumnMode("custom");
-
-//   } catch (err) {
-//     console.error("Failed to save customized columns:", err);
-//   }
-// };
 
    const getColumnsToUse = (mode, savedCols = []) => {
    // console.log("Getting columns for mode:", savedCols);
@@ -2045,7 +2059,7 @@ const isNumericColumn = (col) => {
    //console.log("Checking columns from raw data:", name);
   return (
     name.includes("amount") ||
-    name.includes("cost") ||
+    // name.includes("cost") ||
     name.includes("price") ||
     name.includes("total")
   );
@@ -2376,6 +2390,26 @@ return `
         (page - 1) * pageSize,
         page * pageSize
     );
+
+    const handleGenerateSelected = () => {
+  // Get the selected rows' data
+  const selectedRows = sortedRows.filter(row => selectedRowIds.includes(row.id));
+  if (selectedRows.length === 0) return;
+  // setSelectedRow(selectedRows[0] || null);
+  setSelectedRow(selectedRows);
+  // If you want to show all products from selected rows in the modal:
+  console.log("Preparing row for modal:", selectedRows);
+  setModalItems(selectedRows.map(row => ({
+    doc_date: row.date || "",
+    doc_no: row.doc_no || "",
+    product: row.products || "",
+    amount: row.amount || "",
+    vat: row.vat_amount || "",
+    total_amount: row.total_amount || "",
+    isSelected: true
+  })));
+  setShowGenerateModal(true);
+};
     return (
         <div className="h-full flex flex-col">
              <ValidatePopups
@@ -2466,6 +2500,13 @@ onClick={handleCreate}
                 >
                     Customize
                 </button>
+                <button
+  className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 transition"
+  disabled={selectedRowIds.length === 0}
+  onClick={() => handleGenerateSelected()}
+>
+  Generate
+</button>
 
 </div>
 
@@ -2771,7 +2812,7 @@ onClick={handleCreate}
 
             {/* ================= TABLE WRAPPER ================= */}
             <div className="bg-white rounded-xl shadow flex-1 flex flex-col overflow-hidden">
-                <div className="flex-1 w-full overflow-auto">
+                <div   ref={tableContainerRef} className="flex-1 w-full overflow-auto">
                   {isInitialLoading ? (
                     <div className="flex justify-center items-center h-80">
                       <Loader type="orbit" />
@@ -2878,30 +2919,101 @@ onClick={handleCreate}
                         }
                         disabled={col.column_name === "total_amount_aed"}
 
-                        onChange={(e) => {
-                          let val = e.target.value;
+                       onChange={(e) => {
+  let val = e.target.value;
 
-                          if (isNumericColumn(col.column_name)) {
-                            val = handleNumericInput(val);
-                          }
+  if (isNumericColumn(col.column_name)) {
+    val = handleNumericInput(val);
+  }
 
+  // =========================
+  // AMOUNT AUTO CALCULATION
+  // =========================
+ if (col.column_name === "amount") {
 
+  const amount = parseFloat(val || 0);
 
-                          if (isMaster) {
-                            setInputValues(prev => ({
-                              ...prev,
-                              [col.column_name]: val
-                            }));
+  let matchedProvider = null;
 
-                            setActiveField(col.column_name);
-                          } else {
-                            handleNewRowChange(
-                              col.column_name,
-                              val,
-                              col.master
-                            );
-                          }
-                        }}
+  // =========================
+  // MATCH USING VENDOR
+  // =========================
+  if (newRow.vendors) {
+
+    matchedProvider = serviceProviders.find(
+      sp =>
+        String(sp.vendor || "").trim().toLowerCase() ===
+        String(newRow.vendors || "").trim().toLowerCase()
+    );
+
+  }
+
+  // =========================
+  // IF NO VENDOR
+  // MATCH USING PRODUCT
+  // =========================
+  if (!matchedProvider && newRow.products) {
+
+    matchedProvider = serviceProviders.find(
+      sp =>
+        String(sp.product || "").trim().toLowerCase() ===
+        String(newRow.products || "").trim().toLowerCase()
+    );
+
+  }
+
+  console.log("Matched Provider:", matchedProvider);
+
+  // =========================
+  // VAT CHECK
+  // =========================
+  const isVatApplicable =
+    matchedProvider?.is_vat === true ||
+    matchedProvider?.is_vat === "true" ||
+    matchedProvider?.is_vat === 1;
+
+  // =========================
+  // CALCULATE
+  // =========================
+  const vat = isVatApplicable
+    ? (amount * parseFloat(vatPercent || 0)) / 100
+    : 0;
+
+  const total = amount + vat;
+
+  // =========================
+  // UPDATE ROW
+  // =========================
+  setNewRow(prev => ({
+    ...prev,
+    amount: amount.toFixed(2),
+    vat_amount: vat.toFixed(2),
+    total_amount: total.toFixed(2),
+  }));
+}
+
+  // =========================
+  // NORMAL INPUT
+  // =========================
+  if (isMaster) {
+
+    setInputValues(prev => ({
+      ...prev,
+      [col.column_name]: val
+    }));
+
+    setActiveField(col.column_name);
+
+  } else {
+
+    handleNewRowChange(
+      col.column_name,
+      val,
+      col.master
+    );
+
+  }
+}}
 
                         onFocus={() => {
                         setActiveField(col.column_name);
@@ -2926,6 +3038,12 @@ onClick={handleCreate}
 
                           setActiveField(null);
                         }}
+                        disabled={
+                            col.column_name === "total_amount_aed" ||
+                            col.column_name === "vat_amount" ||
+                            col.column_name === "total_amount" ||
+                            col.column_name === "prf_generate"
+                          }
                       />
                           {isMaster &&
                                       loadingMaster === col.master && (
@@ -3185,6 +3303,7 @@ onClick={handleCreate}
                           key={row.id ?? i}
                           className="hover:bg-gray-50 transition-colors"
                         >
+                          
                           {/* ================= SERIAL NO ================= */}
                           <td className="px-4 py-3 whitespace-nowrap">
                             {(page - 1) * pageSize + i + 1}
@@ -3239,72 +3358,55 @@ onClick={handleCreate}
   } else {
 
     return (
-      <td
-        key={col.column_id}
-        className="px-4 py-3 whitespace-nowrap"
-      >
+      <td className="px-4 py-3 whitespace-nowrap text-center" key={col.column_id}>
+                           <label className="relative flex items-center justify-center cursor-pointer">
+  <input
+    type="checkbox"
+    checked={selectedRowIds.includes(row.id)}
+    onChange={(e) => {
+      setSelectedRowIds((prev) =>
+        e.target.checked
+          ? [...prev, row.id]
+          : prev.filter((id) => id !== row.id)
+      );
+    }}
+    className="
+      peer
+      appearance-none
+      h-5 w-5
+      rounded-md
+      border-2 border-gray-300
+      bg-white
+      checked:bg-green-500
+      checked:border-green-500
+      transition-all duration-200
+      cursor-pointer
+    "
+  />
 
-       <button
-  className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 transition"
-  onClick={() => {
-
-    console.log("Generating for row:", row);
-
-    const paidBy = creditCards.find(
-      cc => cc.card_4number === row.credit_card
-    );
-    // console.log("row.vendors:", row.vendors);
-    // console.log("Available vendors:", vendors);
-   const vendor = vendors.find(
-  v => v.vendor_name === row.vendors
-);
-
-console.log("Matched Vendor:", vendor);
-
-const amount = parseFloat(row.amount || 0);
-
-// VAT check
-const isVAT = vendor?.is_vat === true || vendor?.is_vat === 1;
-
-const vatAmount = isVAT
-  ? (amount * parseFloat(vatPercent || 0)) / 100
-  : 0;
-
-const totalAmount = amount + vatAmount;
-
-    const items = [
-      {
-        product: row.products || "",
-        doc_date: row.date || "",
-        doc_no: row.doc_no || "",
-        narration: row.products || "",
-
-        amount: amount || "",
-        vat: vatAmount || "",
-        total_amount: totalAmount || "",
-
-        isSelected: true,
-        paidBy: paidBy?.card_holder_name || "",
-
-        isVAT
-      }
-    ];
-
-    setForm(prev => ({
-      ...prev,
-      paid_by: paidBy?.card_holder_name || ""
-    }));
-
-    setSelectedRow(row);
-    setModalItems(items);
-    setShowGenerateModal(true);
-
-  }}
->
-  Generate
-</button>
-
-      </td>
+  <svg
+    className="
+      absolute
+      w-3 h-3
+      text-white
+      opacity-0
+      peer-checked:opacity-100
+      pointer-events-none
+    "
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth={3}
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M5 13l4 4L19 7"
+    />
+  </svg>
+</label>
+                          </td>
     );
   }
 }
@@ -3397,33 +3499,99 @@ const totalAmount = amount + vatAmount;
                                               "";
 
                                       })()}
-                                      onChange={(e) => {
+                                     onChange={(e) => {
 
-                                        let val = e.target.value;
+  let val = e.target.value;
 
-                                        // ================= REMOVE MASK =================
-                                        if (
-                                          col.master === "credit_card"
-                                        ) {
-                                          val = val.replace(/\D/g, "");
-                                        }
+  // ================= REMOVE MASK =================
+  if (col.master === "credit_card") {
+    val = val.replace(/\D/g, "");
+  }
 
-                                        // ================= NUMERIC =================
-                                        if (
-                                          isNumericColumn(
-                                            col.column_name
-                                          )
-                                        ) {
-                                          val = handleNumericInput(val);
-                                        }
+  // ================= NUMERIC =================
+  if (isNumericColumn(col.column_name)) {
+    val = handleNumericInput(val);
+  }
 
-                                        setEditRow({
-                                          ...editRow,
-                                          [col.column_name]: val,
-                                        });
+  let updatedRow = {
+    ...editRow,
+    [col.column_name]: val,
+  };
 
-                                        setActiveDropdown(editKey);
-                                      }}
+  // =====================================================
+  // VAT + TOTAL AUTO CALCULATION
+  // =====================================================
+
+  const triggerColumns = [
+    "amount",
+    "vendors",
+    "products"
+  ];
+
+  if (triggerColumns.includes(col.column_name)) {
+
+    let matchedProvider = null;
+
+    // =========================
+    // FIRST CHECK VENDOR
+    // =========================
+    if (updatedRow.vendors) {
+
+      matchedProvider = serviceProviders.find(
+        sp =>
+          String(sp.vendor || "")
+            .trim()
+            .toLowerCase() ===
+          String(updatedRow.vendors || "")
+            .trim()
+            .toLowerCase()
+      );
+    }
+
+    // =========================
+    // IF NO VENDOR MATCH
+    // CHECK PRODUCT
+    // =========================
+    if (!matchedProvider && updatedRow.products) {
+
+      matchedProvider = serviceProviders.find(
+        sp =>
+          String(sp.product || "")
+            .trim()
+            .toLowerCase() ===
+          String(updatedRow.products || "")
+            .trim()
+            .toLowerCase()
+      );
+    }
+
+    const amount = parseFloat(updatedRow.amount || 0);
+
+    // =========================
+    // VAT ENABLED
+    // =========================
+    if (matchedProvider?.is_vat) {
+
+      const vat = (amount * Number(vatPercent || 0)) / 100;
+
+      updatedRow.vat_amount = vat.toFixed(2);
+
+      updatedRow.total_amount = (
+        amount + vat
+      ).toFixed(2);
+
+    } else {
+
+      updatedRow.vat_amount = "0.00";
+
+      updatedRow.total_amount = amount.toFixed(2);
+    }
+  }
+
+  setEditRow(updatedRow);
+
+  setActiveDropdown(editKey);
+}}
                                       onFocus={() => {
 
                                         setActiveDropdown(editKey);
@@ -3800,7 +3968,7 @@ const totalAmount = amount + vatAmount;
 
     <>
       {/* PREVIEW */}
-         {console.log("selected row", row)}
+       
      <button
   
   onClick={() => handlePreview(encodeURIComponent(row.prf_generate))}
@@ -4706,10 +4874,11 @@ const totalAmount = amount + vatAmount;
 <div className="p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 
   {[
-    { label: "Paid By", key: "paid_by" },
+    // { label: "Paid By", key: "paid_by" },
     { label: "Prepared By", key: "prepared_by" },
-    { label: "Checked By", key: "checked_by" },
-    { label: "Verified By", key: "verified_by" },
+    { label: "Checked By Marketting", key: "checked_by" },
+    { label: "Verified By IT", key: "verified_by_it" },
+    { label: "Verified By Accounts", key: "verified_by" },
     { label: "Signed By", key: "signed_by" },
     { label: "Approved By", key: "approved_by" }
   ].map((field, idx) => (
