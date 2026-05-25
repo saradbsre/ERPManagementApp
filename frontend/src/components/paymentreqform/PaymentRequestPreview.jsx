@@ -409,7 +409,7 @@ const expiryDate = header?.expiry_date ? formatDate(header.expiry_date) : "N/A";
       </td>
 
       <td className="border border-gray-800 px-2 py-1 w-[32%] font-semibold">
-        {header.created_at ? formatDate(header.date) : ""}
+        {header.created_at ? formatDate(header.created_at) : ""}
       </td>
 
       {/* CURRENCY */}
