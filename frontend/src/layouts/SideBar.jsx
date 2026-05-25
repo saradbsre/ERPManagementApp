@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+
 import { fetchSections, fetchMasters, getReportsName } from "../api/api";
 
 import {
@@ -9,17 +10,14 @@ import {
   FolderKanban,
   ChevronLeft,
   ChevronRight,
-  FileBarChart2,   // ✅ Reports
-  FileText         // ✅ Forms
+  FileBarChart2,  
+  FileText         
 } from "lucide-react";
 
-export default function Sidebar({
-  collapsed,
-  setCollapsed
-}) {
+export default function Sidebar({ collapsed, setCollapsed }) {
 
   const location = useLocation();
-
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [sections, setSections] = useState([]);
   const [openMain, setOpenMain] = useState(null);
   const [masters, setMasters] = useState([]);
@@ -121,12 +119,7 @@ export default function Sidebar({
         path: `/reports/${report.id}`,
       })),
     },
-    // {
-    //   name: "Payment Request Form",
-    //   icon: <FileText size={18} />,
-    //   path: "/payment-req-form",
-    // },
-
+   
   ].filter(Boolean);
 
   return (
@@ -138,6 +131,7 @@ export default function Sidebar({
         ${collapsed ? "w-20" : "w-64"}
       `}
     >
+      
 
       {/* HEADER */}
       <div className="flex items-center justify-between p-4">

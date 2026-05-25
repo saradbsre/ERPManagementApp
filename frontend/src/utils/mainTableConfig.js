@@ -8,6 +8,7 @@ const mainTableConfig = {
     "department",
     "company",
     "cost_center",
+    "receipt_number",
     "expiry_date",
     "term",
     "credit_card",

@@ -23,14 +23,6 @@ const remarks = remarksList.join(", ");
 const header = data?.header?.[0] || data?.header || {};
 const details = data?.details || [];
 const paid_by = data?.paid_by || "SABAH";
-const currencyNames = {
-  AED: "DIRHAMS",
-  USD: "DOLLARS",
-  EUR: "EUROS",
-  GBP: "POUNDS",
-  SAR: "RIYALS"
-  // Add more as needed
-};
 
 // console.log("Header:", header);
 //   console.log("Details:", details);
@@ -41,7 +33,6 @@ const currencyNames = {
   const activeUser = JSON.parse(localStorage.getItem("user"));
   const activeUserEmail = activeUser?.email;
   const activeUserName = activeUser?.name;
-
 
    useEffect(() => {
   if (details?.[0]?.prf_num && barcodeRef.current) {
@@ -135,17 +126,6 @@ const handleExportPrf = async (prfNum) => {
     setPopupType("error");
   }
 };
-
-function formatDateLong(dateStr) {
-  if (!dateStr) return "";
-  const date = new Date(dateStr);
-  if (isNaN(date)) return "";
-  return date.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric"
-  });
-}
 
 useEffect(() => {
    getMasterData("credit_card", activeUser.email).then(res => {
@@ -258,15 +238,8 @@ const Total = Array.isArray(details)  ? details.reduce((sum, item) => sum + Numb
 
 const TotalVAT = Array.isArray(details)  ? details.reduce((sum, item) => sum + Number(item?.vat_amount || 0), 0)
   : 0;
-// At the top, after expiryDate:
-const startDate = header.date
-  ? formatDateLong(header.date)
-  : details?.[0]?.doc_date
-    ? formatDateLong(details[0].doc_date)
-    : "N/A";
-const expiryDate = header?.expiry_date ? formatDateLong(header.expiry_date) : "N/A";
-const periodDisplay = `${startDate} to ${expiryDate}`;
 
+const expiryDate = header?.expiry_date ? formatDate(header.expiry_date) : "N/A";
   return (
     <div className="bg-gray-200 min-h-screen py-10 px-4 overflow-auto">
 
@@ -495,27 +468,6 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
       </td>
 
     </tr>
-     <tr className="bg-[#f8fafc]">
-
-      {/* DEPARTMENT */}
-      <td className="border border-gray-800 px-2 py-1 font-bold">
-        RECEIPT NUMBER
-      </td>
-
-      <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {header.receipt_number || " - "}
-      </td>
-
-      {/* PAYMENT METHOD */}
-      <td className="border border-gray-800 px-2 py-1 font-bold">
-        PERIOD
-      </td>
-
-      <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {periodDisplay}
-      </td>
-
-    </tr>
 
     {/* ROW 4 */}
     <tr className="bg-[#f8fafc]">
@@ -541,7 +493,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
 
 {/* ================= DESCRIPTION ================= */}
 
-{/* <table className="w-full border border-black border-collapse mb-5 text-[10px]">
+<table className="w-full border border-black border-collapse mb-5 text-[10px]">
 
   <tbody>
 
@@ -560,7 +512,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
 
   </tbody>
 
-</table> */}
+</table>
 
 
 {/* ================= DETAILS TABLE ================= */}
@@ -728,7 +680,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
         colSpan={4}
         className="border border-gray-800 p-2 font-bold"
       >
-        {numberToWords(grandTotal)} {currencyNames[header.currency] || header.currency} ONLY
+        {numberToWords(grandTotal)} ONLY
       </td>
 
     </tr>
@@ -836,7 +788,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
       {/* PREPARED */}
       <td className="border border-gray-800 px-2 py-1 font-semibold">
 
-        <div className="text-[8px]">
+        <div>
           {details?.[0]?.prepared_by}
         </div>
 
@@ -849,7 +801,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
       {/* CHECKED */}
       <td className="border border-gray-800 px-2 py-1 font-semibold">
 
-        <div className="text-[8px]">
+        <div>
           {details?.[0]?.checked_by}
         </div>
 
@@ -862,7 +814,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
       {/* VERIFIED */}
       <td className="border border-gray-800 px-2 py-1 font-semibold">
 
-        <div className="text-[8px]">
+        <div>
           {details?.[0]?.verified_by_it}
         </div>
 
@@ -875,7 +827,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
       {/* VERIFIED */}
       <td className="border border-gray-800 px-2 py-1 font-semibold">
 
-        <div className="text-[8px]">
+        <div>
           {details?.[0]?.verified_by}
         </div>
 
@@ -888,7 +840,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
       {/* SIGNED */}
       <td className="border border-gray-800 px-2 py-1 font-semibold">
 
-        <div className="text-[8px]">
+        <div>
           {details?.[0]?.signed_by}
         </div>
 
@@ -901,7 +853,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
       {/* APPROVED */}
       <td className="w-1/6 border border-gray-800 px-2 py-1 font-semibold">
 
-        <div className="text-[8px]">
+        <div>
           {details?.[0]?.approved_by}
         </div>
 
