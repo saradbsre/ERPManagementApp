@@ -167,15 +167,68 @@ const selectedCompany =
     : null;
 
 function handlePrint() {
-  // Get the HTML of the main paper div
   const content = document.getElementById("print-area").innerHTML;
-  previewPrintContent({
-    content,
-    userName: header.signed_by || "User", // or any user info you want
-    title: "Payment Request"
-  });
-}
 
+  const printWindow = window.open("", "", "width=1200,height=900");
+
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>Payment Request</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+          @page { size: A4; margin: 10mm; }
+          html, body { background: white; margin: 0; padding: 0; font-family: "Times New Roman", serif; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          body { padding: 10px; }
+          table { border-collapse: collapse; width: 100%; }
+          th, td { border-collapse: collapse; }
+          .print-area { width: 100%; }
+        </style>
+      </head>
+      <body>
+        <div class="print-area">${content}</div>
+         <script>
+        (function () {
+          const style = document.createElement('style');
+          style.textContent = \`
+            @media print {
+              @page {
+                
+                @bottom-left {
+                  content: "User:${activeUser.name}  | Printed: ${new Date().toLocaleString()}";
+                  font-size: 10px;
+                  margin-bottom: 20mm;
+                  font-family: "Times New Roman", serif;
+                }
+                @bottom-right {
+                  content: "Page " counter(page) " of " counter(pages);
+                  font-size: 10px;
+                  margin-bottom: 20mm;
+                  font-family: "Times New Roman", serif;
+                }
+              }
+            }\`;
+          document.head.appendChild(style);
+        })();
+
+        window.onload = function() {
+          window.focus();
+          window.print();
+        }
+      </script>
+      </body>
+    </html>
+  `);
+
+  printWindow.document.close();
+
+  // Wait for the new window to finish loading
+  printWindow.onload = function () {
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
+  };
+}
 const grandTotal = Array.isArray(details)
   ? details.reduce((sum, item) => sum + Number(item?.total_amount || 0), 0)
   : 0;
@@ -192,21 +245,22 @@ const expiryDate = header?.expiry_date ? formatDate(header.expiry_date) : "N/A";
 
       {/* PAPER */}
       <div
-        id="print-area"
-        className="
-          bg-white
-          w-full
-          max-w-[900px]
-          mx-auto
-          shadow-2xl
-          border
-          border-gray-300
-          p-10
-          text-[13px]
-          text-black
-          print-area
-        "
-      >
+  id="print-area"
+  className="
+    bg-white
+    w-full
+    max-w-[210mm]
+    min-h-[297mm]
+    mx-auto
+    shadow-2xl
+    border
+    border-gray-300
+    p-8
+    text-[13px]
+    text-black
+    print-area
+  "
+>
 
       <div className="flex justify-between items-start w-full ">
   {/* Left: Company & Vendor Details */}
@@ -815,7 +869,7 @@ const expiryDate = header?.expiry_date ? formatDate(header.expiry_date) : "N/A";
 
 </table>
 
-        <table
+        {/* <table
   className="w-full mt-8"
   style={{
     borderCollapse: "collapse",
@@ -833,7 +887,7 @@ const expiryDate = header?.expiry_date ? formatDate(header.expiry_date) : "N/A";
       </td>
     </tr>
   </tbody>
-</table>
+</table> */}
 
         {/* ================= ACTION BUTTONS ================= */}
         <div className="flex justify-end gap-3 mt-8 print:hidden">
@@ -852,10 +906,10 @@ const expiryDate = header?.expiry_date ? formatDate(header.expiry_date) : "N/A";
           </button>
 
           <button
-            onClick={() => {
-                window.print();
-                handleExportPrf(details?.[0]?.prf_num);
-            }}
+           onClick={() => {
+  handlePrint();
+  handleExportPrf(details?.[0]?.prf_num);
+}}
             className="
               px-5 py-2
               bg-blue-600
