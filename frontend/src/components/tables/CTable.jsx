@@ -1311,16 +1311,41 @@ if (searchText) {
 };
 
 
-   const getExchangeRate = (currencyCode) => {
+const getExchangeRate = (currencyCode) => {
   const list = currencies || [];
-  const currency = list.find(
-    c => c.currency_code === currencyCode
+
+  const searchValue = (currencyCode || "")
+    .toString()
+    .trim()
+    .toUpperCase();
+
+  const currency = list.find(c => {
+    const code = (c.currency_code || "")
+      .toString()
+      .trim()
+      .toUpperCase();
+
+    const name = (c.currency || "")
+      .toString()
+      .trim()
+      .toUpperCase();
+
+    return code === searchValue || name === searchValue;
+  });
+
+  if (searchValue === "AED") return 1;
+
+  console.log(
+    "Exchange rate for",
+    currencyCode,
+    ":",
+    currency?.exchange_rate
   );
 
-  // If your rates are "1 AED = X currency", invert for non-AED
-  if (currencyCode === "AED") return 1;
-  console.log("Exchange rate for", currencyCode, ":", currency?.exchange_rate);
-  if (currency?.exchange_rate) return 1 / Number(currency.exchange_rate);
+  if (currency?.exchange_rate) {
+    return 1 / Number(currency.exchange_rate);
+  }
+
   return 1;
 };
 const calculateCost = (amount, currencyCode, term) => {
@@ -2495,6 +2520,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
   const currencyObj = currencies.find(c => c.code === currency);
   const currencyValue = currencyObj ? Number(currencyObj.value) : 1;
   const totalAed = total * currencyValue;
+  console.log("VAT:", vat, "Total:", total, "Total in AED:", totalAed, "Currency value:", currencyValue);
 
   return {
     vat_amount: vat.toFixed(2),

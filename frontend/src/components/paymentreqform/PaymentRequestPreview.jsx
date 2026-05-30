@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import JsBarcode from "jsbarcode";
 import { getMasterData, createPaymentRequest, incrementPRFExportCount  } from "../../api/api";
 export default function PaymentRequestPreview({ data, onBack }) {
- // console.log("PaymentRequestPreview data:", data);
+  console.log("PaymentRequestPreview data:", data);
   if (!data) {
     return (
       <div className="p-10 text-center text-gray-500">
@@ -37,6 +37,10 @@ const currencyNames = {
   const [creditCards, setCreditCards] = useState([]);
   const [company, setCompany] = useState([]);
   const [vendor, setVendor] = useState(null);
+  const [currency, setCurrency] = useState([]);
+  const [costCenters, setCostCenters] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [terms, setTerms] = useState([]);
   const barcodeRef = useRef(null);
   const activeUser = JSON.parse(localStorage.getItem("user"));
   const activeUserEmail = activeUser?.email;
@@ -163,28 +167,118 @@ useEffect(() => {
     setVendor(result);
   //  console.log("Vendor:", result);
   });
+  getMasterData("currency", activeUser.email).then(res => {
+    const result = Array.isArray(res?.data) ? res.data : [];
+    setCurrency(result);
+  });
+  getMasterData("division", activeUser.email).then(res => {
+    const result = Array.isArray(res?.data) ? res.data : [];
+    setCostCenters(result);
+  });
+  getMasterData("department", activeUser.email).then(res => {
+    const result = Array.isArray(res?.data) ? res.data : [];
+    setDepartments(result);
+  });
+  getMasterData("billing_cycle", activeUser.email).then(res => {
+    const result = Array.isArray(res?.data) ? res.data : [];
+    setTerms(result);
+  });
 
 }, []);
 
 const selectedVendor =
   Array.isArray(vendor) && header.vendors
-    ? vendor.find(
-        (v) =>
-          (v.vendor_code || "").toString().trim().toUpperCase() ===
-          header.vendors.toString().trim().toUpperCase()
-      )
+    ? vendor.find((v) => {
+        const headerValue = header.vendors
+          .toString()
+          .trim()
+          .toUpperCase();
+
+        const vendorCode = (v.vendor_code || "")
+          .toString()
+          .trim()
+          .toUpperCase();
+
+        const vendorName = (v.vendor_name || "")
+          .toString()
+          .trim()
+          .toUpperCase();
+
+        return (
+          vendorCode === headerValue ||
+          vendorName === headerValue
+        );
+      })
     : null;
+
+console.log("Selected Vendor:", selectedVendor);
 const isVatApplicable = selectedVendor ? selectedVendor.is_vat : false;
 //console.log("Selected Vendor:", selectedVendor, "VAT Applicable:", isVatApplicable);
 //console.log("Selected header:", header);
+console.log("Company array:", company);
+console.log("Header company:", header.company);
+
 const selectedCompany =
   Array.isArray(company) && header.company
-    ? company.find(
-        (c) =>
-          (c.company_code || "").toString().trim().toUpperCase() ===
-          header.company.toString().trim().toUpperCase()
-      )
+    ? company.find((c) => {
+        const headerValue = header.company
+          .toString()
+          .trim()
+          .toUpperCase();
+
+        const companyCode = (c.company_code || "")
+          .toString()
+          .trim()
+          .toUpperCase();
+
+        const tradeName = (c.trade_name || "")
+          .toString()
+          .trim()
+          .toUpperCase();
+
+        console.log(
+          "Comparing:",
+          headerValue,
+          "with code:",
+          companyCode,
+          "and trade_name:",
+          tradeName
+        );
+
+        return (
+          companyCode === headerValue ||
+          tradeName === headerValue
+        );
+      })
     : null;
+
+
+
+
+
+const selectedCurrency = Array.isArray(currency) && header.currency ? currency.find(
+  (c) =>
+    (c.currency_code || "").toString().trim().toUpperCase() ===
+    header.currency.toString().trim().toUpperCase()
+) : null;
+
+const selectedTerm = Array.isArray(terms) && header.term ? terms.find(
+  (t) =>
+    (t.bc_code || "").toString().trim().toUpperCase() ===
+    header.term.toString().trim().toUpperCase()
+) : null;
+
+const selectedCostCenter = Array.isArray(costCenters) && header.cost_center ? costCenters.find(
+    (cc) => (cc.division_code || "").toString().trim().toUpperCase() === header.cost_center.toString().trim().toUpperCase()   
+) : null;
+
+const selectedDepartment = Array.isArray(departments) && header.department ? departments.find(
+    (d) => (d.department_code || "").toString().trim().toUpperCase() === header.department.toString().trim().toUpperCase()
+) : null;
+//console.log("Selected commpany:", selectedCompany);
+// console.log("Selected term:", selectedTerm);
+// console.log("Selected cost center:", selectedCostCenter);
+// console.log("Selected department:", selectedDepartment);
 
 function handlePrint() {
   const content = document.getElementById("print-area").innerHTML;
@@ -266,6 +360,7 @@ const startDate = header.date
     : "N/A";
 const expiryDate = header?.expiry_date ? formatDateLong(header.expiry_date) : "N/A";
 const periodDisplay = `${startDate} to ${expiryDate}`;
+const currentDate = new Date();
 
   return (
     <div className="bg-gray-200 min-h-screen py-10 px-4 overflow-auto">
@@ -293,7 +388,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
   {/* Left: Company & Vendor Details */}
   <div className="leading-4">
     <h1 className="font-bold text-[15px] uppercase">
-      {header.company || "Company Name"}
+      {selectedCompany?.trade_name || header.company || "Company Name"}
     </h1>
     <p className="text-[11px] text-gray-700">
       {selectedCompany?.address || "Company Address"}
@@ -345,13 +440,16 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
     </h1>
 
     <p className="text-[12px] text-gray-700">
-      {selectedVendor?.address || "Vendor Address"}
+      {selectedVendor?.address || "Vendor Address"} {selectedVendor?.country ?`, ${selectedVendor?.country}` : ""}
     </p>
 
     <p className="text-[12px] text-gray-700">
       Email: {selectedVendor?.email || "-"}{" "}
       {selectedVendor?.website
         ? `| Website: ${selectedVendor.website}`
+        : ""}
+    {selectedVendor?.phone_number
+        ? `| Tel: ${selectedVendor.phone_number}`
         : ""}
     </p>
 
@@ -365,7 +463,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
     </h2>
 
     <h1 className="font-bold text-[13px]">
-      {header.term} Subscription Fees
+      {selectedTerm?.value || header.term} Subscription Fees
     </h1>
 
     <p className="text-[12px] text-gray-700">
@@ -436,16 +534,16 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
       </td>
 
       <td className="border border-gray-800 px-2 py-1 w-[32%] font-semibold">
-        {header.created_at ? formatDate(header.created_at) : ""}
+        {details?.[0]?.sysdate ? formatDate(details[0].sysdate) : formatDate(currentDate)}
       </td>
 
       {/* CURRENCY */}
       <td className="border border-gray-800 px-2 py-1 w-[18%] font-bold">
-        CURRENCY
+         PRF NUMBER
       </td>
 
       <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {header.currency}
+        {details?.[0]?.prf_num}
       </td>
 
     </tr>
@@ -454,12 +552,12 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
     <tr className="bg-[#f8fafc]">
 
       {/* PRF */}
-      <td className="border border-gray-800 px-2 py-1 font-bold">
-        PRF NUMBER
+       <td className="border border-gray-800 px-2 py-1 font-bold">
+        RECEIPT NUMBER
       </td>
 
       <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {details?.[0]?.prf_num}
+        {header.receipt_number || " - "}
       </td>
 
       {/* PAYMENT TYPE */}
@@ -482,7 +580,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
       </td>
 
       <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {header.department}
+        {selectedDepartment?.department_name || header.department || " - "}
       </td>
 
       {/* PAYMENT METHOD */}
@@ -498,12 +596,13 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
      <tr className="bg-[#f8fafc]">
 
       {/* DEPARTMENT */}
-      <td className="border border-gray-800 px-2 py-1 font-bold">
-        RECEIPT NUMBER
+    
+       <td className="border border-gray-800 px-2 py-1 font-bold">
+        COST CENTER
       </td>
 
       <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {header.receipt_number || " - "}
+        {selectedCostCenter?.division_name || header.cost_center || " - "}
       </td>
 
       {/* PAYMENT METHOD */}
@@ -517,22 +616,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
 
     </tr>
 
-    {/* ROW 4 */}
-    <tr className="bg-[#f8fafc]">
-
-      {/* COST CENTER */}
-      <td className="border border-gray-800 px-2 py-1 font-bold">
-        COST CENTER
-      </td>
-
-      <td
-        colSpan={3}
-        className="border border-gray-800 px-2 py-1 font-semibold"
-      >
-        {header.cost_center || "____________________________"}
-      </td>
-
-    </tr>
+  
 
   </tbody>
 
@@ -565,7 +649,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
 
 {/* ================= DETAILS TABLE ================= */}
 
-<table className="w-full border border-black-800 border-collapse mb-2 text-[10px]">
+<table className="w-full border border-black-800 border-collapse mb-0 text-[10px]">
 
   {/* TABLE HEADER */}
   <thead>
@@ -581,7 +665,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
     </tr>
 
     {/* COLUMN HEADERS */}
-    <tr className="bg-gray-200 text-black">
+    <tr className="bg-gray-200 text-black text-[9px]">
 
       <th className="border border-gray-800 px-2 py-1 w-[5%]">
         S/N
@@ -591,7 +675,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
         INVOICE / PO DOC DATE
       </th>
 
-      <th className="border border-gray-800 px-2 py-1 w-[18%]">
+      <th className="border border-gray-800 px-2 py-1 w-[15%]">
         INVOICE / PO DOC NO
       </th>
 
@@ -599,16 +683,16 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
         PRODUCT DESCRIPTION
       </th>
 
-      <th className="border border-gray-800 px-2 py-1 w-[12%] text-right">
-        AMOUNT
+      <th className="border border-gray-800 px-1 py-1 w-[10%] text-right">
+        AMOUNT ({selectedCurrency?.currency || header.currency})
       </th>
 
-      <th className="border border-gray-800 px-2 py-1 w-[12%] text-right">
-        VAT AMOUNT
+      <th className="border border-gray-800 px-1 py-1 w-[10%] text-right">
+        VAT AMOUNT ({selectedCurrency?.currency || header.currency})
       </th>
 
-      <th className="border border-gray-800 px-2 py-1 w-[14%] text-right">
-        TOTAL AMOUNT
+      <th className="border border-gray-800 px-1 py-1 w-[10%] text-right">
+        TOTAL AMOUNT ({selectedCurrency?.currency || header.currency})
       </th>
 
     </tr>
@@ -618,7 +702,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
   <tbody>
 
     {/* DATA ROW */}
-    <tr className="text-center align-top h-[120px] bg-[#f8fafc] border border-black-800">
+    <tr className="text-center align-top h-[150px] bg-[#f8fafc] border border-black-800">
 
       {/* S/N */}
       <td className="border border-gray-800 p-2 align-top">
@@ -662,7 +746,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
       <td className="border border-gray-800 p-2 align-top text-right">
         {details?.map((item, i) => (
           <div key={i} className="py-1">
-            {header.currency}{" "}
+           
             {formatDecimal(item.amount ?? 0)}
           </div>
         ))}
@@ -672,7 +756,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
       <td className="border border-gray-800 p-2 align-top text-right">
         {details?.map((item, i) => (
           <div key={i} className="py-1">
-            {header.currency}{" "}
+           
             {formatDecimal(item.vat_amount ?? 0)}
           </div>
         ))}
@@ -682,7 +766,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
       <td className="border border-gray-800 p-2 align-top text-right">
         {details?.map((item, i) => (
           <div key={i} className="py-1">
-            {header.currency}{" "}
+           
             {formatDecimal(item.total_amount ?? 0)}
           </div>
         ))}
@@ -695,21 +779,22 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
 
       <td
         colSpan={4}
-        className="border border-gray-800 p-2 font-bold text-center"
+        className="border border-gray-800 p-2 font-bold text-right"
       >
         TOTAL
       </td>
 
       <td className="border border-gray-800 p-2 text-right font-bold">
-        {header.currency} {formatDecimal(Total)}
+        {formatDecimal(Total)}
       </td>
 
       <td className="border border-gray-800 p-2 text-right font-bold">
-        {header.currency} {formatDecimal(TotalVAT)}
+        {formatDecimal(TotalVAT)}
       </td>
 
       <td className="border border-gray-800 p-2 text-right font-bold text-[12px]">
-        {header.currency} {formatDecimal(grandTotal)}
+        {/* {selectedCurrency?.currency || header.currency} {formatDecimal(grandTotal)} */}
+        {formatDecimal(grandTotal)}
       </td>
 
     </tr>
@@ -721,18 +806,18 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
         colSpan={3}
         className="border border-gray-800 p-2 font-bold"
       >
-        TOTAL AMOUNT IN WORDS
+        TOTAL AMOUNT IN WORDS ({currencyNames[selectedCurrency?.currency] || selectedCurrency?.currency})
       </td>
 
       <td
         colSpan={4}
         className="border border-gray-800 p-2 font-bold"
       >
-        {numberToWords(grandTotal)} {currencyNames[header.currency] || header.currency} ONLY
+        {numberToWords(grandTotal)}  ONLY
       </td>
 
     </tr>
-
+     
 
   </tbody>
 
@@ -742,21 +827,19 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
 
 {/* ================= ADDITIONAL DETAILS ================= */}
 
-<table className="w-full border border-gray-800 border-collapse mb-5 text-[10px]">
+<table className="w-full border-x border-b border-gray-800 border-collapse mb-5 text-[10px]">
 
   {/* HEADER */}
   <thead>
 
-    <tr className="bg-gray-200 text-black">
-
-      <th
-        colSpan={2}
-        className="text-left px-2 py-1 border border-gray-800 text-[14px] font-bold"
-      >
-        ADDITIONAL DETAILS
-      </th>
-
-    </tr>
+   <tr className="bg-gray-200 text-black">
+  <th
+    colSpan={2}
+    className="text-left px-2 py-1 border-l border-r border-b border-gray-800 text-[14px] font-bold"
+  >
+    ADDITIONAL DETAILS
+  </th>
+</tr>
 
   </thead>
 
@@ -781,7 +864,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
 
 {/* ================= APPROVALS ================= */}
 
-<table className="w-full table-fixed border border-gray-800 border-collapse text-center text-[10px]">
+<table className="w-full mt-24 table-fixed border border-gray-800 border-collapse text-center text-[10px]">
 
   {/* HEADER */}
   <thead>
@@ -840,7 +923,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
           {details?.[0]?.prepared_by}
         </div>
 
-        <div className="mt-2 text-[9px] text-gray-600">
+        <div className="mt-2 text-[8px] ">
           IT DEPARTMENT
         </div>
 
@@ -853,7 +936,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
           {details?.[0]?.checked_by}
         </div>
 
-        <div className="mt-2 text-[9px] text-gray-600">
+        <div className="mt-2 text-[8px] ">
           OPERATIONS
         </div>
 
@@ -866,7 +949,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
           {details?.[0]?.verified_by_it}
         </div>
 
-        <div className="mt-2 text-[9px] text-gray-600">
+        <div className="mt-2 text-[8px] ">
           IT DEPARTMENT
         </div>
 
@@ -879,7 +962,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
           {details?.[0]?.verified_by}
         </div>
 
-        <div className="mt-2 text-[9px] text-gray-600">
+        <div className="mt-2 text-[8px] ">
           ACCOUNTS
         </div>
 
@@ -892,7 +975,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
           {details?.[0]?.signed_by}
         </div>
 
-        <div className="mt-2 text-[9px] text-gray-600">
+        <div className="mt-2 text-[8px] ">
           FINANCE MANAGER
         </div>
 
@@ -905,7 +988,7 @@ const periodDisplay = `${startDate} to ${expiryDate}`;
           {details?.[0]?.approved_by}
         </div>
 
-        <div className="mt-2 text-[9px] text-gray-600">
+        <div className="mt-2 text-[8px]">
           FOUNDER & CEO
         </div>
 
