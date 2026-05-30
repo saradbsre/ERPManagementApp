@@ -684,6 +684,8 @@ const getLabel = (key, value) => {
       const isVendor =
         col.key.toLowerCase() === "vendor";
 
+      const isCodeColumn = col.key.toLowerCase().includes("_code");
+
       return (
 
         <td
@@ -697,7 +699,7 @@ const getLabel = (key, value) => {
             <select
               className="border px-2 py-1 rounded w-full"
               value={newRow.vendor || ""}
-
+              disabled={isCodeColumn}
               onChange={(e) =>
                 setNewRow(prev => ({
                   ...prev,
@@ -734,7 +736,7 @@ const getLabel = (key, value) => {
                   [col.key]: prev[col.key] ? 0 : 1
                 }))
               }
-
+              disabled={isCodeColumn}
               className={`
                 w-12 h-6 flex items-center
                 rounded-full p-1
@@ -769,7 +771,7 @@ const getLabel = (key, value) => {
 
               <select
                 className="border px-2 py-1 rounded w-full"
-
+                disabled={isCodeColumn}
                 value={newRow[col.key] || ""}
 
                 onChange={(e) =>
@@ -806,7 +808,7 @@ const getLabel = (key, value) => {
             <input
 
               type={isDate ? "date" : "text"}
-
+              disabled={isCodeColumn}
               className={`
                 border px-2 py-1 rounded w-full
                 ${getAlignClass(col.key)}
@@ -920,6 +922,8 @@ const getLabel = (key, value) => {
 
         const inputType = "date";
 
+        const isCodeColumn = col.key.toLowerCase().includes("_code");
+
         return (
 
           <td
@@ -936,6 +940,7 @@ const getLabel = (key, value) => {
                 <select
                   className="border px-2 py-1 rounded w-full"
                   value={editRow[col.key] || ""}
+                  disabled={isCodeColumn}
                   onChange={(e) =>
                     setEditRow(prev => ({
                       ...prev,
@@ -967,6 +972,7 @@ const getLabel = (key, value) => {
                 <select
                   className="border px-2 py-1 rounded w-full"
                   value={editRow[col.key] || ""}
+                    disabled={isCodeColumn}
                   onChange={(e) =>
                     setEditRow(prev => ({
                       ...prev,
@@ -1002,6 +1008,7 @@ const getLabel = (key, value) => {
                       [col.key]: prev[col.key] ? 0 : 1
                     }))
                   }
+                  disabled={isCodeColumn}
                   className={`
                     w-12 h-6 flex items-center rounded-full p-1 transition
                     ${editRow[col.key]
@@ -1026,6 +1033,7 @@ const getLabel = (key, value) => {
                 /* ================= INPUT ================= */
                 <input
                   type={isDate ? inputType : "text"}
+                  disabled={isCodeColumn}
                   className={`
                     border px-2 py-1 rounded w-full
                     ${getAlignClass(col.key)}

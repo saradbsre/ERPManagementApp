@@ -6,6 +6,7 @@ const masterTableConfig = {
 
     columns: [
       { key: "currency", label: "Currency", data_type: "string" },
+      { key: "currency_code", label: "Currency Code", data_type: "string" },
       { key: "description", label: "Description", data_type: "string" },
       { key: "country", label: "Country", data_type: "string" },
       { key: "sysdate", label: "Updated On", data_type: "datetime" },
@@ -18,6 +19,7 @@ const masterTableConfig = {
 
     columns: [
       { key: "vendor_name", label: "Vendor Name", data_type: "string" },
+      { key: "vendor_code", label: "Vendor Code", data_type: "string" },
       { key: "description", label: "Description", data_type: "string" },
       { key: "website", label: "Website", data_type: "string" },
       { key: "is_vat", label: "VAT Applicable", data_type: "boolean" },
@@ -34,6 +36,7 @@ const masterTableConfig = {
 
     columns: [
       { key: "product", label: "Product Name", data_type: "string" },
+      { key: "product_code", label: "Product Code", data_type: "string" },
       { key: "vendor", label: "Vendor", data_type: "string" },
       { key: "services", label: "Product Type", data_type: "string" },
       { key: "approved", label: "Approved By", data_type: "boolean" },
@@ -58,6 +61,7 @@ const masterTableConfig = {
 
     columns: [
         { key: "value", label: "Term Name", data_type: "string" },
+        { key: "bc_code", label: "Term Code", data_type: "number" },
         { key: "description", label: "Description", data_type: "string" },
         { key: "is_active", label: "Is Active", data_type: "boolean" },
     ]
@@ -67,6 +71,7 @@ const masterTableConfig = {
 
     columns: [
         { key: "method_name", label: "Payment Method", data_type: "string" },
+        { key: "pm_code", label: "Payment Method Code", data_type: "string" },
         { key: "description", label: "Description", data_type: "string" },
         { key: "is_active", label: "Is Active", data_type: "boolean" },
         
@@ -76,6 +81,7 @@ const masterTableConfig = {
   company: {
     displayName: "Company Master",
     columns: [
+      { key: "company_code", label: "Company Code", data_type: "string" },
       { key: "licence_no", label: "Licence Number", data_type: "string" },
       { key: "sector_brand", label: "Sector/Brand", data_type: "string" },
       { key: "trade_name", label: "Company Name", data_type: "string" },
@@ -103,6 +109,7 @@ const masterTableConfig = {
    credit_card: {
     displayName: "Credit Cards Master",
     columns: [
+      { key: "cc_code", label: "Card Code", data_type: "string" },
       { key: "card_holder_name", label: "Cardholder Name", data_type: "string" },
       { key: "card_4number", label: "Card Number - Last 4 Digits", data_type: "string" },
       { key: "card_brand", label: "Card Brand", data_type: "string" },
@@ -115,6 +122,7 @@ const masterTableConfig = {
     displayName: "Plans Master",
     columns: [
       { key: "plan_name", label: "Plan Name", data_type: "string" },
+      { key: "plan_code", label: "Plan Code", data_type: "string" },
       { key: "description", label: "Description", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
@@ -123,6 +131,7 @@ const masterTableConfig = {
     displayName: "Department Master",
     columns: [
       { key: "department_name", label: "Department Name", data_type: "string" },
+      { key: "department_code", label: "Department Code", data_type: "string" },
       { key: "description", label: "Description", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
@@ -131,6 +140,7 @@ const masterTableConfig = {
     displayName: "Division Master",
     columns: [
       { key: "division_name", label: "Division Name", data_type: "string" },
+      { key: "division_code", label: "Division Code", data_type: "string" },
       { key: "description", label: "Description", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
