@@ -1203,20 +1203,13 @@ if (col.column_name === "product_types") {
           .toLowerCase()
     );
 
-    console.log(
-      "Matched Providers:",
-      matchedProviders
-    );
 
     // Get service codes
     const serviceIds = matchedProviders.map(
       sp => String(sp.services)
     );
 
-    console.log(
-      "Service Codes:",
-      serviceIds
-    );
+   
 
     // Match service master
     const matchedServices = serviceTypes.filter(
@@ -1226,10 +1219,7 @@ if (col.column_name === "product_types") {
         )
     );
 
-    console.log(
-      "Matched Services:",
-      matchedServices
-    );
+  
 
     // Remove duplicates by service_code
     const uniqueServices = matchedServices.filter(
@@ -1363,11 +1353,11 @@ const handleNewRowChange = async (key, value, masterName) => {
   if (key === "product_types") {
   console.log("SETTING PRODUCT TYPE:", normalized);
 }
-  console.log("NEW ROW UPDATE", {
-    key,
-    original: value,
-    normalized
-  });
+  // console.log("NEW ROW UPDATE", {
+  //   key,
+  //   original: value,
+  //   normalized
+  // });
 
   setNewRow(prev => {
     const updated = {
@@ -3058,9 +3048,15 @@ onClick={handleCreate}
   const totals = calculateRowTotals({
     amount: val,
     currency: newRow.currency,
-    service_provider_id: serviceProviders.find(sp =>
-      sp.name === (newRow.service_provider?.value || newRow.service_provider)
-    )?.id
+    service_provider_id: serviceProviders.find(sp => {
+      //console.log("sp", sp.product_code)
+      const matched = sp.product_code === (newRow.products?.value || newRow.products);
+      // console.log("Matched name for amount change:", serviceProviders.product, "with new row product:", newRow.products  );
+      if (matched) {
+      }
+      return matched;
+    })?.id
+   
   });
 
   setNewRow(prev => ({
@@ -3145,6 +3141,7 @@ onClick={handleCreate}
             {/* ================= MASTER DROPDOWN ================= */}
             {isMaster &&
               activeField === col.column_name &&
+              loadingMaster !== col.master &&
               (() => {
 
                 const typedValue =
@@ -3210,9 +3207,7 @@ onMouseDown={async () => {
     typeof option === "object"
       ? option.key ?? option.id ?? option.value
       : option;
-  console.log("Selected option:", {
-    value,
-  });
+
   const label =
     typeof option === "object"
       ? option.value
