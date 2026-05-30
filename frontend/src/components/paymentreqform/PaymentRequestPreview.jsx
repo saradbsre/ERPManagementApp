@@ -170,7 +170,7 @@ const selectedVendor =
   Array.isArray(vendor) && header.vendors
     ? vendor.find(
         (v) =>
-          (v.vendor_name || "").toString().trim().toUpperCase() ===
+          (v.vendor_code || "").toString().trim().toUpperCase() ===
           header.vendors.toString().trim().toUpperCase()
       )
     : null;
@@ -181,7 +181,7 @@ const selectedCompany =
   Array.isArray(company) && header.company
     ? company.find(
         (c) =>
-          (c.trade_name || "").toString().trim().toUpperCase() ===
+          (c.company_code || "").toString().trim().toUpperCase() ===
           header.company.toString().trim().toUpperCase()
       )
     : null;
