@@ -1,14 +1,14 @@
 const mainTableConfig = {
   tbl_payment_transactions: [
     "date",
+    "receipt_number",
     "vendors",
     "products",
-    "product_types",
     "plan_provider",
-    "department",
+    "product_types",
     "company",
-    "cost_center",
-    "receipt_number",
+    "department",
+    "cost_center", 
     "expiry_date",
     "term",
     "credit_card",

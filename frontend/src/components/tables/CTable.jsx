@@ -4752,9 +4752,9 @@ setNewRow(prev => ({
           </thead>
 
           <tbody>
-
+              {console.log("Rendering item:", modalItems)}
             {modalItems.map((item, i) => (
-
+             
               <tr
                 key={i}
                 className={`hover:bg-blue-50/40 transition ${
@@ -4821,31 +4821,31 @@ setNewRow(prev => ({
                     type="number"
                     step="0.01"
                     value={Number(item.amount || 0).toFixed(2)}
-                    onChange={(e) => {
+                    // onChange={(e) => {
 
-                      const amount =
-                        parseFloat(e.target.value || 0);
+                    //   const amount =
+                    //     parseFloat(e.target.value || 0);
 
-                      const vat =
-                        (amount * parseFloat(vatPercent || 0)) / 100;
+                    //   const vat =
+                    //     (amount * parseFloat(vatPercent || 0)) / 100;
 
-                      const total =
-                        amount + vat;
+                    //   const total =
+                    //     amount + vat;
 
-                      const updatedItems = [...modalItems];
+                    //   const updatedItems = [...modalItems];
 
-                      updatedItems[i].amount =
-                        amount.toFixed(2);
+                    //   updatedItems[i].amount =
+                    //     amount.toFixed(2);
 
-                      updatedItems[i].vat =
-                        vat.toFixed(2);
+                    //   updatedItems[i].vat =
+                    //     vat.toFixed(2);
 
-                      updatedItems[i].total_amount =
-                        total.toFixed(2);
+                    //   updatedItems[i].total_amount =
+                    //     total.toFixed(2);
 
-                      setModalItems(updatedItems);
+                    //   setModalItems(updatedItems);
 
-                    }}
+                    // }}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-right focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none"
                   />
 

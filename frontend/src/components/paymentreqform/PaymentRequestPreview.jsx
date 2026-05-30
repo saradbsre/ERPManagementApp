@@ -24,12 +24,21 @@ const header = data?.header?.[0] || data?.header || {};
 const details = data?.details || [];
 const paid_by = data?.paid_by || "SABAH";
 const currencyNames = {
+  // Currency codes
   AED: "DIRHAMS",
   USD: "DOLLARS",
   EUR: "EUROS",
   GBP: "POUNDS",
-  SAR: "RIYALS"
-  // Add more as needed
+  INR: "RUPEES",
+  SAR: "RIYALS",
+
+  // Master codes
+  CR001: "DIRHAMS",   // AED
+  CR002: "DOLLARS",   // USD
+  CR003: "EUROS",     // EUR
+  CR004: "POUNDS",    // GBP
+  CR006: "RUPEES",    // INR
+  CR007: "RIYALS"     // SAR
 };
 
 // console.log("Header:", header);
@@ -256,11 +265,30 @@ const selectedCompany =
 
 
 
-const selectedCurrency = Array.isArray(currency) && header.currency ? currency.find(
-  (c) =>
-    (c.currency_code || "").toString().trim().toUpperCase() ===
-    header.currency.toString().trim().toUpperCase()
-) : null;
+const selectedCurrency =
+  Array.isArray(currency) && header.currency
+    ? currency.find((c) => {
+        const headerValue = header.currency
+          .toString()
+          .trim()
+          .toUpperCase();
+
+        const currencyCode = (c.currency_code || "")
+          .toString()
+          .trim()
+          .toUpperCase();
+
+        const currencyName = (c.currency || "")
+          .toString()
+          .trim()
+          .toUpperCase();
+
+        return (
+          currencyCode === headerValue ||
+          currencyName === headerValue
+        );
+      })
+    : null;
 
 const selectedTerm = Array.isArray(terms) && header.term ? terms.find(
   (t) =>
@@ -275,7 +303,7 @@ const selectedCostCenter = Array.isArray(costCenters) && header.cost_center ? co
 const selectedDepartment = Array.isArray(departments) && header.department ? departments.find(
     (d) => (d.department_code || "").toString().trim().toUpperCase() === header.department.toString().trim().toUpperCase()
 ) : null;
-//console.log("Selected commpany:", selectedCompany);
+console.log("Selected currency:", selectedCurrency);
 // console.log("Selected term:", selectedTerm);
 // console.log("Selected cost center:", selectedCostCenter);
 // console.log("Selected department:", selectedDepartment);
@@ -448,8 +476,12 @@ const currentDate = new Date();
       {selectedVendor?.website
         ? `| Website: ${selectedVendor.website}`
         : ""}
+   
+    </p>
+      <p className="text-[12px] text-gray-700">
+     
     {selectedVendor?.phone_number
-        ? `| Tel: ${selectedVendor.phone_number}`
+        ? `Tel: ${selectedVendor.phone_number}`
         : ""}
     </p>
 
@@ -734,10 +766,13 @@ const currentDate = new Date();
       </td>
 
       {/* PRODUCT */}
-      <td className="border border-gray-800 p-2 align-top text-center">
+      <td className="border border-gray-800 p-2 align-top text-left">
         {details?.map((item, i) => (
           <div key={i} className="py-1">
             {item.product}
+            {header.plan_provider
+            ? ` - ${header.plan_provider} - ${header.product_types}`
+            : ` - ${header.product_types}`}
           </div>
         ))}
       </td>

@@ -6,7 +6,6 @@ export const getAlignClass = (key) => {
   if (
     k.includes("amt") ||
     k.includes("amount") ||
-    k.includes("cost") ||
     k.includes("price") ||
     k.includes("total")
   ) {
