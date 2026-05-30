@@ -105,24 +105,7 @@ function SortableColumnItem({ col, checked, toggleTempColumn}) {
   );
 }
 
-function calculateRowTotals({ amount, currency, service_provider_id }) {
-  const provider = serviceProviders.find(p => p.id === service_provider_id);
-  const isVat = provider?.is_vat;
-  const amt = Number(amount) || 0;
-  const vat = isVat ? (amt * vatPercent) / 100 : 0;
-  const total = amt + vat;
 
-  // Find currency value (exchange rate)
-  const currencyObj = currencies.find(c => c.code === currency);
-  const currencyValue = currencyObj ? Number(currencyObj.value) : 1;
-  const totalAed = total * currencyValue;
-
-  return {
-    vat_amount: vat.toFixed(2),
-    total_amount: total.toFixed(2),
-    total_amount_aed: totalAed.toFixed(2),
-  };
-}
 
 
 export default function DynamicTablePage() {
@@ -578,7 +561,6 @@ useEffect(() => {
       : newRow.currency;
 
   if (isNaN(amount) || !currency) return;
-
 
 
   const calc = calculateCost(
@@ -1153,62 +1135,125 @@ const getMasterOptions = (col, searchText = "") => {
 
   const selectedVendor =
     newRow?.vendors || editRow?.vendors || null;
-
+//console.log("Selected vendor for master options:", selectedVendor);
+// console.log("newRow:", newRow?.vendors, "editRow:", editRow?.vendors);
   // ================= PRODUCTS =================
- if (col.column_name === "products") {
+// ================= PRODUCTS =================
+if (col.column_name === "products") {
 
-  let list = [];
-  //  console.log("selectedVendor:", selectedVendor);
-  //   console.log("Master data map for service providers:", masterDataMap?.service_providers);
-  // vendor selected
-  if (selectedVendor && availableProducts?.length) {
-    
-    list = availableProducts;
+  let products = [];
+
+  if (selectedVendor && serviceProviders?.length) {
+
+    products = serviceProviders.filter(
+      sp =>
+        String(sp.vendor || "")
+          .trim()
+          .toLowerCase() ===
+        String(selectedVendor || "")
+          .trim()
+          .toLowerCase()
+    );
+
+  } else if (serviceProviders?.length) {
+
+    products = serviceProviders;
+
   }
- 
-  // all products
- 
-  else if (masterDataMap?.service_providers) {
-   
-    list = masterDataMap.service_providers
-      .map(sp => sp.value || [])
-      .filter(Boolean);
-   // console.log("Products from master data:", list);
-  }
 
-  // remove duplicates
-  const unique = [...new Set(list)];
+  // remove duplicates by product_code
+  const unique = products.filter(
+    (item, index, self) =>
+      index === self.findIndex(
+        p => p.product_code === item.product_code
+      )
+  );
 
-  return unique.map((v, i) => ({
-    id: i,
-    value: v
+  return unique.map(sp => ({
+    key: sp.product_code, // PR009
+    value: sp.product     // ChatGPT Go Subscription (per seat)
   }));
 }
 
-  // ================= PRODUCT TYPES =================
 if (col.column_name === "product_types") {
 
-  let list = [];
-  //console.log("masterDataMap for service types:", masterDataMap?.services);
-  // vendor filtered
-  if (selectedVendor && availableServices?.length) {
-    list = availableServices;
+  // =========================
+  // SELECTED PRODUCT CODE
+  // =========================
+  const selectedProduct =
+    newRow?.products ||
+    editRow?.products ||
+    null;
+
+
+
+  // =========================
+  // FILTER SERVICES BY PRODUCT
+  // =========================
+  if (selectedProduct && serviceProviders?.length) {
+
+    // Find provider rows matching selected product code
+    const matchedProviders = serviceProviders.filter(
+      sp =>
+        String(sp.product_code || "")
+          .trim()
+          .toLowerCase() ===
+        String(selectedProduct || "")
+          .trim()
+          .toLowerCase()
+    );
+
+    console.log(
+      "Matched Providers:",
+      matchedProviders
+    );
+
+    // Get service codes
+    const serviceIds = matchedProviders.map(
+      sp => String(sp.services)
+    );
+
+    console.log(
+      "Service Codes:",
+      serviceIds
+    );
+
+    // Match service master
+    const matchedServices = serviceTypes.filter(
+      st =>
+        serviceIds.includes(
+          String(st.service_code)
+        )
+    );
+
+    console.log(
+      "Matched Services:",
+      matchedServices
+    );
+
+    // Remove duplicates by service_code
+    const uniqueServices = matchedServices.filter(
+      (item, index, self) =>
+        index ===
+        self.findIndex(
+          s =>
+            s.service_code ===
+            item.service_code
+        )
+    );
+
+    return uniqueServices.map(st => ({
+      key: st.service_code,   // S01
+      value: st.service_name // Subscriptions
+    }));
   }
 
-  // all services fallback
-  else if (masterDataMap?.services?.length) {
-
-    list = masterDataMap.services
-      .map(st => st.value)   // ✅ correct field
-      .filter(Boolean);      // ✅ remove empty/null
-  }
-
-  // remove duplicates
-  const unique = [...new Set(list)];
-
-  return unique.map((v, i) => ({
-    id: i,
-    value: v
+  // =========================
+  // FALLBACK ALL SERVICES
+  // =========================
+  return serviceTypes.map(st => ({
+    key: st.service_code,    // S01
+    value: st.service_name   // Subscriptions
   }));
 }
 
@@ -1250,16 +1295,27 @@ if (col.column_name === "product_types") {
     );
   }
 
-  // ================= SEARCH =================
-  if (searchText) {
+// ================= SEARCH =================
+if (searchText) {
 
-    const search = searchText.toLowerCase();
+  const search =
+    typeof searchText === "object"
+      ? String(searchText?.value || "").toLowerCase()
+      : String(searchText || "").toLowerCase();
 
-    options = options.filter(v => {
-      const val = typeof v === "object" ? v.value : v;
-      return String(val).toLowerCase().includes(search);
-    });
-  }
+  options = options.filter(v => {
+
+    const val =
+      typeof v === "object"
+        ? v.value
+        : v;
+
+    return String(val || "")
+      .toLowerCase()
+      .includes(search);
+
+  });
+}
 
   return options;
 };
@@ -1304,6 +1360,9 @@ const handleNewRowChange = async (key, value, masterName) => {
       : parsed;
   }
 
+  if (key === "product_types") {
+  console.log("SETTING PRODUCT TYPE:", normalized);
+}
   console.log("NEW ROW UPDATE", {
     key,
     original: value,
@@ -1360,7 +1419,8 @@ useEffect(() => {
        setLoading(true);
         // Clone the newRow to avoid mutating state directly
         const payload = { ...newRow };
-
+        console.log("NEW ROW AT SAVE:", newRow);
+        console.log("Original payload before processing:", payload);
         // Set fcamt and currency from the form values
         if (payload.amount && payload.currency) {
            // payload.fc_amount = payload.total_amount_aed;
@@ -2432,6 +2492,26 @@ return `
   
   setShowGenerateModal(true);
 };
+
+function calculateRowTotals({ amount, currency, service_provider_id }) {
+  const provider = serviceProviders.find(p => p.id === service_provider_id);
+  console.log("Calculating totals for amount:", amount, "currency:", currency, "provider ID:", service_provider_id, "provider:", provider);
+  const isVat = provider?.is_vat;
+  const amt = Number(amount) || 0;
+  const vat = isVat ? (amt * vatPercent) / 100 : 0;
+  const total = amt + vat;
+
+  // Find currency value (exchange rate)
+  const currencyObj = currencies.find(c => c.code === currency);
+  const currencyValue = currencyObj ? Number(currencyObj.value) : 1;
+  const totalAed = total * currencyValue;
+
+  return {
+    vat_amount: vat.toFixed(2),
+    total_amount: total.toFixed(2),
+    total_amount_aed: totalAed.toFixed(2),
+  };
+}
     return (
         <div className="h-full flex flex-col">
              <ValidatePopups
@@ -2875,451 +2955,365 @@ onClick={handleCreate}
                         {/* TABLE BODY */}
                     <tbody className="divide-y">
                       {isCreating && (
-                        <tr className="bg-blue-50">
-                          <td className="px-4 py-3 whitespace-nowrap"></td>
+  <tr className="bg-blue-50">
+    <td className="px-4 py-3 whitespace-nowrap"></td>
 
-                          {visibleColumns.map((col) => {
-                            const isMaster = !!col.master;
-                            const isDate = col.data_type?.toLowerCase().includes("date");
-                            const isAmount = col.data_type?.toLowerCase().includes("decimal")
+    {visibleColumns.map((col) => {
 
-                            // ✅ normalize value (IMPORTANT FIX)
-                            const rawValue = newRow[col.column_name];
-                          let value =
-                        typeof rawValue === "object"
-                          ? rawValue?.value ?? ""
-                          : rawValue ?? "";
+      const isMaster = !!col.master;
 
-                      // 🔐 CREDIT CARD MASKING (CREATE MODE)
-                      if (col.master === "credit_card" && value) {
-                        const raw = String(value);
-                        const last4 = raw.slice(-4);
-                        value = `**** **** **** ${last4}`;
-                      }
+      const isDate =
+        col.data_type?.toLowerCase().includes("date");
 
-                            return (
-                            <td
-  key={col.column_id}
-  className={`
-    px-4 py-2 whitespace-nowrap
-    ${getAlignClass(col.display_name)}
-    ${col.column_name === "company" ? "min-w-[450px]" : ""}
-  `}
->
-                                <div className="relative">
+      const isAmount =
+        col.data_type?.toLowerCase().includes("decimal");
 
-                                <input
-                        autoComplete="off"
-                        type={isNumericColumn(col) ? "number" : isDate ? "date" : "text"}
-                         className={`
-    rounded-xl
-    border border-gray-300
-    bg-white
-    px-3 py-2
-    text-sm
-    outline-none
-    transition-all duration-200
-    focus:border-blue-500
-    focus:ring-4
-    focus:ring-blue-100
+      // =========================
+      // DISPLAY VALUE
+      // =========================
+      const fieldValue = inputValues[col.column_name];
 
-    ${
-      col.column_name === "company"
-        ? "w-[450px]"
-        : "w-full"
-    }
-  `}
-                        value={
-                          inputValues[col.column_name] ??
-                          (
-                            col.column_name === "total_amount_aed"
-                              ? newRow.total_amount_aed || ""
-                              : isDate
-                              ? formatForInput(value)
-                              : value
-                          )
-                        }
-                        disabled={col.column_name === "total_amount_aed"}
+      const displayValue =
+        typeof fieldValue === "object"
+          ? fieldValue.value
+          : fieldValue ??
+            newRow[col.column_name] ??
+            "";
 
-                       onChange={(e) => {
-  let val = e.target.value;
+      return (
 
-  if (isNumericColumn(col.column_name)) {
-    val = handleNumericInput(val);
-  }
+        <td
+          key={col.column_id}
+          className={`
+            px-4 py-2 whitespace-nowrap
+            ${getAlignClass(col.display_name)}
+            ${col.column_name === "company"
+              ? "min-w-[450px]"
+              : ""
+            }
+          `}
+        >
 
-  // =========================
-  // AMOUNT AUTO CALCULATION
-  // =========================
- if (col.column_name === "amount") {
+          <div className="relative">
 
-  const amount = parseFloat(val || 0);
+            {/* ================= INPUT ================= */}
+            <input
+              autoComplete="off"
 
-  let matchedProvider = null;
+              type={
+                isNumericColumn(col)
+                  ? "number"
+                  : isDate
+                  ? "date"
+                  : "text"
+              }
 
-  // =========================
-  // MATCH USING VENDOR
-  // =========================
-  if (newRow.vendors) {
+              className={`
+                rounded-xl
+                border border-gray-300
+                bg-white
+                px-3 py-2
+                text-sm
+                outline-none
+                transition-all duration-200
+                focus:border-blue-500
+                focus:ring-4
+                focus:ring-blue-100
 
-    matchedProvider = serviceProviders.find(
-      sp =>
-        String(sp.vendor || "").trim().toLowerCase() ===
-        String(newRow.vendors || "").trim().toLowerCase()
-    );
+                ${
+                  col.column_name === "company"
+                    ? "w-[450px]"
+                    : "w-full"
+                }
+              `}
 
-  }
+              value={
+                col.column_name === "total_amount_aed"
+                  ? newRow.total_amount_aed || ""
+                  : isDate
+                  ? formatForInput(displayValue)
+                  : displayValue
+              }
 
-  // =========================
-  // IF NO VENDOR
-  // MATCH USING PRODUCT
-  // =========================
-  if (!matchedProvider && newRow.products) {
+              disabled={
+                col.column_name === "total_amount_aed" ||
+                col.column_name === "vat_amount" ||
+                col.column_name === "total_amount" ||
+                col.column_name === "prf_generate"
+              }
 
-    matchedProvider = serviceProviders.find(
-      sp =>
-        String(sp.product || "").trim().toLowerCase() ===
-        String(newRow.products || "").trim().toLowerCase()
-    );
+              onChange={(e) => {
 
-  }
+                let val = e.target.value;
 
-  console.log("Matched Provider:", matchedProvider);
+                // =========================
+                // NUMERIC
+                // =========================
+                if (isNumericColumn(col.column_name)) {
+                  val = handleNumericInput(val);
+                }
 
-  // =========================
-  // VAT CHECK
-  // =========================
-  const isVatApplicable =
-    matchedProvider?.is_vat === true ||
-    matchedProvider?.is_vat === "true" ||
-    matchedProvider?.is_vat === 1;
+                if (col.column_name === "amount") {
 
-  // =========================
-  // CALCULATE
-  // =========================
-  const vat = isVatApplicable
-    ? (amount * parseFloat(vatPercent || 0)) / 100
-    : 0;
+  const totals = calculateRowTotals({
+    amount: val,
+    currency: newRow.currency,
+    service_provider_id: serviceProviders.find(sp =>
+      sp.name === (newRow.service_provider?.value || newRow.service_provider)
+    )?.id
+  });
 
-  const total = amount + vat;
-
-  // =========================
-  // UPDATE ROW
-  // =========================
   setNewRow(prev => ({
     ...prev,
-    amount: amount.toFixed(2),
-    vat_amount: vat.toFixed(2),
-    total_amount: total.toFixed(2),
+    amount: val,
+    vat_amount: totals.vat_amount,
+    total_amount: totals.total_amount,
+    total_amount_aed: totals.total_amount_aed
   }));
 }
 
-  // =========================
-  // NORMAL INPUT
-  // =========================
-  if (isMaster) {
-
-    setInputValues(prev => ({
-      ...prev,
-      [col.column_name]: val
-    }));
-
-    setActiveField(col.column_name);
-
-  } else {
-
-    handleNewRowChange(
-      col.column_name,
-      val,
-      col.master
-    );
-
-  }
-}}
-
-                        onFocus={() => {
-                        setActiveField(col.column_name);
-
-                        if (col.master) {
-                          fetchMasterDataForColumn(col.master);
-                        }
-
-                        if (col.master1) {
-                          fetchMasterDataForColumn(col.master1);
-                        }
-                      }}
-
-                        onBlur={(e) => {
-                          if (isAmount && e.target.value !== "") {
-                            handleNewRowChange(
-                              col.column_name,
-                              Number(e.target.value).toFixed(2),
-                              col.master
-                            );
-                          }
-
-                          setActiveField(null);
-                        }}
-                        disabled={
-                            col.column_name === "total_amount_aed" ||
-                            col.column_name === "vat_amount" ||
-                            col.column_name === "total_amount" ||
-                            col.column_name === "prf_generate"
-                          }
-                      />
-                          {isMaster &&
-                                      loadingMaster === col.master && (
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                          <Loader type="dots" />
-                                        </div>
-                                    )}
-                                  {/* MASTER DROPDOWN */}
-                                {/* ================= MASTER DROPDOWN ================= */}
-                      {isMaster &&
-                        activeField === col.column_name &&
-                        (() => {
-
-                          const typedValue =
-                            inputValues[col.column_name] || "";
-
-                          const rawOptions = getMasterOptions(
-                            col,
-                            typedValue,
-                            newRow
-                          ).slice(0, 20);
-
-                          const filteredOptions = rawOptions.filter((val) => {
-
-                            const raw =
-                              typeof val === "object"
-                                ? val.value
-                                : val;
-
-                            return String(raw || "")
-                              .toLowerCase()
-                              .includes(typedValue.toLowerCase());
-                          });
-
-                        const showAdd =
-                          typedValue &&
-                          filteredOptions.length === 0 &&
-                          loadingMaster !== col.master;
-
-                          return (
-                            <div className="
-                              absolute z-50 mt-2 w-full overflow-hidden
-                              rounded-2xl border border-gray-200
-                              bg-white/95 backdrop-blur-xl
-                              shadow-[0_10px_35px_rgba(0,0,0,0.12)]
-                              max-h-64 overflow-y-auto
-                            ">
-                              {loadingMaster ===
-                                              col.master && (
-                                              <div className="flex items-center justify-center py-6">
-                                                <Loader type="dots" />
-                                              </div>
-                                            )}
-
-
-                              {/* OPTIONS */}
-                              {filteredOptions.map((val, i) => {
-
-                                let display =
-                                  typeof val === "object"
-                                    ? val.value
-                                    : val;
-
-                                // CREDIT CARD MASKING (DISPLAY ONLY)
-                                if (col.column_name === "credit_card" && display) {
-                                  const raw = String(display).replace(/\D/g, "");
-                                  const last4 = raw.slice(-4);
-                                  display = `**** **** **** ${last4}`;
-                                }
-
-                                const rawValue =
-                                  typeof val === "object"
-                                    ? val.value
-                                    : val;
-
-                                return (
-                                  <div
-                                    key={i}
-                                    className="
-                                      flex items-center justify-between
-                                      px-4 py-3
-                                      text-sm text-gray-700
-                                      cursor-pointer
-                                      hover:bg-blue-50
-                                      transition-all duration-150
-                                      border-b border-gray-100 last:border-0
-                                    "
-                               onMouseDown={() => {
-
-  const selectedValue =
-    typeof val === "object"
-      ? val.value
-      : val;
-
-  // =========================
-  // SET VALUE GENERIC
-  // =========================
-  handleNewRowChange(
-    col.column_name,
-    selectedValue,
-    col.master
-  );
+                // =========================
+                // MASTER FIELD
+                // =========================
+                if (isMaster) {
 
   setInputValues(prev => ({
     ...prev,
-    [col.column_name]: selectedValue
+    [col.column_name]: {
+      key: "",
+      value: val
+    }
   }));
 
+  setActiveField(col.column_name);
 
-  // =========================
-  // VENDOR SELECTED
-  // =========================
-  if (col.column_name === "vendors") {
+}
 
-    const matchedProviders = serviceProviders.filter(
-      sp =>
-        String(sp.vendor || "").trim().toLowerCase() ===
-        String(selectedValue || "").trim().toLowerCase()
-    );
+                // =========================
+                // NORMAL FIELD
+                // =========================
+                else {
 
-    // -------------------------
-    // PRODUCTS LIST
-    // -------------------------
-    if (matchedProviders.length > 0) {
+                  handleNewRowChange(
+                    col.column_name,
+                    val,
+                    col.master
+                  );
 
-      const allProducts = matchedProviders.flatMap(sp =>
-        String(sp.product || "")
-          .split(",")
-          .map(p => p.trim())
-      );
+                }
 
-      const uniqueProducts = [...new Set(allProducts)];
+              }}
 
-      setAvailableProducts(uniqueProducts);
-    }
+              onFocus={() => {
 
-    // -------------------------
-    // SERVICES LIST
-    // -------------------------
-    const matchedServices = serviceTypes.filter(
-      st =>
-        matchedProviders.some(mp =>
-          String(st.id) === String(mp.services)
-        )
-    );
+                setActiveField(col.column_name);
 
-    if (matchedServices.length > 0) {
+                if (col.master) {
+                  fetchMasterDataForColumn(col.master);
+                }
 
-      const serviceNames = matchedServices.map(
-        s => s.service_name
-      );
+              }}
 
-      setAvailableServices([...new Set(serviceNames)]);
-    }
-  }
+              onBlur={(e) => {
 
+                if (isAmount && e.target.value !== "") {
 
-  // =========================
-  // PRODUCT SELECTED
-  // =========================
+                  handleNewRowChange(
+                    col.column_name,
+                    Number(e.target.value).toFixed(2),
+                    col.master
+                  );
+
+                }
+
+                setTimeout(() => {
+                  setActiveField(null);
+                }, 150);
+
+              }}
+
+            />
+
+            {/* ================= LOADER ================= */}
+            {isMaster &&
+              loadingMaster === col.master && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <Loader type="dots" />
+                </div>
+            )}
+
+            {/* ================= MASTER DROPDOWN ================= */}
+            {isMaster &&
+              activeField === col.column_name &&
+              (() => {
+
+                const typedValue =
+                  typeof inputValues[col.column_name] === "object"
+                    ? inputValues[col.column_name]?.value || ""
+                    : inputValues[col.column_name] || "";
+
+                const rawOptions = getMasterOptions(
+                  col,
+                  typedValue,
+                  newRow
+                );
+
+                const filteredOptions =
+                  rawOptions.filter((option) => {
+
+                    const label =
+                      typeof option === "object"
+                        ? option.value
+                        : option;
+
+                    return String(label || "")
+                      .toLowerCase()
+                      .includes(
+                        typedValue.toLowerCase()
+                      );
+
+                  });
+
+                return (
+
+                  <div className="
+                    absolute z-50 mt-2 w-full overflow-hidden
+                    rounded-2xl border border-gray-200
+                    bg-white shadow-xl
+                    max-h-64 overflow-y-auto
+                  ">
+
+                    {/* OPTIONS */}
+                    {filteredOptions.map((option, i) => {
+
+                      const label =
+                        typeof option === "object"
+                          ? option.value
+                          : option;
+
+                      return (
+
+                        <div
+                          key={i}
+
+                          className="
+                            px-4 py-3
+                            text-sm text-gray-700
+                            cursor-pointer
+                            hover:bg-blue-50
+                            border-b border-gray-100
+                          "
+
+onMouseDown={async () => {
+
+  const value =
+    typeof option === "object"
+      ? option.key ?? option.id ?? option.value
+      : option;
+  console.log("Selected option:", {
+    value,
+  });
+  const label =
+    typeof option === "object"
+      ? option.value
+      : option;
+
+  // ✅ 1. update NEW ROW FIRST (source of truth)
+setNewRow(prev => ({
+  ...prev,
+  [col.column_name]: value,
+  ...(col.column_name === "products"
+    ? { product_types: "" }
+    : {})
+}));
+
+  // ✅ 2. UI state
+  setInputValues(prev => ({
+    ...prev,
+    [col.column_name]: { key: value, value: label }
+  }));
+
+  // ✅ 3. DB state
+ if (col.column_name === "product_types") {
+  console.log("PRODUCT TYPE SELECTED", option);
+}
+  handleNewRowChange(col.column_name, value, col.master);
+
+  // ✅ 4. load dependent data
   if (col.column_name === "products") {
-    const matchedProduct = serviceProviders.find(
-      sp =>
-        String(sp.product || "").trim().toLowerCase() ===
-        String(selectedValue || "").trim().toLowerCase()
-    );
-    console.log("Product selected:", selectedValue, matchedProduct);
-    loadProviderPlans(matchedProduct?.id);
-  }
 
+    const matchedProvider = serviceProviders.find(sp =>
+      String(sp.product || "").trim().toLowerCase() ===
+      String(label || "").trim().toLowerCase()
+    );
+
+    await loadProviderPlans(matchedProvider?.id);
+  }
 
   setActiveField(null);
 }}
-                                  >
-                                    <span className="truncate">
-                                      {display}
-                                    </span>
-                                  </div>
-                                );
-                              })}
+                        >
 
-                              {/* EMPTY */}
-                              {loadingMaster !== col.master &&
-                                filteredOptions.length === 0 &&
-                                !showAdd && (
-                                  <div className="px-4 py-3 text-sm text-gray-400 text-center">
-                                    No results found
-                                  </div>
-                              )}
+                          {label}
 
-                              {/* ADD NEW */}
-                              {showAdd && (
-                                <div
-                                  className="
-                                    sticky bottom-0
-                                    bg-green-50
-                                    border-t border-green-200
-                                    px-4 py-3
-                                    text-sm font-medium text-green-700
-                                    cursor-pointer
-                                    hover:bg-green-100
-                                    transition
-                                  "
-                                  onMouseDown={async () => {
+                        </div>
 
-                                    const newValue =
-                                      inputValues[col.column_name];
+                      );
 
-                                    await addMasterValue(
-                                      col.master,
-                                      newValue
-                                    );
+                    })}
 
-                                    setInputValues(prev => ({
-                                      ...prev,
-                                      [col.column_name]: newValue
-                                    }));
+                    {/* EMPTY */}
+                    {filteredOptions.length === 0 && (
+                      <div className="px-4 py-3 text-sm text-gray-400 text-center">
+                        No results found
+                      </div>
+                    )}
 
-                                    handleNewRowChange(
-                                      col.column_name,
-                                      newValue,
-                                      col.master
-                                    );
+                  </div>
 
-                                    setAutoFilledFields(prev => ({
-                                      ...prev,
-                                      [col.column_name]: true
-                                    }));
+                );
 
-                                    setActiveField(null);
-                                  }}
-                                >
-                                  + Add "{typedValue}"
-                                </div>
-                              )}
+              })()}
 
-                            </div>
-                          );
-                        })()}
+          </div>
 
-                                </div>
-                              </td>
-                            );
-                          })}
+        </td>
 
-                          {/* ACTIONS */}
-                          <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
-                            <button onClick={handleSave} className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-                                    hover:bg-blue-100 hover:border-blue-500 transition">Save</button>
-                            <button onClick={handleCancel} className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-                                    hover:bg-red-100 hover:border-red-500 transition">Cancel</button>
-                          </td>
-                        </tr>
-                      )}
+      );
+
+    })}
+
+    {/* ACTIONS */}
+    <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
+
+      <button
+        onClick={handleSave}
+        className="
+          px-3 py-1.5 text-sm rounded-md
+          border border-blue-300 bg-white
+          hover:bg-blue-100 hover:border-blue-500
+          transition
+        "
+      >
+        Save
+      </button>
+
+      <button
+        onClick={handleCancel}
+        className="
+          px-3 py-1.5 text-sm rounded-md
+          border border-red-300 bg-white
+          hover:bg-red-100 hover:border-red-500
+          transition
+        "
+      >
+        Cancel
+      </button>
+
+    </td>
+
+  </tr>
+)}
                       {sortedRows.map((row, i) => (
                         <tr
                           key={row.id ?? i}

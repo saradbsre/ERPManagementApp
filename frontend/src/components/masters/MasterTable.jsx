@@ -63,6 +63,7 @@ export default function MasterTablePage() {
     const [editingPlanName, setEditingPlanName] = useState("");
     const [servicesList, setServicesList] = useState([]);
     const [providersList, setProvidersList] = useState([]);
+    const [vendorList, setVendorList] = useState([]);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [popupMessage, setPopupMessage] = useState("");
     const [popupType, setPopupType] = useState("");
@@ -272,6 +273,19 @@ const handleSavePlans = async () => {
     console.error(err);
   }
 };
+
+useEffect(() => {
+  const loadVendors = async () => {
+    try {
+      const res = await getMasterData("vendors", activeUserEmail);
+      setVendorList(res?.data || []);
+    } catch (err) {
+      setVendorList([]);
+    }
+  };
+  loadVendors();
+}, [activeUserEmail]);
+
   const filteredRows = rows.filter(row => {
   if (!search) return true;
 
@@ -657,112 +671,216 @@ const getLabel = (key, value) => {
     <td className="px-4 py-3">#</td>
 
     {columns.map(col => {
+
       const isDate = isDateColumn(col);
-      const isToggle = col.key.toLowerCase() === "is_active" || col.key.toLowerCase() === "is_vat";
-      const inputType = "date";
-      const isServiceMaster = col.key.toLowerCase() === "services";
+
+      const isToggle =
+        col.key.toLowerCase() === "is_active" ||
+        col.key.toLowerCase() === "is_vat";
+
+      const isServiceMaster =
+        col.key.toLowerCase() === "services";
+
+      const isVendor =
+        col.key.toLowerCase() === "vendor";
 
       return (
-        <td key={col.key} className={`px-4 py-3 ${getAlignClass(col.key)}`}>
 
-          {/* ================= TOGGLE ================= */}
-    {isToggle ? (
-  <button
-    onClick={() =>
-      setNewRow(prev => ({
-        ...prev,
-        [col.key]: prev[col.key] ? 0 : 1
-      }))
-    }
-    className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-200
-      ${newRow[col.key] ? "bg-green-500" : "bg-gray-300"}
-    `}
-  >
-    <div
-      className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform duration-200
-        ${newRow[col.key] ? "translate-x-6" : "translate-x-0"}
-      `}
-    />
-  </button>
-) : isServiceMaster ? (
-  // SERVICES MASTER DROPDOWN
-  <div className="relative">
-    <select
-      className="border px-2 py-1 rounded w-full"
-      value={newRow[col.key] || ""}
-      onChange={e =>
-        setNewRow(prev => ({
-          ...prev,
-          [col.key]: e.target.value
-        }))
-      }
-    >
-      <option value="">Select Service</option>
-      {(servicesList || []).map((s, i) => (
-  <option key={i} value={s.id}>
-    {s.service_name}
-  </option>
-))}
-    </select>
-  </div>
-) : (
+        <td
+          key={col.key}
+          className={`px-4 py-3 ${getAlignClass(col.key)}`}
+        >
+
+          {/* ================= VENDOR ================= */}
+          {isVendor ? (
+
+            <select
+              className="border px-2 py-1 rounded w-full"
+              value={newRow.vendor || ""}
+
+              onChange={(e) =>
+                setNewRow(prev => ({
+                  ...prev,
+                  vendor: e.target.value
+                }))
+              }
+            >
+
+              <option value="">
+                Select Vendor
+              </option>
+              {console.log("Vendor list for dropdown:", vendorList)}
+              {vendorList.map(v => (
+
+                <option
+                  key={v.vendor_code}
+                  value={v.vendor_code}
+                >
+                  {v.vendor_name}
+                </option>
+
+              ))}
+
+            </select>
+
+          ) : isToggle ? (
+
+            /* ================= TOGGLE ================= */
+
+            <button
+              onClick={() =>
+                setNewRow(prev => ({
+                  ...prev,
+                  [col.key]: prev[col.key] ? 0 : 1
+                }))
+              }
+
+              className={`
+                w-12 h-6 flex items-center
+                rounded-full p-1
+                transition-colors duration-200
+                ${
+                  newRow[col.key]
+                    ? "bg-green-500"
+                    : "bg-gray-300"
+                }
+              `}
+            >
+
+              <div
+                className={`
+                  bg-white w-4 h-4 rounded-full shadow
+                  transform transition-transform duration-200
+                  ${
+                    newRow[col.key]
+                      ? "translate-x-6"
+                      : "translate-x-0"
+                  }
+                `}
+              />
+
+            </button>
+
+          ) : isServiceMaster ? (
+
+            /* ================= SERVICES ================= */
+
+            <div className="relative">
+
+              <select
+                className="border px-2 py-1 rounded w-full"
+
+                value={newRow[col.key] || ""}
+
+                onChange={(e) =>
+                  setNewRow(prev => ({
+                    ...prev,
+                    [col.key]: e.target.value
+                  }))
+                }
+              >
+
+                <option value="">
+                  Select Service
+                </option>
+
+                {(servicesList || []).map((s, i) => (
+
+                  <option
+                    key={i}
+                    value={s.id}
+                  >
+                    {s.service_name}
+                  </option>
+
+                ))}
+
+              </select>
+
+            </div>
+
+          ) : (
+
+            /* ================= NORMAL INPUT ================= */
+
             <input
-              type={isDate ? inputType : "text"}
-              className={`border px-2 py-1 rounded w-full ${getAlignClass(col.key)}`}
+
+              type={isDate ? "date" : "text"}
+
+              className={`
+                border px-2 py-1 rounded w-full
+                ${getAlignClass(col.key)}
+              `}
+
               value={
                 isDate
-                  ? formatForInput(newRow[col.key], inputType)
+                  ? formatForInput(newRow[col.key], "date")
                   : (formatCard(newRow[col.key], col.key) || "")
               }
+
               onChange={(e) => {
+
                 let value = e.target.value;
 
                 if (isNumericColumn(col.key)) {
                   value = handleNumericInput(value);
                 }
 
-                setNewRow({
-                  ...newRow,
+                setNewRow(prev => ({
+                  ...prev,
                   [col.key]: value
-                });
+                }));
+
               }}
+
             />
+
           )}
 
         </td>
+
       );
+
     })}
 
-    {/* PLANS BUTTON */}
+    {/* ================= PLANS BUTTON ================= */}
     {masterName === "service_providers" && (
+
       <td className="px-4 py-3 text-center">
-        {/* <button
-          onClick={() => openPlansModal(null)}
-          className="px-2 py-1 text-xs rounded border border-blue-300 hover:bg-blue-100"
-          disabled // disable until name is entered
-        >
-           Plans
-        </button> */}
+
+        {/* Future plans button */}
+
       </td>
+
     )}
 
-    {/* ACTIONS */}
+    {/* ================= ACTIONS ================= */}
     <td className="px-4 py-3 flex gap-2 justify-end">
+
       <button
         onClick={handleSave}
-        className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white 
-        hover:bg-blue-100 hover:border-blue-500 transition"
+        className="
+          px-3 py-1.5 text-sm rounded-md
+          border border-blue-300 bg-white
+          hover:bg-blue-100 hover:border-blue-500
+          transition
+        "
       >
         Save
       </button>
 
       <button
         onClick={handleCancel}
-        className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white 
-        hover:bg-red-100 hover:border-red-500 transition"
+        className="
+          px-3 py-1.5 text-sm rounded-md
+          border border-red-300 bg-white
+          hover:bg-red-100 hover:border-red-500
+          transition
+        "
       >
         Cancel
       </button>
+
     </td>
 
   </tr>
@@ -770,10 +888,15 @@ const getLabel = (key, value) => {
 
 {/* ================= DATA ROWS ================= */}
 {paginatedRows.map((row, i) => {
+
   const rowKey = row.id ?? i;
 
   return (
-    <tr key={rowKey} className="border-b hover:bg-gray-50">
+
+    <tr
+      key={rowKey}
+      className="border-b hover:bg-gray-50"
+    >
 
       {/* ================= S.NO ================= */}
       <td className="px-4 py-3">
@@ -782,20 +905,34 @@ const getLabel = (key, value) => {
 
       {/* ================= DYNAMIC COLUMNS ================= */}
       {columns.map(col => {
+
         const isDate = isDateColumn(col);
-        const isToggle = col.key.toLowerCase() === "is_active" || col.key.toLowerCase() === "is_vat";
-        const isService = col.key.toLowerCase() === "services";
+
+        const isToggle =
+          col.key.toLowerCase() === "is_active" ||
+          col.key.toLowerCase() === "is_vat";
+
+        const isService =
+          col.key.toLowerCase() === "services";
+
+        const isVendor =
+          col.key.toLowerCase() === "vendor";
+
         const inputType = "date";
 
         return (
-          <td key={col.key} className={`px-4 py-3 ${getAlignClass(col.key)}`}>
+
+          <td
+            key={col.key}
+            className={`px-4 py-3 ${getAlignClass(col.key)}`}
+          >
 
             {/* ================= EDIT MODE ================= */}
             {editRowId === rowKey ? (
 
-              isService ? (
+              isVendor ? (
 
-                /* ===== SERVICES DROPDOWN ===== */
+                /* ================= VENDOR DROPDOWN ================= */
                 <select
                   className="border px-2 py-1 rounded w-full"
                   value={editRow[col.key] || ""}
@@ -806,18 +943,58 @@ const getLabel = (key, value) => {
                     }))
                   }
                 >
-                  <option value="">Select Service</option>
+
+                  <option value="">
+                    Select Vendor
+                  </option>
+
+                  {vendorList.map(v => (
+
+                    <option
+                      key={v.vendor_code}
+                      value={v.vendor_code}
+                    >
+                      {v.vendor_name}
+                    </option>
+
+                  ))}
+
+                </select>
+
+              ) : isService ? (
+
+                /* ================= SERVICES DROPDOWN ================= */
+                <select
+                  className="border px-2 py-1 rounded w-full"
+                  value={editRow[col.key] || ""}
+                  onChange={(e) =>
+                    setEditRow(prev => ({
+                      ...prev,
+                      [col.key]: e.target.value
+                    }))
+                  }
+                >
+
+                  <option value="">
+                    Select Service
+                  </option>
 
                   {servicesList.map((s) => (
-                    <option key={s.id} value={s.id}>
+
+                    <option
+                      key={s.service_code}
+                      value={s.service_code}
+                    >
                       {s.service_name}
                     </option>
+
                   ))}
+
                 </select>
 
               ) : isToggle ? (
 
-                /* ===== TOGGLE ===== */
+                /* ================= TOGGLE ================= */
                 <button
                   onClick={() =>
                     setEditRow(prev => ({
@@ -825,27 +1002,49 @@ const getLabel = (key, value) => {
                       [col.key]: prev[col.key] ? 0 : 1
                     }))
                   }
-                  className={`w-12 h-6 flex items-center rounded-full p-1 transition 
-                    ${editRow[col.key] ? "bg-green-500" : "bg-gray-300"}`}
+                  className={`
+                    w-12 h-6 flex items-center rounded-full p-1 transition
+                    ${editRow[col.key]
+                      ? "bg-green-500"
+                      : "bg-gray-300"}
+                  `}
                 >
+
                   <div
-                    className={`bg-white w-4 h-4 rounded-full shadow transform transition 
-                      ${editRow[col.key] ? "translate-x-6" : ""}`}
+                    className={`
+                      bg-white w-4 h-4 rounded-full shadow transform transition
+                      ${editRow[col.key]
+                        ? "translate-x-6"
+                        : ""}
+                    `}
                   />
+
                 </button>
 
               ) : (
 
-                /* ===== INPUT ===== */
+                /* ================= INPUT ================= */
                 <input
                   type={isDate ? inputType : "text"}
-                  className={`border px-2 py-1 rounded w-full ${getAlignClass(col.key)}`}
+                  className={`
+                    border px-2 py-1 rounded w-full
+                    ${getAlignClass(col.key)}
+                  `}
                   value={
                     isDate
-                      ? formatForInput(editRow[col.key], inputType)
-                      : (formatCard(editRow[col.key], col.key) || "")
+                      ? formatForInput(
+                          editRow[col.key],
+                          inputType
+                        )
+                      : (
+                          formatCard(
+                            editRow[col.key],
+                            col.key
+                          ) || ""
+                        )
                   }
                   onChange={(e) => {
+
                     let value = e.target.value;
 
                     if (isNumericColumn(col.key)) {
@@ -856,99 +1055,155 @@ const getLabel = (key, value) => {
                       ...editRow,
                       [col.key]: value
                     });
+
                   }}
                 />
+
               )
 
             ) : (
 
               /* ================= VIEW MODE ================= */
+
               isToggle ? (
-                <span className={`px-2 py-1 text-xs rounded-full font-medium
-  ${row[col.key] ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-600"}
-`}>
-  {getLabel(col.key, row[col.key])}
-</span>
+
+                <span
+                  className={`
+                    px-2 py-1 text-xs rounded-full font-medium
+                    ${row[col.key]
+                      ? "bg-green-100 text-green-700"
+                      : "bg-gray-200 text-gray-600"}
+                  `}
+                >
+                  {getLabel(col.key, row[col.key])}
+                </span>
 
               ) : isDate ? (
+
                 formatDate(row[col.key])
 
+              ) : isVendor ? (
+
+                vendorList.find(
+                  v => v.vendor_code === row[col.key]
+                )?.vendor_name || "-"
+
               ) : isService ? (
-                servicesList.find(s => s.id == row[col.key])?.service_name || "-"
+
+                servicesList.find(
+                  s => s.service_code === row[col.key]
+                )?.service_name || "-"
 
               ) : (
-                formatCard(row[col.key], col.key) || "-"
+
+                formatCard(
+                  row[col.key],
+                  col.key
+                ) || "-"
+
               )
 
             )}
 
           </td>
+
         );
+
       })}
+      
 
       {/* ================= SERVICE ACTION COLUMN ================= */}
-{masterName === "service_providers" && (
-  <td className="px-4 py-3 text-center">
+      {masterName === "service_providers" && (
 
-    {editRowId === rowKey ? (
+        <td className="px-4 py-3 text-center">
 
-      null
+          {editRowId === rowKey ? (
 
-    ) : (
+            null
 
-      <>
-        {Number(row.services) === 1 ? (
+          ) : (
 
-          <button
-            onClick={() => openPlansModal(row)}
-            className="px-2 py-1 text-xs rounded border border-blue-300 hover:bg-blue-100"
-          >
-            Manage Plans
-          </button>
+            <>
+            
+             {String(row.services).trim().toUpperCase() === "S01" ? (
 
-        ) : (
+  <button
+    onClick={() => openPlansModal(row)}
+    className="
+      px-2 py-1 text-xs rounded
+      border border-blue-300
+      hover:bg-blue-100
+    "
+  >
+    Manage Plans
+  </button>
 
-          <span className="text-sm text-black-700">
-            {providersList.find(p => p.id == row.providers)?.provider_name || "-"}
-          </span>
+) : (
 
-        )}
-      </>
-    )}
+  <span className="text-sm text-black-700">
+    {providersList.find(
+      p => p.provider_code === row.providers
+    )?.provider_name || "-"}
+  </span>
 
-  </td>
 )}
+            </>
+
+          )}
+
+        </td>
+
+      )}
 
       {/* ================= ACTIONS ================= */}
       <td className="px-4 py-3 flex justify-end gap-2">
 
         {editRowId === rowKey ? (
+
           <>
             <button
               onClick={handleSaveEdit}
-              className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white hover:bg-blue-100"
+              className="
+                px-3 py-1.5 text-sm rounded-md
+                border border-blue-300
+                bg-white hover:bg-blue-100
+              "
             >
               Save
             </button>
 
             <button
               onClick={handleCancelEdit}
-              className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white hover:bg-red-100"
+              className="
+                px-3 py-1.5 text-sm rounded-md
+                border border-red-300
+                bg-white hover:bg-red-100
+              "
             >
               Cancel
             </button>
           </>
+
         ) : (
+
           <>
             <PermissionButton
               user={activeUser}
               permission="modify"
               onClick={() => {
+
                 setEditRowId(rowKey);
+
                 setEditRow(row);
+
                 setOriginalRow(row);
+
               }}
-              className="px-3 py-1.5 text-sm rounded-md border border-blue-300 bg-white hover:bg-blue-100"
+              className="
+                px-3 py-1.5 text-sm rounded-md
+                border border-blue-300
+                bg-white hover:bg-blue-100
+              "
             >
               Edit
             </PermissionButton>
@@ -957,17 +1212,24 @@ const getLabel = (key, value) => {
               user={activeUser}
               permission="delete"
               onClick={() => handleDelete(row)}
-              className="px-3 py-1.5 text-sm rounded-md border border-red-300 bg-white hover:bg-red-100"
+              className="
+                px-3 py-1.5 text-sm rounded-md
+                border border-red-300
+                bg-white hover:bg-red-100
+              "
             >
               Delete
             </PermissionButton>
           </>
+
         )}
 
       </td>
 
     </tr>
+
   );
+
 })}
 
 </tbody>
