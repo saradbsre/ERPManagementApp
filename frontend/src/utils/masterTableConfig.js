@@ -41,8 +41,8 @@ const masterTableConfig = {
       { key: "approved", label: "Approved By", data_type: "boolean" },
       { key: "description", label: "Description", data_type: "string" },
       { key: "is_vat", label: "VAT Applicable", data_type: "boolean" },
-      { key: "is_icann", label: "ICANN Applicable", data_type: "boolean" },
-      { key: "icann_fee", label: "ICANN Fee", data_type: "number" },
+      // { key: "is_icann", label: "ICANN Applicable", data_type: "boolean" },
+      // { key: "icann_fee", label: "ICANN Fee", data_type: "number" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
   },

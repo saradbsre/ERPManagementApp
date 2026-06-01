@@ -981,7 +981,7 @@ const currentDate = new Date();
         colSpan={3}
         className="border border-gray-800 p-2 font-bold"
       >
-        TOTAL AMOUNT IN WORDS ({currencyNames[selectedCurrency?.currency] || selectedCurrency?.currency})
+        TOTAL AMOUNT IN WORDS 
       </td>
 
       <td
