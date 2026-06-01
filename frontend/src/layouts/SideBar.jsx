@@ -138,23 +138,23 @@ export default function Sidebar({ collapsed, setCollapsed }) {
   return (
     <>
       {/* MOBILE MENU BUTTON */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="
-          md:hidden
-          fixed
-          top-4
-          left-4
-          z-50
-          p-2
-          rounded-lg
-          bg-white
-          shadow
-          border
-        "
-      >
-        <Menu size={22} />
-      </button>
+<button
+  onClick={() => setMobileOpen(true)}
+  className="
+    md:hidden
+    fixed
+    top-4
+    left-4
+    z-[60]
+    p-2
+    rounded-lg
+    bg-white
+    shadow
+    border
+  "
+>
+  <Menu size={22} />
+</button>
 
       {/* BACKDROP */}
       {mobileOpen && (

@@ -399,6 +399,25 @@ function handlePrint() {
 
   const printWindow = window.open("", "", "width=1200,height=900");
 
+const now = new Date();
+
+const dd = String(now.getDate()).padStart(2, '0');
+const mm = String(now.getMonth() + 1).padStart(2, '0');
+const yyyy = now.getFullYear();
+
+let hh = now.getHours();
+const min = String(now.getMinutes()).padStart(2, '0');
+const ss = String(now.getSeconds()).padStart(2, '0');
+
+const ampm = hh >= 12 ? 'PM' : 'AM';
+
+// convert to 12-hour format
+hh = hh % 12;
+hh = hh ? hh : 12; // 0 should be 12
+hh = String(hh).padStart(2, '0');
+
+const formattedDateTime = `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss} ${ampm}`;
+
   printWindow.document.write(`
     <html>
       <head>
@@ -423,7 +442,7 @@ function handlePrint() {
               @page {
                 
                 @bottom-left {
-                  content: "User:${activeUser.name}  | Printed: ${new Date().toLocaleString()}";
+                  content: "User:${activeUser.name}  | Printed: ${formattedDateTime}";
                   font-size: 10px;
                   margin-bottom: 20mm;
                   font-family: "Times New Roman", serif;
@@ -829,7 +848,7 @@ const currentDate = new Date();
   <tbody>
 
     {/* DATA ROW */}
-    <tr className="text-center align-top h-[150px] bg-[#f8fafc] border border-black-800">
+    <tr className="text-center align-top h-[250px] bg-[#f8fafc] border border-black-800">
 
      
       <td className="border border-gray-800 p-2 align-top">
@@ -1063,7 +1082,7 @@ const currentDate = new Date();
 
 {/* ================= APPROVALS ================= */}
 
-<table className="w-full mt-24 table-fixed border border-gray-800 border-collapse text-center text-[10px]">
+<table className="w-full mt-15 table-fixed border border-gray-800 border-collapse text-center text-[10px]">
 
   {/* HEADER */}
   <thead>

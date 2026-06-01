@@ -2565,7 +2565,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                             }}
                           />
             {/* ================= HEADER ================= */}
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center mb-4">
 
                 <h1 className="text-xl font-semibold text-gray-800">
                     {module?.display_name || "Loading..."}
@@ -2578,15 +2578,6 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
   <PermissionButton
     user={activeUser}
     permission="add"
-//      onClick={() => {
-//     const empty = {};
-//     visibleColumns.forEach(col => {
-//       empty[col.column_name] = "";
-//     });
-
-//     setNewRow(empty);
-//     setShowCreateModal(true);
-//   }}
 onClick={handleCreate}
     className="px-3 py-1.5 text-sm rounded-md bg-green-600 text-white 
                hover:bg-green-700 hover:shadow-md transition"
@@ -2657,7 +2648,7 @@ onClick={handleCreate}
             </div>
 
             {/* ================= CONTROL BAR (LEFT ALIGNED) ================= */}
-            <div className="bg-white p-3 rounded-xl shadow mb-4 flex flex-wrap items-center gap-3">
+            <div className="bg-white p-3 rounded-xl shadow mb-4 flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
 
                 {/* SEARCH */}
                 <input
@@ -2717,8 +2708,8 @@ onClick={handleCreate}
       borderRadius: 6,
       border: "1px solid #ccc",
       fontSize: 14,
-      minWidth: 150,
-      maxWidth: 180,
+      minWidth: 130,
+      maxWidth: 150,
       background: "#f8fafc",
       textAlign: "center",
     }}
@@ -2736,8 +2727,8 @@ onClick={handleCreate}
       borderRadius: 6,
       border: "1px solid #ccc",
       fontSize: 14,
-      minWidth: 150,
-      maxWidth: 180,
+      minWidth: 130,
+      maxWidth: 150,
       background: "#f8fafc",
       textAlign: "center",
     }}
@@ -2770,7 +2761,7 @@ onClick={handleCreate}
                
 
                 {/* PAGINATION (LEFT SIDE LIKE YOU WANTED) */}
-                <div className="flex items-center gap-2 text-sm ml-4">
+                <div className="flex items-center gap-2 text-sm w-full md:w-auto">
 
                     <button
                         disabled={page === 1}

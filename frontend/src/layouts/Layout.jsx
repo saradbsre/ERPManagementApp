@@ -19,17 +19,18 @@ export default function Layout() {
       />
 
       {/* MAIN CONTENT */}
-      <div
-        className={`
-          flex flex-col min-w-0 transition-all duration-300
-          ${collapsed ? "ml-20" : "ml-64"}
-        `}
-        style={{
-          width: "100%",
-          minHeight: "100vh",
-          background: "#f3f4f6"
-        }}
-      >
+<div
+  className={`flex flex-col min-w-0 transition-all duration-300 ${
+    collapsed
+      ? "md:ml-20 ml-0"
+      : "md:ml-64 ml-0"
+  }`}
+  style={{
+    width: "100%",
+    minHeight: "100vh",
+    background: "#f3f4f6",
+  }}
+>
 
         {/* HEADER */}
         <Navbar />
