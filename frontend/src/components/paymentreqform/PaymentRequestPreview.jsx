@@ -65,7 +65,7 @@ const currencyNames = {
   const activeUser = JSON.parse(localStorage.getItem("user"));
   const activeUserEmail = activeUser?.email;
   const activeUserName = activeUser?.name;
-
+  
 
    useEffect(() => {
   if (details?.prf_num && barcodeRef.current) {

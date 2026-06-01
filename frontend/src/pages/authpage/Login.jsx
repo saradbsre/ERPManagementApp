@@ -157,6 +157,12 @@ useEffect(() => {
     }
 };
 
+const handleCancel = () => {
+  setUsername("");
+  setPassword("");
+  setError(null);
+};
+
 
     return (
         <div
@@ -223,12 +229,12 @@ useEffect(() => {
 
                                 <div className="flex space-x-4">
                                     <button
-                                        type="button"
-                                        onClick={() => setIsSignup(true)}
-                                        className="flex-1 border border-white text-white py-3 rounded hover:bg-orange-500"
-                                    >
-                                        Sign Up
-                                    </button>
+    type="button"
+    onClick={handleCancel}
+    className="flex-1 border border-white text-white py-3 rounded hover:bg-gray-500"
+  >
+    Cancel
+  </button>
 
                                     <button
                                     type="submit"
@@ -239,7 +245,7 @@ useEffect(() => {
                                     {loading ? "Logging in..." : "Login"}
                                     </button>
                                 </div>
-                                <div className="text-center">
+                               <div className="text-center space-y-2">
                                     <button
                                         type="button"
                                         className="text-sm text-black hover:underline"
@@ -247,7 +253,18 @@ useEffect(() => {
                                     >
                                         Forgot Password?
                                     </button>
-                                </div>
+
+                                    <div className="text-sm text-black">
+                                        New user?{" "}
+                                        <button
+                                        type="button"
+                                        onClick={() => setIsSignup(true)}
+                                        className="underline hover:text-orange-300 text-blue-800"
+                                        >
+                                        Sign Up
+                                        </button>
+                                    </div>
+                                    </div>
                             </>
                         ) : (
                             <>
@@ -256,31 +273,31 @@ useEffect(() => {
                                 <div>
                                     <label className="text-sm text-white block mb-1">Name</label>
                                     <input name="name" type="text" className="w-full px-4 py-3 rounded bg-white text-gray-900" />
-{signupError.name && <p className="text-red-500 text-xs">{signupError.name}</p>}
+                                     {signupError.name && <p className="text-red-500 text-xs">{signupError.name}</p>}
                                 </div>
 
                                 <div>
                                     <label className="text-sm text-white block mb-1">Email</label>
                                     <input name="email" type="email" className="w-full px-4 py-3 rounded bg-white text-gray-900" />
-{signupError.email && <p className="text-red-500 text-xs">{signupError.email}</p>}
+                                     {signupError.email && <p className="text-red-500 text-xs">{signupError.email}</p>}
                                 </div>
 
                                 <div>
                                     <label className="text-sm text-white block mb-1">Phone Number</label>
                                     <input name="phone" type="text" className="w-full px-4 py-3 rounded bg-white text-gray-900" />
-{signupError.phone_number && <p className="text-red-500 text-xs">{signupError.phone_number}</p>}
+                                    {signupError.phone_number && <p className="text-red-500 text-xs">{signupError.phone_number}</p>}
                                 </div>
 
                                 <div>
                                     <label className="text-sm text-white block mb-1">Password</label>
                                     <input name="password" type="password" className="w-full px-4 py-3 rounded bg-white text-gray-900" />
-{signupError.password && <p className="text-red-500 text-xs">{signupError.password}</p>}
+                                     {signupError.password && <p className="text-red-500 text-xs">{signupError.password}</p>}
                                 </div>
 
                                 <div>
                                     <label className="text-sm text-white block mb-1">Confirm Password</label>
                                     <input name="confirmPassword" type="password" className="w-full px-4 py-3 rounded bg-white text-gray-900" />
-{signupError.confirmPassword && <p className="text-red-500 text-xs">{signupError.confirmPassword}</p>}
+                                    {signupError.confirmPassword && <p className="text-red-500 text-xs">{signupError.confirmPassword}</p>}
                                 </div>
 
                                 <div className="flex space-x-4">

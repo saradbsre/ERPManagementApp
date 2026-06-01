@@ -23,7 +23,6 @@ const masterTableConfig = {
       { key: "description", label: "Description", data_type: "string" },
       { key: "website", label: "Website", data_type: "string" },
       { key: "is_vat", label: "VAT Applicable", data_type: "boolean" },
-      { key: "currency", label: "Currency", data_type: "string" },
       { key: "address", label: "Address", data_type: "string" },
       { key: "country", label: "Country", data_type: "string" },
       { key: "email", label: "Email", data_type: "string" },
