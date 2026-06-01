@@ -156,7 +156,19 @@ const masterTableConfig = {
       { key: "support_email", label: "Support Email", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
-   }
+   },
+    transaction_types:{
+    displayName: "Payment Methods Master",
+
+    columns: [
+        { key: "transaction_name", label: "Transaction Name", data_type: "string" },
+        { key: "transaction_code", label: "Transaction Code", data_type: "string" },
+        { key: "description", label: "Description", data_type: "string" },
+        { key: "is_active", label: "Is Active", data_type: "boolean" },
+        
+        
+    ]
+  },
 };
 
 export default masterTableConfig;

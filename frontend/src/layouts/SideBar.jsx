@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
-import { fetchSections, fetchMasters, getReportsName } from "../api/api";
+import {
+  fetchSections,
+  fetchMasters,
+  getReportsName,
+} from "../api/api";
 
 import {
   LayoutDashboard,
@@ -10,25 +14,26 @@ import {
   FolderKanban,
   ChevronLeft,
   ChevronRight,
-  FileBarChart2,  
-  FileText         
+  FileBarChart2,
+  Menu,
+  X,
 } from "lucide-react";
 
 export default function Sidebar({ collapsed, setCollapsed }) {
-
   const location = useLocation();
-  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   const [sections, setSections] = useState([]);
-  const [openMain, setOpenMain] = useState(null);
   const [masters, setMasters] = useState([]);
   const [reports, setReports] = useState([]);
-
-  // ✅ SIDEBAR TOGGLE
-  //const [collapsed, setCollapsed] = useState(false);
+  const [openMain, setOpenMain] = useState(null);
 
   const User = JSON.parse(localStorage.getItem("user"));
-  const role = (User?.role || "user").toLowerCase().trim();
-  
+
+  const role = (User?.role || "user")
+    .toLowerCase()
+    .trim();
 
   useEffect(() => {
     loadSections();
@@ -57,18 +62,24 @@ export default function Sidebar({ collapsed, setCollapsed }) {
   const loadReportFilters = async () => {
     try {
       const activeUserEmail = User?.email || "";
+
       const res = await getReportsName(activeUserEmail);
+
       setReports(res.data || []);
     } catch (err) {
       console.error(err);
     }
   };
 
-  const isActive = (path) => location.pathname === path;
+  const isActive = (path) =>
+    location.pathname === path;
 
-  // ROLE FILTERS
-  const showAdmin = role !== "user" && role !== "asst admin";
-  const showMasters = role !== "user";
+  const showAdmin =
+    role !== "user" &&
+    role !== "asst admin";
+
+  const showMasters =
+    role !== "user";
 
   const menuItems = [
     {
@@ -87,12 +98,11 @@ export default function Sidebar({ collapsed, setCollapsed }) {
       name: "Masters",
       icon: <BookOpen size={18} />,
       children: masters.map((master) => ({
-        key: `${master.master_name}`,
+        key: master.master_name,
         id: master.master_name,
         name: master.display_name,
-        master: master,
+        master,
         path: `/masters/${master.master_name}`,
-        state: { master }
       })),
     },
 
@@ -115,149 +125,230 @@ export default function Sidebar({ collapsed, setCollapsed }) {
         key: `${report.id}_${report.filter_name}`,
         id: report.id,
         name: report.filter_name,
-        report: report,
+        report,
         path: `/reports/${report.id}`,
       })),
     },
-   
   ].filter(Boolean);
 
+  const closeMobile = () => {
+    setMobileOpen(false);
+  };
+
   return (
+    <>
+      {/* MOBILE MENU BUTTON */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="
+          md:hidden
+          fixed
+          top-4
+          left-4
+          z-50
+          p-2
+          rounded-lg
+          bg-white
+          shadow
+          border
+        "
+      >
+        <Menu size={22} />
+      </button>
 
-    <div
-      className={`
-        h-screen bg-gray-100 text-gray-900 fixed top-0 left-0
-        transition-all duration-300 overflow-y-auto
-        ${collapsed ? "w-20" : "w-64"}
-      `}
-    >
-      
+      {/* BACKDROP */}
+      {mobileOpen && (
+        <div
+          className="
+            md:hidden
+            fixed
+            inset-0
+            bg-black/40
+            z-40
+          "
+          onClick={closeMobile}
+        />
+      )}
 
-      {/* HEADER */}
-      <div className="flex items-center justify-between p-4">
+      {/* SIDEBAR */}
+      <div
+        className={`
+          fixed top-0 left-0 h-screen
+          bg-gray-100 text-gray-900
+          overflow-y-auto
+          z-50
+          transition-all duration-300
 
-        {!collapsed && (
-          <h1 className="text-lg font-bold">
-            BINSHABIB GROUP
-          </h1>
-        )}
-
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="p-1 rounded hover:bg-gray-200"
-        >
-          {collapsed
-            ? <ChevronRight size={20} />
-            : <ChevronLeft size={20} />
+          ${
+            mobileOpen
+              ? "translate-x-0"
+              : "-translate-x-full md:translate-x-0"
           }
-        </button>
 
-      </div>
+          ${
+            collapsed
+              ? "md:w-20"
+              : "md:w-64"
+          }
 
-      {/* MENU */}
-      <nav className="space-y-2 p-3">
+          w-64
+        `}
+      >
+        {/* HEADER */}
+        <div className="flex items-center justify-between p-4">
+          {!collapsed && (
+            <h1 className="text-lg font-bold">
+              BINSHABIB GROUP
+            </h1>
+          )}
 
-        {menuItems.map((item, i) => (
+          <div className="flex items-center gap-2">
+            {/* DESKTOP COLLAPSE */}
+            <button
+              onClick={() =>
+                setCollapsed(!collapsed)
+              }
+              className="
+                hidden md:block
+                p-1 rounded
+                hover:bg-gray-200
+              "
+            >
+              {collapsed ? (
+                <ChevronRight size={20} />
+              ) : (
+                <ChevronLeft size={20} />
+              )}
+            </button>
 
-          <div key={i}>
+            {/* MOBILE CLOSE */}
+            <button
+              onClick={closeMobile}
+              className="
+                md:hidden
+                p-1 rounded
+                hover:bg-gray-200
+              "
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
 
-            {/* MAIN ITEM */}
-            {item.path ? (
+        {/* MENU */}
+        <nav className="space-y-2 p-3">
+          {menuItems.map((item, i) => (
+            <div key={i}>
+              {/* NORMAL LINK */}
+              {item.path ? (
+                <Link
+                  to={item.path}
+                  onClick={closeMobile}
+                  className={`
+                    flex items-center gap-3
+                    px-3 py-2 rounded
 
-              <Link
-                to={item.path}
-                className={`
-                  flex items-center gap-3 px-3 py-2 rounded
-                  ${isActive(item.path)
-                    ? "bg-gray-300"
-                    : "hover:bg-gray-200"
-                  }
-                `}
-              >
-
-                <span>{item.icon}</span>
-
-                {!collapsed && (
-                  <span>{item.name}</span>
-                )}
-
-              </Link>
-
-            ) : (
-
-              <div
-                onClick={() =>
-                  setOpenMain(openMain === item.name ? null : item.name)
-                }
-                className="
-                  flex justify-between items-center
-                  px-3 py-2 rounded cursor-pointer
-                  hover:bg-gray-200
-                "
-              >
-
-                <div className="flex items-center gap-3">
-
+                    ${
+                      isActive(item.path)
+                        ? "bg-gray-300"
+                        : "hover:bg-gray-200"
+                    }
+                  `}
+                >
                   <span>{item.icon}</span>
 
                   {!collapsed && (
                     <span>{item.name}</span>
                   )}
+                </Link>
+              ) : (
+                <div
+                  onClick={() =>
+                    setOpenMain(
+                      openMain === item.name
+                        ? null
+                        : item.name
+                    )
+                  }
+                  className="
+                    flex justify-between
+                    items-center
+                    px-3 py-2
+                    rounded
+                    cursor-pointer
+                    hover:bg-gray-200
+                  "
+                >
+                  <div className="flex items-center gap-3">
+                    <span>{item.icon}</span>
 
-                </div>
+                    {!collapsed && (
+                      <span>{item.name}</span>
+                    )}
+                  </div>
 
-                {!collapsed && (
-                  <span>
-                    {openMain === item.name ? "▾" : "▸"}
-                  </span>
-                )}
-
-              </div>
-
-            )}
-
-            {/* CHILDREN */}
-            {!collapsed &&
-              item.children &&
-              openMain === item.name && (
-                <div className="ml-6 mt-2 space-y-1">
-
-                  {item.children.map((child) => (
-
-                    <Link
-                      key={child.key}
-                      to={child.path}
-                      state={
-                        child.master
-                          ? { master: child.master }
-                          : child.report
-                          ? { report: child.report }
-                          : { module: child.module }
-                      }
-                      className={`
-                        block px-3 py-2 rounded text-sm
-                        ${isActive(child.path)
-                          ? "bg-gray-300"
-                          : "hover:bg-gray-200"
-                        }
-                      `}
-                    >
-
-                      {child.name}
-
-                    </Link>
-
-                  ))}
-
+                  {!collapsed && (
+                    <span>
+                      {openMain === item.name
+                        ? "▾"
+                        : "▸"}
+                    </span>
+                  )}
                 </div>
               )}
 
-          </div>
+              {/* CHILDREN */}
+              {item.children &&
+                openMain === item.name &&
+                !collapsed && (
+                  <div className="ml-6 mt-2 space-y-1">
+                    {item.children.map(
+                      (child) => (
+                        <Link
+                          key={child.key}
+                          to={child.path}
+                          onClick={closeMobile}
+                          state={
+                            child.master
+                              ? {
+                                  master:
+                                    child.master,
+                                }
+                              : child.report
+                              ? {
+                                  report:
+                                    child.report,
+                                }
+                              : {
+                                  module:
+                                    child.module,
+                                }
+                          }
+                          className={`
+                            block
+                            px-3 py-2
+                            rounded
+                            text-sm
 
-        ))}
-
-      </nav>
-
-    </div>
+                            ${
+                              isActive(
+                                child.path
+                              )
+                                ? "bg-gray-300"
+                                : "hover:bg-gray-200"
+                            }
+                          `}
+                        >
+                          {child.name}
+                        </Link>
+                      )
+                    )}
+                  </div>
+                )}
+            </div>
+          ))}
+        </nav>
+      </div>
+    </>
   );
 }
