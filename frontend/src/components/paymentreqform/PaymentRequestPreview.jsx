@@ -86,7 +86,7 @@ const currencyNames = {
     });
   }
 }, [details?.prf_num]);
-function numberToWords(num) {
+function numberToWords(num, currencyCode = "AED") {
   if (num == null || isNaN(num)) return "ZERO";
 
   const belowTwenty = [
@@ -100,6 +100,38 @@ function numberToWords(num) {
     "", "", "TWENTY", "THIRTY", "FORTY",
     "FIFTY", "SIXTY", "SEVENTY", "EIGHTY", "NINETY"
   ];
+
+  const majorUnits = {
+    AED: "DIRHAMS",
+    USD: "DOLLARS",
+    EUR: "EUROS",
+    GBP: "POUNDS",
+    INR: "RUPEES",
+    SAR: "RIYALS",
+
+    CR001: "DIRHAMS",
+    CR002: "DOLLARS",
+    CR003: "EUROS",
+    CR004: "POUNDS",
+    CR006: "RUPEES",
+    CR007: "RIYALS"
+  };
+
+  const minorUnits = {
+    AED: "FILS",
+    USD: "CENTS",
+    EUR: "CENTS",
+    GBP: "PENCE",
+    INR: "PAISE",
+    SAR: "HALALAS",
+
+    CR001: "FILS",
+    CR002: "CENTS",
+    CR003: "CENTS",
+    CR004: "PENCE",
+    CR006: "PAISE",
+    CR007: "HALALAS"
+  };
 
   function helper(n) {
     n = Math.floor(n);
@@ -135,10 +167,17 @@ function numberToWords(num) {
   const whole = Math.floor(num);
   const decimal = Math.round((num - whole) * 100);
 
+  const major = majorUnits[currencyCode] || "";
+  const minor = minorUnits[currencyCode] || "FILS";
+
   let result = helper(whole);
 
+  if (major) {
+    result += ` ${major}`;
+  }
+
   if (decimal > 0) {
-    result += " AND " + helper(decimal) + " FILS";
+    result += ` AND ${helper(decimal)} ${minor}`;
   }
 
   return result.trim();
@@ -249,10 +288,7 @@ const selectedVendor =
 
 //console.log("Selected Vendor:", selectedVendor);
 const isVatApplicable = selectedVendor ? selectedVendor.is_vat : false;
-//console.log("Selected Vendor:", selectedVendor, "VAT Applicable:", isVatApplicable);
-//console.log("Selected header:", header);
-// console.log("Company array:", company);
-// console.log("Header company:", header.company);
+
 
 const selectedCompany =
   Array.isArray(company) && header.company
@@ -952,7 +988,7 @@ const currentDate = new Date();
         colSpan={4}
         className="border border-gray-800 p-2 font-bold"
       >
-        {numberToWords(grandTotal)}  ONLY
+        {numberToWords(grandTotal, selectedCurrency?.currency)}  ONLY
       </td>
 
     </tr>
