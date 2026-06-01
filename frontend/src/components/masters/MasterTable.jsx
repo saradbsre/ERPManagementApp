@@ -676,7 +676,8 @@ const getLabel = (key, value) => {
 
       const isToggle =
         col.key.toLowerCase() === "is_active" ||
-        col.key.toLowerCase() === "is_vat";
+        col.key.toLowerCase() === "is_vat" ||
+        col.key.toLowerCase() === "is_icann";
 
       const isServiceMaster =
         col.key.toLowerCase() === "services";
@@ -685,6 +686,8 @@ const getLabel = (key, value) => {
         col.key.toLowerCase() === "vendor";
 
       const isCodeColumn = col.key.toLowerCase().includes("_code");
+
+      const isIcannFee = col.key.toLowerCase() === "icann_fee";
 
       return (
 
@@ -699,7 +702,7 @@ const getLabel = (key, value) => {
             <select
               className="border px-2 py-1 rounded w-full"
               value={newRow.vendor || ""}
-              disabled={isCodeColumn}
+              disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
               onChange={(e) =>
                 setNewRow(prev => ({
                   ...prev,
@@ -711,7 +714,7 @@ const getLabel = (key, value) => {
               <option value="">
                 Select Vendor
               </option>
-              {console.log("Vendor list for dropdown:", vendorList)}
+              
               {vendorList.map(v => (
 
                 <option
@@ -736,7 +739,7 @@ const getLabel = (key, value) => {
                   [col.key]: prev[col.key] ? 0 : 1
                 }))
               }
-              disabled={isCodeColumn}
+              disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
               className={`
                 w-12 h-6 flex items-center
                 rounded-full p-1
@@ -771,7 +774,7 @@ const getLabel = (key, value) => {
 
               <select
                 className="border px-2 py-1 rounded w-full"
-                disabled={isCodeColumn}
+                disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
                 value={newRow[col.key] || ""}
 
                 onChange={(e) =>
@@ -808,7 +811,7 @@ const getLabel = (key, value) => {
             <input
 
               type={isDate ? "date" : "text"}
-              disabled={isCodeColumn}
+              disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
               className={`
                 border px-2 py-1 rounded w-full
                 ${getAlignClass(col.key)}
@@ -912,7 +915,8 @@ const getLabel = (key, value) => {
 
         const isToggle =
           col.key.toLowerCase() === "is_active" ||
-          col.key.toLowerCase() === "is_vat";
+          col.key.toLowerCase() === "is_vat" ||
+          col.key.toLowerCase() === "is_icann";
 
         const isService =
           col.key.toLowerCase() === "services";
@@ -924,6 +928,8 @@ const getLabel = (key, value) => {
 
         const isCodeColumn = col.key.toLowerCase().includes("_code");
 
+        const isIcannFee = col.key.toLowerCase() === "icann_fee";
+        //console.log("is icann fee column:", isIcannFee, "column key:", col.key);
         return (
 
           <td
@@ -940,7 +946,7 @@ const getLabel = (key, value) => {
                 <select
                   className="border px-2 py-1 rounded w-full"
                   value={editRow[col.key] || ""}
-                  disabled={isCodeColumn}
+                  disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
                   onChange={(e) =>
                     setEditRow(prev => ({
                       ...prev,
@@ -972,7 +978,7 @@ const getLabel = (key, value) => {
                 <select
                   className="border px-2 py-1 rounded w-full"
                   value={editRow[col.key] || ""}
-                    disabled={isCodeColumn}
+                    disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
                   onChange={(e) =>
                     setEditRow(prev => ({
                       ...prev,
@@ -1008,7 +1014,7 @@ const getLabel = (key, value) => {
                       [col.key]: prev[col.key] ? 0 : 1
                     }))
                   }
-                  disabled={isCodeColumn}
+                  disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
                   className={`
                     w-12 h-6 flex items-center rounded-full p-1 transition
                     ${editRow[col.key]
@@ -1033,7 +1039,7 @@ const getLabel = (key, value) => {
                 /* ================= INPUT ================= */
                 <input
                   type={isDate ? inputType : "text"}
-                  disabled={isCodeColumn}
+                  disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
                   className={`
                     border px-2 py-1 rounded w-full
                     ${getAlignClass(col.key)}

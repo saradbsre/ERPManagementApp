@@ -807,65 +807,124 @@ useEffect(() => {
     }));
   }
 }, [workflow]);
-const handleGenerate = async () => {
+// console.log("selectedRow:", selectedRow);
+// console.log("currencies:", currencies);
 
-  const snapshot = [...modalItems];
+const rowCurrency = (
+  Array.isArray(selectedRow)
+    ? selectedRow[0]?.currency
+    : selectedRow?.currency
+)
+  ?.toString()
+  .trim()
+  .toUpperCase();
 
-  const detailsArray = [];
+//console.log("Row Currency:", rowCurrency);
 
-  for (const item of snapshot) {
+const selectedCurrency = currencies.find((c) => {
+  const currencyCode = (c.currency_code || "")
+    .toString()
+    .trim()
+    .toUpperCase();
 
-    const payload = {
-      doc_date: item.doc_date || null,
-      prf_num: prfNumber,
-      doc_no: item.doc_no || null,
-      product: item.product || "",
-      amount: item.amount || 0,
-      vat_amount: item.vat || 0,
-      total_amount: item.total_amount || 0,
-      paid_by: form.paid_by,
-      prepared_by: activeUserName,
-      checked_by: form.checked_by,
-      verified_by_it: form.verified_by_it,
-      verified_by: form.verified_by,
-      signed_by: form.signed_by,
-      approved_by: form.approved_by,
-      userid: activeUserEmail,
-    };
+  const currencyName = (c.currency || "")
+    .toString()
+    .trim()
+    .toUpperCase();
 
-    await createprf(payload, activeUserEmail, selectedRow);
+  return (
+    currencyCode === rowCurrency ||
+    currencyName === rowCurrency
+  );
+});
 
-    detailsArray.push(payload);
-  }
+// console.log("Selected Currency:", selectedCurrency);
+// console.log("Selected currency for PRF generation:", selectedCurrency);
+const exchange_rate = selectedCurrency?.exchange_rate || 1;
+//console.log("exchange_rate:", exchange_rate, "for currency:", selectedCurrency);
+const loadPreviewData = async (prfNum) => {
+  const res = await getPreviewPRF(prfNum);
+  const previewObj = Array.isArray(res.data)
+    ? res.data[0]
+    : res.data;
 
-  // ✅ preview
   setPreviewData({
-    header: selectedRow,
-    details: detailsArray,
-    paidBy: "SABAH",
+    header: previewObj?.headers || [],
+    details: previewObj?.details || {},
+    paid_by: previewObj?.paid_by || ""
   });
+};
+
+const handleGenerate = async () => {
+  const totalAmount = modalItems.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0
+  );
+
+  const totalVat = modalItems.reduce(
+    (sum, item) => sum + Number(item.vat || 0),
+    0
+  );
+
+  const grandTotal = modalItems.reduce(
+    (sum, item) => sum + Number(item.total_amount || 0),
+    0
+  );
+
+  const payload = {
+    prf_num: prfNumber,
+
+    receipt_number: form.receipt_number || null,
+
+    amount: totalAmount,
+    vat_amount: totalVat,
+    total_amount: grandTotal,
+
+    prepared_by: activeUserName,
+    checked_by: form.checked_by,
+    verified_by_it: form.verified_by_it,
+    verified_by: form.verified_by,
+    signed_by: form.signed_by,
+    approved_by: form.approved_by,
+    exchange_rate,
+    userid: activeUserEmail
+  };
+
+  await createprf(
+    payload,
+    activeUserEmail,
+    selectedRow
+  );
+
+  // Preview can still use original rows
+  // setPreviewData({
+  //   header: selectedRow,
+  //   details: modalItems,
+  //   paidBy: "SABAH"
+  // });
+  const newPrfNum = encodeURIComponent(prfNumber);
+  await loadPreviewData(newPrfNum);
 
   setShowPreview(true);
 
-  // ✅ RESET EVERYTHING
+  // Reset
   setShowGenerateModal(false);
 
   setModalItems([]);
 
   setSelectedRow({});
 
-  setSelectedRowIds([]); // IMPORTANT
+  setSelectedRowIds([]);
 
   setForm({
-    paid_by: "",
+    receipt_number: "",
     prepared_by: "",
     checked_by: "",
     verified_by_it: "",
     verified_by: "",
     signed_by: "",
-    approved_by: "",
+    approved_by: ""
   });
-
 };
 
 const handlePreview = async (prfNum) => {
@@ -874,10 +933,10 @@ const handlePreview = async (prfNum) => {
     // The API returns: { data: [ { header, details } ] }
     const previewObj = Array.isArray(res.data) ? res.data[0] : res.data;
     console.log("API Response for preview:", res.data);
-    console.log("header:", previewObj?.header);
-    console.log("details:", previewObj?.details);
+    // console.log("header:", previewObj?.header);
+    // console.log("details:", previewObj?.details);
     setPreviewData({
-      header: previewObj?.header,
+      header: previewObj?.headers,
       details: previewObj?.details,
       paid_by: previewObj?.paid_by || "",
     });
@@ -1083,32 +1142,6 @@ useEffect(() => {
     }, [id]);
  
 
-
-//    useEffect(() => {
-//   if (!columns.length) return;
-
-//   const uniqueMasters = new Set();
-
-//   columns.forEach(c => {
-//     if (c.master) uniqueMasters.add(c.master);
-//     if (c.master1) uniqueMasters.add(c.master1);
-//   });
-//   //console.log("Unique masters to fetch:", uniqueMasters);
-//   uniqueMasters.forEach(async (master) => {
-//     try {
-//       const res = await getMasterValues(master);
-
-//       setMasterDataMap(prev => ({
-//         ...prev,
-//         [master]: res.data.data || []
-//       }));
-//      // console.log(`Master data for ${master}:`, res.data.data || []);
-//     } catch (err) {
-//       console.error("Master fetch failed:", master, err);
-//     }
-//   });
-
-// }, [columns]);
 
 
 
@@ -1334,13 +1367,6 @@ const getExchangeRate = (currencyCode) => {
   });
 
   if (searchValue === "AED") return 1;
-
-  console.log(
-    "Exchange rate for",
-    currencyCode,
-    ":",
-    currency?.exchange_rate
-  );
 
   if (currency?.exchange_rate) {
     return 1 / Number(currency.exchange_rate);
@@ -2497,12 +2523,12 @@ return `
   console.log("Preparing row for modal:", selectedRows);
   setModalItems(selectedRows.map(row => ({
     doc_date: row.date || "",
-    doc_no: row.doc_no || "",
+    doc_no: row.invoice_number || "",
     product: row.products || "",
     amount: row.amount || "",
     vat: row.vat_amount || "",
     total_amount: row.total_amount || "",
-    isSelected: true
+    isSelected: true,
   })));
   
   setShowGenerateModal(true);
@@ -2520,7 +2546,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
   const currencyObj = currencies.find(c => c.code === currency);
   const currencyValue = currencyObj ? Number(currencyObj.value) : 1;
   const totalAed = total * currencyValue;
-  console.log("VAT:", vat, "Total:", total, "Total in AED:", totalAed, "Currency value:", currencyValue);
+ // console.log("VAT:", vat, "Total:", total, "Total in AED:", totalAed, "Currency value:", currencyValue);
 
   return {
     vat_amount: vat.toFixed(2),
@@ -4705,26 +4731,24 @@ setNewRow(prev => ({
           </p>
 
         </div>
+  <div className="flex items-center gap-2">
+    <label className="text-sm font-medium text-slate-700">
+      Receipt No
+    </label>
 
-        {/* <button
-           onClick={() =>
-                setModalItems([
-                  ...modalItems,
-                  {
-                    doc_date: "",
-                    doc_no: "",
-                    product: "",
-                    amount: "",
-                    vat: "",
-                    total_amount: "",
-                    isSelected: true
-                  }
-                ])
-              }
-          className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
-        >
-          + Add Row
-        </button> */}
+<input
+  type="text"
+  value={form.receipt_number || ""}
+  onChange={(e) =>
+    setForm(prev => ({
+      ...prev,
+      receipt_number: e.target.value
+    }))
+  }
+  placeholder="Enter receipt number"
+  className="px-3 py-2 border rounded-lg text-sm w-56 focus:outline-none focus:ring-2 focus:ring-blue-500"
+/>
+  </div>
 
       </div>
 

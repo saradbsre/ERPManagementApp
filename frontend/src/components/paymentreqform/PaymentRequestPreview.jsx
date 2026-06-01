@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import JsBarcode from "jsbarcode";
 import { getMasterData, createPaymentRequest, incrementPRFExportCount  } from "../../api/api";
 export default function PaymentRequestPreview({ data, onBack }) {
-  console.log("PaymentRequestPreview data:", data);
+ // console.log("PaymentRequestPreview data:", data);
   if (!data) {
     return (
       <div className="p-10 text-center text-gray-500">
@@ -14,15 +14,23 @@ export default function PaymentRequestPreview({ data, onBack }) {
       </div>
     );
   }
-const remarksList = Array.isArray(data?.header)
-  ? data.header.map(h => h.remarks).filter(Boolean)
-  : [data?.header?.remarks].filter(Boolean);
+
+
+const headers = Array.isArray(data?.header)
+  ? data.header
+  : [];
+// console.log("Headers array:", headers);
+const header = headers[0] || {};
+// console.log("Using header:", header);
+const details = data?.details || {};
+
+const paid_by = data?.paid_by || "";
+
+const remarksList = headers
+  .map(h => h.remarks)
+  .filter(Boolean);
 
 const remarks = remarksList.join(", ");
-
-const header = data?.header?.[0] || data?.header || {};
-const details = data?.details || [];
-const paid_by = data?.paid_by || "SABAH";
 const currencyNames = {
   // Currency codes
   AED: "DIRHAMS",
@@ -50,6 +58,9 @@ const currencyNames = {
   const [costCenters, setCostCenters] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [terms, setTerms] = useState([]);
+  const [plans, setPlans] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [productTypes, setProductTypes] = useState([]);
   const barcodeRef = useRef(null);
   const activeUser = JSON.parse(localStorage.getItem("user"));
   const activeUserEmail = activeUser?.email;
@@ -57,7 +68,7 @@ const currencyNames = {
 
 
    useEffect(() => {
-  if (details?.[0]?.prf_num && barcodeRef.current) {
+  if (details?.prf_num && barcodeRef.current) {
     const svg = barcodeRef.current;
    // console.log("Generating barcode for PRF Number:", details[0].prf_num);
     // 🔥 IMPORTANT: clear old barcode
@@ -65,7 +76,7 @@ const currencyNames = {
       svg.removeChild(svg.firstChild);
     }
 
-    JsBarcode(svg, details[0].prf_num, {
+    JsBarcode(svg, details.prf_num, {
       format: "CODE128",
       height: 40,
       width: 1,
@@ -74,7 +85,7 @@ const currencyNames = {
       displayValue: true
     });
   }
-}, [details?.[0]?.prf_num]);
+}, [details?.prf_num]);
 function numberToWords(num) {
   if (num == null || isNaN(num)) return "ZERO";
 
@@ -192,8 +203,24 @@ useEffect(() => {
     const result = Array.isArray(res?.data) ? res.data : [];
     setTerms(result);
   });
+  getMasterData("plans", activeUser.email).then(res => {
+    const result = Array.isArray(res?.data) ? res.data : [];
+    setPlans(result);
+  });
+  getMasterData("service_providers", activeUser.email).then(res => {
+    const result = Array.isArray(res?.data) ? res.data : [];
+    setProducts(result);
+  });
+  getMasterData("services", activeUser.email).then(res => {
+    const result = Array.isArray(res?.data) ? res.data : [];
+    setProductTypes(result);
+  });
 
 }, []);
+
+// console.log("products:", products);
+// console.log("productTypes:", productTypes);
+// console.log("plans:", plans);
 
 const selectedVendor =
   Array.isArray(vendor) && header.vendors
@@ -220,12 +247,12 @@ const selectedVendor =
       })
     : null;
 
-console.log("Selected Vendor:", selectedVendor);
+//console.log("Selected Vendor:", selectedVendor);
 const isVatApplicable = selectedVendor ? selectedVendor.is_vat : false;
 //console.log("Selected Vendor:", selectedVendor, "VAT Applicable:", isVatApplicable);
 //console.log("Selected header:", header);
-console.log("Company array:", company);
-console.log("Header company:", header.company);
+// console.log("Company array:", company);
+// console.log("Header company:", header.company);
 
 const selectedCompany =
   Array.isArray(company) && header.company
@@ -245,14 +272,7 @@ const selectedCompany =
           .trim()
           .toUpperCase();
 
-        console.log(
-          "Comparing:",
-          headerValue,
-          "with code:",
-          companyCode,
-          "and trade_name:",
-          tradeName
-        );
+        
 
         return (
           companyCode === headerValue ||
@@ -303,10 +323,40 @@ const selectedCostCenter = Array.isArray(costCenters) && header.cost_center ? co
 const selectedDepartment = Array.isArray(departments) && header.department ? departments.find(
     (d) => (d.department_code || "").toString().trim().toUpperCase() === header.department.toString().trim().toUpperCase()
 ) : null;
-console.log("Selected currency:", selectedCurrency);
+// console.log("Selected currency:", selectedCurrency);
 // console.log("Selected term:", selectedTerm);
 // console.log("Selected cost center:", selectedCostCenter);
 // console.log("Selected department:", selectedDepartment);
+
+const getProductName = (productCode) => {
+  const product = products?.find(
+    p =>
+      (p.product_code || "").toUpperCase() ===
+      (productCode || "").toUpperCase()
+  );
+  console.log("products:", product);
+  return product?.product || productCode;
+};
+
+const getServiceName = (serviceCode) => {
+  const service = productTypes?.find(
+    s =>
+      (s.service_code || "").toUpperCase() ===
+      (serviceCode || "").toUpperCase()
+  );
+
+  return service?.service_name || serviceCode;
+};
+
+const getPlanName = (planCode) => {
+  const plan = plans?.find(
+    p =>
+      (p.plan_code || "").toUpperCase() ===
+      (planCode || "").toUpperCase()
+  );
+
+  return plan?.plan_name || planCode;
+};
 
 function handlePrint() {
   const content = document.getElementById("print-area").innerHTML;
@@ -371,15 +421,22 @@ function handlePrint() {
     printWindow.close();
   };
 }
-const grandTotal = Array.isArray(details)
-  ? details.reduce((sum, item) => sum + Number(item?.total_amount || 0), 0)
-  : 0;
+const Total = Number(details?.amount || 0);
 
-const Total = Array.isArray(details)  ? details.reduce((sum, item) => sum + Number(item?.amount || 0), 0)
-  : 0;
+const TotalVAT = Number(details?.vat_amount || 0);
 
-const TotalVAT = Array.isArray(details)  ? details.reduce((sum, item) => sum + Number(item?.vat_amount || 0), 0)
-  : 0;
+const grand = Number(details?.total_amount || 0);
+
+const TotalICANN = headers?.reduce((sum, item) => {
+  const product = products?.find(
+    p =>
+      (p.product_code || "").toUpperCase() ===
+      (item?.products || "").toUpperCase()
+  );
+
+  return sum + (product?.is_icann ? Number(product?.icann_fee || 0) : 0);
+}, 0);
+const grandTotal = grand + TotalICANN;
 // At the top, after expiryDate:
 const startDate = header.date
   ? formatDateLong(header.date)
@@ -566,7 +623,9 @@ const currentDate = new Date();
       </td>
 
       <td className="border border-gray-800 px-2 py-1 w-[32%] font-semibold">
-        {details?.[0]?.sysdate ? formatDate(details[0].sysdate) : formatDate(currentDate)}
+        {details?.sysdate
+  ? formatDate(details.sysdate)
+  : formatDate(currentDate)}
       </td>
 
       {/* CURRENCY */}
@@ -575,7 +634,7 @@ const currentDate = new Date();
       </td>
 
       <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {details?.[0]?.prf_num}
+        {details?.prf_num}
       </td>
 
     </tr>
@@ -589,7 +648,7 @@ const currentDate = new Date();
       </td>
 
       <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {header.receipt_number || " - "}
+        {details?.receipt_number || " - "}
       </td>
 
       {/* PAYMENT TYPE */}
@@ -736,80 +795,125 @@ const currentDate = new Date();
     {/* DATA ROW */}
     <tr className="text-center align-top h-[150px] bg-[#f8fafc] border border-black-800">
 
-      {/* S/N */}
+     
       <td className="border border-gray-800 p-2 align-top">
-        {details?.map((_, i) => (
+        {headers?.map((_, i) => (
           <div key={i} className="py-1">
             {i + 1}.
           </div>
         ))}
       </td>
 
-      {/* DATE */}
+      
       <td className="border border-gray-800 p-2 align-top">
-        {details?.map((item, i) => (
+        {headers?.map((_, i) => (
           <div key={i} className="py-1">
-            {item.doc_date
-              ? formatDate(item.doc_date)
+            {headers?.[i]?.date
+              ? formatDate(headers[i].date)
               : ""}
           </div>
         ))}
       </td>
 
-      {/* DOC NO */}
+     
       <td className="border border-gray-800 p-2 align-top">
-        {details?.map((item, i) => (
+        {headers?.map((_, i) => (
           <div key={i} className="py-1">
-            {item.doc_no}
+            {headers[i]?.invoice_number || " - "}
           </div>
         ))}
       </td>
 
-      {/* PRODUCT */}
-      <td className="border border-gray-800 p-2 align-top text-left">
-        {details?.map((item, i) => (
-          <div key={i} className="py-1">
-            {item.product}
-            {header.plan_provider
-            ? ` - ${header.plan_provider} - ${header.product_types}`
-            : ` - ${header.product_types}`}
-          </div>
-        ))}
-      </td>
+     
+   <td className="border border-gray-800 p-2 align-top text-left">
+  {headers?.map((item, i) => {
+    const product = products?.find(
+      p =>
+        (p.product_code || "").toUpperCase() ===
+        (item?.products || "").toUpperCase()
+    );
 
-      {/* AMOUNT */}
+    return (
+      <div key={i} className="py-1 flex flex-col">
+
+        {/* PRODUCT + DETAILS */}
+        <div>
+          {getProductName(item?.products)}
+
+          {item?.plan_provider &&
+            ` - ${getPlanName(item.plan_provider)}`}
+
+          {item?.product_types &&
+            ` - ${getServiceName(item.product_types)}`}
+        </div>
+
+        {/* ICANN (from product master) */}
+        {product?.is_icann && product?.icann_fee ? (
+          <div className="text-[9px]  mt-1">
+            ICANN Fee added for {getProductName(item?.products)}
+          </div>
+        ) : null}
+
+      </div>
+    );
+  })}
+</td>
+
+    
       <td className="border border-gray-800 p-2 align-top text-right">
-        {details?.map((item, i) => (
+        {headers?.map((_, i) => (
           <div key={i} className="py-1">
            
-            {formatDecimal(item.amount ?? 0)}
+            {formatDecimal(headers[i]?.amount ?? 0)}
           </div>
         ))}
       </td>
 
-      {/* VAT */}
+      
       <td className="border border-gray-800 p-2 align-top text-right">
-        {details?.map((item, i) => (
+        {headers?.map((_, i) => (
           <div key={i} className="py-1">
            
-            {formatDecimal(item.vat_amount ?? 0)}
+            {formatDecimal(headers[i]?.vat_amount ?? 0)}
           </div>
         ))}
       </td>
 
-      {/* TOTAL */}
-      <td className="border border-gray-800 p-2 align-top text-right">
-        {details?.map((item, i) => (
-          <div key={i} className="py-1">
-           
-            {formatDecimal(item.total_amount ?? 0)}
+     
+     <td className="border border-gray-800 p-2 align-top text-right">
+  {headers?.map((item, i) => {
+    const product = products?.find(
+      p =>
+        (p.product_code || "").toUpperCase() ===
+        (item?.products || "").toUpperCase()
+    );
+
+    const mainAmount = Number(item?.total_amount ?? 0);
+    const icannFee = product?.is_icann ? Number(product?.icann_fee ?? 0) : 0;
+
+    return (
+      <div key={i} className="py-1 flex flex-col items-end">
+
+        {/* LINE 1: NORMAL TOTAL */}
+        <div>
+          {formatDecimal(mainAmount)}
+        </div>
+
+        {/* LINE 2: ICANN FEE */}
+        {icannFee > 0 && (
+          <div className="text-[10px] text-black mt-1">
+             {formatDecimal(icannFee)} 
           </div>
-        ))}
-      </td>
+        )}
+
+      </div>
+    );
+  })}
+</td>
 
     </tr>
 
-    {/* TOTAL ROW */}
+   
     <tr className="bg-[#e5e7eb]">
 
       <td
@@ -886,9 +990,33 @@ const currentDate = new Date();
         REMARKS
       </td>
 
-      <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {remarks || " - "}
-      </td>
+<td className="border border-gray-800 px-2 py-1 font-semibold">
+  {remarks}{" "}
+
+  {(header.currency !== "CR001" &&
+    header.currency !== "AED" &&
+    header.total_amount_aed) && (
+    <>
+      {/* <br /> */}
+    <span>
+  Equivalent Amount in AED: {formatDecimal(header.total_amount_aed)}
+  {details?.exchange_rate && (
+    <>
+      {" "}
+      (Converted at an exchange rate of {details.exchange_rate} when this PRF was generated on{" "}
+      {formatDate(details.prf_date)})
+    </>
+  )}
+</span>
+    </>
+  )}
+
+  {!remarks &&
+    !(header.currency !== "CR001" &&
+      header.currency !== "AED" &&
+      header.total_amount_aed) &&
+    " - "}
+</td>
 
     </tr>
 
@@ -955,7 +1083,7 @@ const currentDate = new Date();
       <td className="border border-gray-800 px-2 py-1 font-semibold">
 
         <div className="text-[8px]">
-          {details?.[0]?.prepared_by}
+          {details?.prepared_by}
         </div>
 
         <div className="mt-2 text-[8px] ">
@@ -968,7 +1096,7 @@ const currentDate = new Date();
       <td className="border border-gray-800 px-2 py-1 font-semibold">
 
         <div className="text-[8px]">
-          {details?.[0]?.checked_by}
+          {details?.checked_by}
         </div>
 
         <div className="mt-2 text-[8px] ">
@@ -981,7 +1109,7 @@ const currentDate = new Date();
       <td className="border border-gray-800 px-2 py-1 font-semibold">
 
         <div className="text-[8px]">
-          {details?.[0]?.verified_by_it}
+          {details?.verified_by_it}
         </div>
 
         <div className="mt-2 text-[8px] ">
@@ -994,7 +1122,7 @@ const currentDate = new Date();
       <td className="border border-gray-800 px-2 py-1 font-semibold">
 
         <div className="text-[8px]">
-          {details?.[0]?.verified_by}
+          {details?.verified_by}
         </div>
 
         <div className="mt-2 text-[8px] ">
@@ -1007,7 +1135,7 @@ const currentDate = new Date();
       <td className="border border-gray-800 px-2 py-1 font-semibold">
 
         <div className="text-[8px]">
-          {details?.[0]?.signed_by}
+          {details?.signed_by}
         </div>
 
         <div className="mt-2 text-[8px] ">
@@ -1020,7 +1148,7 @@ const currentDate = new Date();
       <td className="w-1/6 border border-gray-800 px-2 py-1 font-semibold">
 
         <div className="text-[8px]">
-          {details?.[0]?.approved_by}
+          {details?.approved_by}
         </div>
 
         <div className="mt-2 text-[8px]">

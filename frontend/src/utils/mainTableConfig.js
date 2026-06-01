@@ -1,7 +1,7 @@
 const mainTableConfig = {
   tbl_payment_transactions: [
     "date",
-    "receipt_number",
+    "invoice_number",
     "vendors",
     "products",
     "plan_provider",
