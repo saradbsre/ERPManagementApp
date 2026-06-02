@@ -617,7 +617,7 @@ const currentDate = new Date();
     <h1 className="font-bold text-[13px]">
       {selectedTerm?.value || header.term} Subscription Fees
     </h1>
-    <div>
+   <p className="text-[12px] text-gray-700">
   {selectedTransactionType?.transaction_code === "TT003" &&
     `This payment request is for a new subscription.`}
 
@@ -626,8 +626,7 @@ const currentDate = new Date();
 
   {selectedTransactionType?.transaction_code === "TT004" &&
     `This payment request is related to the cancellation of a subscription service.`}
-</div>
-
+    </p>
     <p className="text-[12px] text-gray-700">
       Subscription expiry on {expiryDate}
     </p>
