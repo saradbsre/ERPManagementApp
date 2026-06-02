@@ -185,7 +185,7 @@ function numberToWords(num, currencyCode = "AED") {
 }
 
 function formatDecimal(num) {
-  if (isNaN(num) || num === null) return "0.00";
+  if (isNaN(num) || num === null) return "-";
   return Number(num).toFixed(2);
 }
 
