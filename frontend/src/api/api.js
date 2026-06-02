@@ -91,13 +91,14 @@ export const fetchSections = () => {
   return API.get("/sections");
 }
 
-export const getModuleData = (moduleId, activeUserEmail, filters = {}) => {
+export const getModuleData = (moduleId, activeUserEmail, filters = {}, userRole) => {
   return API.get(`/module-data/${moduleId}`, {
     params: {
       activeUserEmail,
       search: filters.search || "",
       filters: filters.filters || "[]",
-      dateFilters: filters.dateFilters || "{}"
+      dateFilters: filters.dateFilters || "{}",
+      userRole: userRole || ""
     }
   });
 };

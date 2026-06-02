@@ -145,6 +145,7 @@ export default function DynamicTablePage() {
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email;
     const activeUserName = activeUser?.name;
+    const userRole = activeUser?.role;
     const [vatPercent, setVatPercent] = useState(0);
     const [providerPlansMap, setProviderPlansMap] = useState({});
     const [providerPlans, setProviderPlans] = useState([]);
@@ -402,7 +403,7 @@ const applyDateFilter = async () => {
 
     // console.log("Applying date filter:", payload);
 
-    const res = await getModuleData(id, activeUserEmail, payload);
+    const res = await getModuleData(id, activeUserEmail, payload, userRole);
 
     setRows(res.data || []);
 
@@ -1114,9 +1115,10 @@ const loadModule = async (
       const dataRes = await getModuleData(
         id,
         activeUserEmail,
-        payload
+        payload,
+        userRole
       );
-
+      console.log("userRole:", userRole);
       setRows(dataRes.data || []);
 
       setColumns(
@@ -1183,42 +1185,78 @@ const getMasterOptions = (col, searchText = "") => {
     newRow?.vendors || editRow?.vendors || null;
 //console.log("Selected vendor for master options:", selectedVendor);
 // console.log("newRow:", newRow?.vendors, "editRow:", editRow?.vendors);
-  // ================= PRODUCTS =================
-// ================= PRODUCTS =================
+
 if (col.column_name === "products") {
+  const selectedVendorValue = String(selectedVendor || "")
+    .trim()
+    .toLowerCase();
+
+  const currentProductValue = String(
+    newRow?.products || editRow?.products || ""
+  )
+    .trim();
 
   let products = [];
 
-  if (selectedVendor && serviceProviders?.length) {
+  if (selectedVendorValue && serviceProviders?.length) {
+    products = serviceProviders.filter((sp) => {
+      const vendorCode = String(sp.vendor || "")
+        .trim()
+        .toLowerCase();
 
-    products = serviceProviders.filter(
-      sp =>
-        String(sp.vendor || "")
-          .trim()
-          .toLowerCase() ===
-        String(selectedVendor || "")
-          .trim()
-          .toLowerCase()
-    );
+      // If vendor_name is missing in service_providers, resolve from vendors master
+      const vendorNameFromMaster =
+        vendors.find(
+          (v) =>
+            String(v.vendor_code || "").trim().toLowerCase() === vendorCode
+        )?.vendor_name || "";
 
+      const vendorName = String(
+        sp.vendor_name || vendorNameFromMaster || ""
+      )
+        .trim()
+        .toLowerCase();
+
+      return (
+        selectedVendorValue === vendorCode ||
+        selectedVendorValue === vendorName
+      );
+    });
+
+    // Fallback: if selected vendor has no mapped products, show all products
+    if (products.length === 0) {
+      products = [...serviceProviders];
+    }
   } else if (serviceProviders?.length) {
-
-    products = serviceProviders;
-
+    products = [...serviceProviders];
   }
 
-  // remove duplicates by product_code
   const unique = products.filter(
     (item, index, self) =>
-      index === self.findIndex(
-        p => p.product_code === item.product_code
-      )
+      index === self.findIndex((p) => p.product_code === item.product_code)
   );
 
-  return unique.map(sp => ({
-    key: sp.product_code, // PR009
-    value: sp.product     // ChatGPT Go Subscription (per seat)
+  let mapped = unique.map((sp) => ({
+    key: sp.product_code,
+    value: sp.product,
   }));
+
+  // Keep current value visible in edit/create even if not in mapped list
+  if (
+    currentProductValue &&
+    !mapped.some(
+      (o) =>
+        String(o.value || "").toLowerCase() === currentProductValue.toLowerCase() ||
+        String(o.key || "").toLowerCase() === currentProductValue.toLowerCase()
+    )
+  ) {
+    mapped = [
+      { key: currentProductValue, value: currentProductValue },
+      ...mapped,
+    ];
+  }
+
+  return mapped;
 }
 
 if (col.column_name === "product_types") {
@@ -1228,7 +1266,8 @@ if (col.column_name === "product_types") {
     newRow?.products ||
     editRow?.products ||
     null;
-
+    console.log("DBG product_types selectedProduct:", selectedProduct);
+console.log("DBG product_types serviceProviders sample:", serviceProviders.slice(0, 5).map(sp => ({ product_code: sp.product_code, product: sp.product, services: sp.services })));
 
 
   // =========================
@@ -1237,15 +1276,14 @@ if (col.column_name === "product_types") {
   if (selectedProduct && serviceProviders?.length) {
 
     // Find provider rows matching selected product code
-    const matchedProviders = serviceProviders.filter(
-      sp =>
-        String(sp.product_code || "")
-          .trim()
-          .toLowerCase() ===
-        String(selectedProduct || "")
-          .trim()
-          .toLowerCase()
-    );
+const matchedProviders = serviceProviders.filter((sp) => {
+  const selected = String(selectedProduct || "").trim().toLowerCase();
+
+  const code = String(sp.product_code || "").trim().toLowerCase();
+  const name = String(sp.product || "").trim().toLowerCase();
+
+  return selected === code || selected === name;
+});
 
 
     // Get service codes
@@ -1757,7 +1795,8 @@ const handleClear = async () => {
     const res = await getModuleData(
       id,
       activeUserEmail,
-      payload
+      payload,
+      userRole
     );
 
     setRows(res.data || []);
@@ -1989,36 +2028,26 @@ const finalRows = filtered.filter(row => {
         // }
     });
     }, [isCreating, visibleColumns, masterDataMap]);
-    useEffect(() => {
-    if (!editRowId) return;
+useEffect(() => {
+  if (!editRowId) return;
 
-    visibleColumns.forEach((col) => {
-        if (!col.master) return;
+  visibleColumns.forEach((col) => {
+    if (!col.master) return;
 
-        const key = col.column_name;
+    if (col.column_name === "product_types") return;
 
-        const options = getMasterOptions(
-        col,
-        editRow?.[key] || ""
-        );
+    const key = col.column_name;
+    const options = getMasterOptions(col, editRow?.[key] || "");
 
-        if (options.length === 1) {
-        const val =
-            typeof options[0] === "object"
-            ? options[0].value
-            : options[0];
+    if (options.length === 1 && !editRow?.[key]) {
+      const val = typeof options[0] === "object" ? options[0].value : options[0];
 
-        setEditRow((prev) => {
-            if (prev[key] === val) return prev;
-
-            return {
-            ...prev,
-            [key]: val
-            };
-        });
-        }
-    });
-    }, [editRowId, visibleColumns, masterDataMap]);
+      setEditRow((prev) => (
+        prev[key] ? prev : { ...prev, [key]: val }
+      ));
+    }
+  });
+}, [editRowId, visibleColumns, masterDataMap]);
 
 
 
@@ -3904,6 +3933,9 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                                           <Loader type="dots" />
                                         </div>
                                     )}
+                                   
+
+
 
                                     {/* ================================================= */}
                                     {/* ================= DROPDOWN ===================== */}
@@ -4028,20 +4060,22 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                                                         border-b border-gray-100
                                                         last:border-0
                                                       "
-                                                     onMouseDown={() => {
-
-                                                      const selectedValue =
-                                                        typeof val === "object"
-                                                          ? val.key ?? val.id ?? val.value
-                                                          : val;
+                                                    onMouseDown={() => {
+                                                    
+                                                      const selectedLabel =
+                                                      typeof val === "object"
+                                                      ? val.value
+                                                      : val;
 
                                                       setEditRow(prev => ({
-                                                        ...prev,
-                                                        [col.column_name]: selectedValue,
+                                                      ...prev,
+                                                      [col.column_name]: selectedLabel,
                                                       }));
 
                                                       setActiveDropdown(null);
-                                                    }}
+                                                      }}
+
+
                                                     >
                                                       <span className="truncate">
                                                         {displayValue}
