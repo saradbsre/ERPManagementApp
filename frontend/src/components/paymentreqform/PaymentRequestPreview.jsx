@@ -185,8 +185,9 @@ function numberToWords(num, currencyCode = "AED") {
 }
 
 function formatDecimal(num) {
-  if (isNaN(num) || num === null) return "-";
-  return Number(num).toFixed(2);
+  if (num === null || num === undefined || isNaN(num)) return "-";
+  const value = Number(num);
+  return value === 0 ? "-" : value.toFixed(2);
 }
 
 const handleExportPrf = async (prfNum) => {
