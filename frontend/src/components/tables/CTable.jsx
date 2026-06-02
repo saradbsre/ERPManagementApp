@@ -1565,6 +1565,26 @@ useEffect(() => {
         setOriginalRow({ ...row });
     };
 
+    const toMasterKey = (columnName, rawVal) => {
+if (rawVal === null || rawVal === undefined || rawVal === "") return rawVal;
+
+const col = columns.find(c => c.column_name === columnName);
+if (!col?.master) return rawVal;
+
+const options = getMasterOptions(col, "");
+const input = String(rawVal).trim().toLowerCase();
+
+const hit = options.find(o => {
+const key = String(o?.key ?? o?.id ?? o?.value ?? "").trim().toLowerCase();
+const val = String(o?.value ?? o ?? "").trim().toLowerCase();
+return input === key || input === val;
+});
+
+return hit ? (hit.key ?? hit.id ?? hit.value) : rawVal;
+};
+
+
+
     const handleSaveEdit = async () => {
         setLoading(true);
         try {
@@ -1572,7 +1592,7 @@ useEffect(() => {
 
             Object.keys(editRow).forEach((key) => {
                 if (editRow[key] !== originalRow[key]) {
-                    changedData[key] = editRow[key];
+                    changedData[key] = toMasterKey(key, editRow[key]);
                 }
             });
 
