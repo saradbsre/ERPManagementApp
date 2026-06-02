@@ -1107,7 +1107,7 @@ const currentDate = new Date();
     <tr className="bg-gray-200 text-black">
 
       <th
-        colSpan={6}
+        colSpan={details?.is_advertising ? 6 : 5}
         className="text-left px-2 py-1 border border-gray-800 text-[14px] font-bold"
       >
         APPROVALS
@@ -1121,10 +1121,11 @@ const currentDate = new Date();
       <th className="border border-gray-800 px-2 py-1">
         PREPARED BY
       </th>
-
+    {details?.is_advertising && (
       <th className="w-1/6 border border-gray-800 px-2 py-1">
-        CHECKED BY
+        CHECKED BY 
       </th>
+    )}
 
       <th className="w-1/6 border border-gray-800 px-2 py-1">
         VERIFIED BY
@@ -1164,6 +1165,7 @@ const currentDate = new Date();
       </td>
 
       {/* CHECKED */}
+      {details?.is_advertising && (
       <td className="border border-gray-800 px-2 py-1 font-semibold">
 
         <div className="text-[8px]">
@@ -1175,6 +1177,7 @@ const currentDate = new Date();
         </div>
 
       </td>
+      )}
 
       {/* VERIFIED */}
       <td className="border border-gray-800 px-2 py-1 font-semibold">

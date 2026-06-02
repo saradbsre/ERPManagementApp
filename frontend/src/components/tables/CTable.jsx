@@ -185,7 +185,18 @@ export default function DynamicTablePage() {
     const configOrder = mainTableConfig[module.module_name];
     const [selectedRowIds, setSelectedRowIds] = useState([]);
     const [showActions, setShowActions] = useState(false);
+    const [showMobileFilters, setShowMobileFilters] = useState(false);
     const tableContainerRef = useRef(null);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+    const [isAdvertising, setIsAdvertising] = useState(false);
+    useEffect(() => {
+      const handleResize = () => {
+        setIsMobile(window.innerWidth < 768);
+      };
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }, []);
     const [form, setForm] = useState({
       paid_by: "",
       prepared_by: "",
@@ -888,7 +899,8 @@ const handleGenerate = async () => {
     signed_by: form.signed_by,
     approved_by: form.approved_by,
     exchange_rate,
-    userid: activeUserEmail
+    userid: activeUserEmail,
+    is_advertising: isAdvertising ? 1 : 0,
   };
 
   await createprf(
@@ -1211,9 +1223,7 @@ if (col.column_name === "products") {
 
 if (col.column_name === "product_types") {
 
-  // =========================
-  // SELECTED PRODUCT CODE
-  // =========================
+  console.log("editRow.products", editRow.products);
   const selectedProduct =
     newRow?.products ||
     editRow?.products ||
@@ -2566,9 +2576,9 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                             }}
                           />
             {/* ================= HEADER ================= */}
-            <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center mb-4">
+            <div className="flex justify-between items-center mb-4">
 
-                <h1 className="text-xl font-semibold text-gray-800">
+                <h1 className="text-xl font-semibold text-gray-800 truncate">
                     {module?.display_name || "Loading..."}
                 </h1>
 
@@ -2671,6 +2681,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
       >
         Generate
       </button>
+      
 
     </div>
   )}
@@ -2679,168 +2690,333 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
             </div>
 
             {/* ================= CONTROL BAR (LEFT ALIGNED) ================= */}
-            <div className="bg-white p-3 rounded-xl shadow mb-4 flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+           <div className="bg-white p-3 rounded-xl shadow mb-4">
 
-                {/* SEARCH */}
-                <input
-                    type="text"
-                    placeholder="Search records..."
-                    className="border px-3 py-2 rounded-lg w-64"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                />
+  {/* ================= MOBILE ================= */}
+  <div className="md:hidden">
 
+    {/* Search + Toggle */}
+    <div className="flex gap-2">
+      <input
+        type="text"
+        placeholder="Search records..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="flex-1 border px-3 py-2 rounded-lg"
+      />
 
-                {/* FILTER BUTTON */}
-                <TableFilters
-                  masterList={masterList}
-                  filters={filters}
-                  setFilters={setFilters}
-                  currencies={currencies}
-                  masterDataMap={masterDataMap}
-                  setMasterDataMap={setMasterDataMap}
-                />
-                {isFilterActive && (
-  <div className="flex items-center gap-2 ml-2 bg-gray-50 px-3 py-2 rounded-lg border">
-
-    {/* INPUT */}
-    <input
-      type="text"
-      placeholder="Enter filter name (required)"
-      value={saveFilterName}
-      onChange={(e) => setSaveFilterName(e.target.value)}
-      className="border px-2 py-1 rounded text-sm w-52"
-    />
-
-    {/* SAVE BUTTON */}
-    <button
-      onClick={handleSaveFilter}
-      disabled={!saveFilterName.trim()}
-      className={`px-3 py-1 rounded text-sm text-white ${
-        saveFilterName.trim()
-          ? "bg-blue-500 hover:bg-blue-600"
-          : "bg-gray-300 cursor-not-allowed"
-      }`}
-    >
-      Save As
-    </button>
-
-  </div>
-)}
-              
-<div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-  <input
-    type="date"
-    name="startDate"
-    value={dateFilters.startDate}
-    onChange={onInputChange}
-    style={{
-      padding: "8px 12px",
-      borderRadius: 6,
-      border: "1px solid #ccc",
-      fontSize: 14,
-      minWidth: 130,
-      maxWidth: 150,
-      background: "#f8fafc",
-      textAlign: "center",
-    }}
-  />
-
-  <span style={{ fontSize: 14, color: "#666" }}>to</span>
-
-  <input
-    type="date"
-    name="endDate"
-    value={dateFilters.endDate}
-    onChange={onInputChange}
-    style={{
-      padding: "8px 12px",
-      borderRadius: 6,
-      border: "1px solid #ccc",
-      fontSize: 14,
-      minWidth: 130,
-      maxWidth: 150,
-      background: "#f8fafc",
-      textAlign: "center",
-    }}
-  />
-</div>
-<button
-  onClick={applyDateFilter}
-  className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
->
-  Apply
-</button>
-<button
-    onClick={handleClear}
-  className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
->
-  Clear
-</button>
-               <button
-  onClick={() =>
-    setActiveDateFilter(
-      activeDateFilter === "custom" ? null : "custom"
-    )
-  }
-  className={`px-3 py-2 border rounded-lg text-sm hover:bg-gray-100 ${
-    activeDateFilter === "custom" ? "bg-gray-100" : ""
+   <button
+  onClick={() => setShowMobileFilters(!showMobileFilters)}
+  className={`flex items-center justify-between w-full px-4 py-2 rounded-xl shadow-sm transition-all ${
+    showMobileFilters
+      ? "bg-gradient-to-r from-pink-200 to-indigo-400 text-white"
+      : "bg-white border border-slate-200"
   }`}
 >
-  Custom Range
+
+  <span
+    className={`transition-transform ${
+      showMobileFilters ? "rotate-180" : ""
+    }`}
+  >
+    ▼
+  </span>
 </button>
-               
+    </div>
 
-                {/* PAGINATION (LEFT SIDE LIKE YOU WANTED) */}
-                <div className="flex items-center gap-2 text-sm w-full md:w-auto">
+    {/* Drawer */}
+    {showMobileFilters && (
+  <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
 
-                    <button
-                        disabled={page === 1}
-                        onClick={() => setPage(p => p - 1)}
-                        className="px-3 py-1 border rounded disabled:opacity-40"
-                    >
-                        Prev
-                    </button>
+    {/* Header */}
+    <div className="bg-gradient-to-r from-pink-200 to-indigo-400 px-4 py-3">
+      <h3 className="text-black font-semibold text-sm">
+        Filters & Date Range
+      </h3>
+    </div>
 
-                    <span className="text-gray-600">
-                        {page} / {totalPages || 1}
-                    </span>
+    <div className="p-4 space-y-4">
 
-                    <button
-                        disabled={page === totalPages}
-                        onClick={() => setPage(p => p + 1)}
-                        className="px-3 py-1 border rounded disabled:opacity-40"
-                    >
-                        Next
-                    </button>
+      {/* Filters */}
+      <div className="rounded-xl bg-slate-50 p-3 border border-slate-200">
+        <TableFilters
+          masterList={masterList}
+          filters={filters}
+          setFilters={setFilters}
+          currencies={currencies}
+          masterDataMap={masterDataMap}
+          setMasterDataMap={setMasterDataMap}
+        />
+      </div>
 
-                </div>
+      {/* Save Filter */}
+      {isFilterActive && (
+        <div className="space-y-2">
+          <input
+            type="text"
+            placeholder="Save current filter..."
+            value={saveFilterName}
+            onChange={(e) => setSaveFilterName(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          />
 
-                {/* RECORD COUNT */}
-                <span className="text-sm text-gray-500 ml-auto">
-                    Total: {finalRows.length}
-                </span>
+          <button
+            onClick={handleSaveFilter}
+            disabled={!saveFilterName.trim()}
+            className={`w-full rounded-xl py-2 text-sm font-medium text-white transition ${
+              saveFilterName.trim()
+                ? "bg-blue-600 hover:bg-blue-700"
+                : "bg-slate-300 cursor-not-allowed"
+            }`}
+          >
+            Save Filter
+          </button>
+        </div>
+      )}
 
+      {/* Date Range */}
+      <div>
+        <label className="block text-xs font-medium text-slate-600 mb-2">
+          Date Range
+        </label>
 
-            </div>
-            {activeDateFilter && (
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="date"
+            name="startDate"
+            value={dateFilters.startDate}
+            onChange={onInputChange}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm bg-slate-50"
+          />
+
+          <input
+            type="date"
+            name="endDate"
+            value={dateFilters.endDate}
+            onChange={onInputChange}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm bg-slate-50"
+          />
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="grid grid-cols-3 gap-2">
+
+        <button
+          onClick={applyDateFilter}
+          className="rounded-xl bg-green-600 py-2 text-sm font-medium text-white shadow hover:bg-green-700"
+        >
+          Apply
+        </button>
+
+        <button
+          onClick={handleClear}
+          className="rounded-xl bg-red-500 py-2 text-sm font-medium text-white shadow hover:bg-red-600"
+        >
+          Clear
+        </button>
+
+        <button
+          onClick={() =>
+            setActiveDateFilter(
+              activeDateFilter === "custom" ? null : "custom"
+            )
+          }
+          className={`rounded-xl py-2 text-sm font-medium shadow ${
+            activeDateFilter === "custom"
+              ? "bg-indigo-600 text-white"
+              : "bg-slate-100 text-slate-700"
+          }`}
+        >
+          Custom
+        </button>
+
+      </div>
+
+    </div>
+  </div>
+)}
+  </div>
+
+  {/* ================= DESKTOP ================= */}
+  <div className="hidden md:flex flex-wrap items-center gap-3">
+
+    <input
+      type="text"
+      placeholder="Search records..."
+      className="border px-3 py-2 rounded-lg w-64"
+      value={search}
+      onChange={(e) => setSearch(e.target.value)}
+    />
+
+    <TableFilters
+      masterList={masterList}
+      filters={filters}
+      setFilters={setFilters}
+      currencies={currencies}
+      masterDataMap={masterDataMap}
+      setMasterDataMap={setMasterDataMap}
+    />
+
+    {isFilterActive && (
+      <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border">
+        <input
+          type="text"
+          placeholder="Enter filter name (required)"
+          value={saveFilterName}
+          onChange={(e) => setSaveFilterName(e.target.value)}
+          className="border px-2 py-1 rounded text-sm w-52"
+        />
+
+        <button
+          onClick={handleSaveFilter}
+          disabled={!saveFilterName.trim()}
+          className={`px-3 py-1 rounded text-sm text-white ${
+            saveFilterName.trim()
+              ? "bg-blue-500 hover:bg-blue-600"
+              : "bg-gray-300 cursor-not-allowed"
+          }`}
+        >
+          Save As
+        </button>
+      </div>
+    )}
+
+    <div className="flex gap-3 items-center">
+      <input
+        type="date"
+        name="startDate"
+        value={dateFilters.startDate}
+        onChange={onInputChange}
+        className="border rounded px-3 py-2 bg-slate-50 w-[150px]"
+      />
+
+      <span className="text-gray-500">to</span>
+
+      <input
+        type="date"
+        name="endDate"
+        value={dateFilters.endDate}
+        onChange={onInputChange}
+        className="border rounded px-3 py-2 bg-slate-50 w-[150px]"
+      />
+    </div>
+
+    <button
+      onClick={applyDateFilter}
+      className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
+    >
+      Apply
+    </button>
+
+    <button
+      onClick={handleClear}
+      className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
+    >
+      Clear
+    </button>
+
+    <button
+      onClick={() =>
+        setActiveDateFilter(
+          activeDateFilter === "custom" ? null : "custom"
+        )
+      }
+      className={`px-3 py-2 border rounded-lg text-sm hover:bg-gray-100 ${
+        activeDateFilter === "custom" ? "bg-gray-100" : ""
+      }`}
+    >
+      Custom Range
+    </button>
+
+    {/* Desktop only Pagination */}
+    <div className="flex items-center gap-2 text-sm ml-4">
+      <button
+        disabled={page === 1}
+        onClick={() => setPage((p) => p - 1)}
+        className="px-3 py-1 border rounded disabled:opacity-40"
+      >
+        Prev
+      </button>
+
+      <span className="text-gray-600">
+        {page} / {totalPages || 1}
+      </span>
+
+      <button
+        disabled={page === totalPages}
+        onClick={() => setPage((p) => p + 1)}
+        className="px-3 py-1 border rounded disabled:opacity-40"
+      >
+        Next
+      </button>
+    </div>
+
+    {/* Desktop only Total */}
+    <span className="text-sm text-gray-500 ml-auto">
+      Total: {finalRows.length}
+    </span>
+
+  </div>
+
+</div>
+           {activeDateFilter && !isMobile && (
   <div className="mb-4">
-<DateOnlyFilter
-  onApply={(range) => {
-    if (!range?.start || !range?.end) return;
+    <DateOnlyFilter
+      onApply={(range) => {
+        if (!range?.start || !range?.end) return;
 
-    const updatedFilters = {
-      startDate: range.start,
-      endDate: range.end,
-    };
+        const updatedFilters = {
+          startDate: range.start,
+          endDate: range.end,
+        };
 
-    setDateFilters(updatedFilters);
-    setActiveDateFilter(null);
+        setDateFilters(updatedFilters);
+        setActiveDateFilter(null);
+        loadModule(updatedFilters);
+      }}
+    />
+  </div>
+)}
+{activeDateFilter && isMobile && (
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4">
+    
+    <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
 
-    // ✅ pass latest filters directly
-    loadModule(updatedFilters);
-  }}
-/>
+      {/* Header */}
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <h3 className="font-semibold text-gray-800">
+          Select Date Range
+        </h3>
+
+        <button
+          onClick={() => setActiveDateFilter(null)}
+          className="text-gray-500 text-lg"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="p-4">
+        <DateOnlyFilter
+          onApply={(range) => {
+            if (!range?.start || !range?.end) return;
+
+            const updatedFilters = {
+              startDate: range.start,
+              endDate: range.end,
+            };
+
+            setDateFilters(updatedFilters);
+            setActiveDateFilter(null);
+            loadModule(updatedFilters);
+          }}
+        />
+      </div>
+
+    </div>
+
   </div>
 )}
 
@@ -2984,32 +3160,34 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                       <Loader type="orbit" />
                     </div>
                   ) : (
+                    <>
+                    <div className="hidden md:block ">
                     <table className="min-w-max w-full text-sm">
                         <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
                             <tr>
                                 <th className="px-4 py-3 border-b text-left">S.No</th> 
                                 {visibleColumns.map(col => (
                                    <th
-  key={col.column_id}
-  onClick={() => handleSort(col.column_name)}
-  className={`${getAlignClass(
-    col.display_name
-  )} px-4 py-3 whitespace-nowrap border-b cursor-pointer select-none hover:bg-gray-200`}
->
-  <div className="flex items-center gap-1">
-    <span>{col.display_name}</span>
+                                      key={col.column_id}
+                                      onClick={() => handleSort(col.column_name)}
+                                      className={`${getAlignClass(
+                                        col.display_name
+                                      )} px-4 py-3 whitespace-nowrap border-b cursor-pointer select-none hover:bg-gray-200`}
+                                    >
+                                      <div className="flex items-center gap-1">
+                                        <span>{col.display_name}</span>
 
-    {sortConfig.key === col.column_name ? (
-      sortConfig.direction === "asc" ? (
-        <span>▲</span>
-      ) : (
-        <span>▼</span>
-      )
-    ) : (
-      <span className="text-gray-400">↕</span>
-    )}
-  </div>
-</th>
+                                        {sortConfig.key === col.column_name ? (
+                                          sortConfig.direction === "asc" ? (
+                                            <span>▲</span>
+                                          ) : (
+                                            <span>▼</span>
+                                          )
+                                        ) : (
+                                          <span className="text-gray-400">↕</span>
+                                        )}
+                                      </div>
+                                    </th>
                                 ))}
 
                                 <th className="px-4 py-3 border-b text-right">Actions</th>
@@ -3019,370 +3197,370 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                         {/* TABLE BODY */}
                     <tbody className="divide-y">
                       {isCreating && (
-  <tr className="bg-blue-50">
-    <td className="px-4 py-3 whitespace-nowrap"></td>
-
-    {visibleColumns.map((col) => {
-
-      const isMaster = !!col.master;
-
-      const isDate =
-        col.data_type?.toLowerCase().includes("date");
-
-      const isAmount =
-        col.data_type?.toLowerCase().includes("decimal");
-
-      // =========================
-      // DISPLAY VALUE
-      // =========================
-      const fieldValue = inputValues[col.column_name];
-
-      const displayValue =
-        typeof fieldValue === "object"
-          ? fieldValue.value
-          : fieldValue ??
-            newRow[col.column_name] ??
-            "";
-
-      return (
-
-        <td
-          key={col.column_id}
-          className={`
-            px-4 py-2 whitespace-nowrap
-            ${getAlignClass(col.display_name)}
-            ${col.column_name === "company"
-              ? "min-w-[450px]"
-              : ""
-            }
-          `}
-        >
-
-          <div className="relative">
-
-            {/* ================= INPUT ================= */}
-            <input
-              autoComplete="off"
-
-              type={
-                isNumericColumn(col)
-                  ? "number"
-                  : isDate
-                  ? "date"
-                  : "text"
-              }
-
-              className={`
-                rounded-xl
-                border border-gray-300
-                bg-white
-                px-3 py-2
-                text-sm
-                outline-none
-                transition-all duration-200
-                focus:border-blue-500
-                focus:ring-4
-                focus:ring-blue-100
-
-                ${
-                  col.column_name === "company"
-                    ? "w-[450px]"
-                    : "w-full"
-                }
-              `}
-
-              value={
-                col.column_name === "total_amount_aed"
-                  ? newRow.total_amount_aed || ""
-                  : isDate
-                  ? formatForInput(displayValue)
-                  : displayValue
-              }
-
-              disabled={
-                col.column_name === "total_amount_aed" ||
-                col.column_name === "vat_amount" ||
-                col.column_name === "total_amount" ||
-                col.column_name === "prf_generate"
-              }
-
-              onChange={(e) => {
-
-                let val = e.target.value;
-
-                // =========================
-                // NUMERIC
-                // =========================
-                if (isNumericColumn(col.column_name)) {
-                  val = handleNumericInput(val);
-                }
-
-                if (col.column_name === "amount") {
-
-  const totals = calculateRowTotals({
-    amount: val,
-    currency: newRow.currency,
-    service_provider_id: serviceProviders.find(sp => {
-      //console.log("sp", sp.product_code)
-      const matched = sp.product_code === (newRow.products?.value || newRow.products);
-      // console.log("Matched name for amount change:", serviceProviders.product, "with new row product:", newRow.products  );
-      if (matched) {
-      }
-      return matched;
-    })?.id
-   
-  });
-
-  setNewRow(prev => ({
-    ...prev,
-    amount: val,
-    vat_amount: totals.vat_amount,
-    total_amount: totals.total_amount,
-    total_amount_aed: totals.total_amount_aed
-  }));
-}
-
-                // =========================
-                // MASTER FIELD
-                // =========================
-                if (isMaster) {
-
-  setInputValues(prev => ({
-    ...prev,
-    [col.column_name]: {
-      key: "",
-      value: val
-    }
-  }));
-
-  setActiveField(col.column_name);
-
-}
-
-                // =========================
-                // NORMAL FIELD
-                // =========================
-                else {
-
-                  handleNewRowChange(
-                    col.column_name,
-                    val,
-                    col.master
-                  );
-
-                }
-
-              }}
-
-              onFocus={() => {
-
-                setActiveField(col.column_name);
-
-                if (col.master) {
-                  fetchMasterDataForColumn(col.master);
-                }
-
-              }}
-
-              onBlur={(e) => {
-
-                if (isAmount && e.target.value !== "") {
-
-                  handleNewRowChange(
-                    col.column_name,
-                    Number(e.target.value).toFixed(2),
-                    col.master
-                  );
-
-                }
-
-                setTimeout(() => {
-                  setActiveField(null);
-                }, 150);
-
-              }}
-
-            />
-
-            {/* ================= LOADER ================= */}
-            {isMaster &&
-              loadingMaster === col.master && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <Loader type="dots" />
-                </div>
-            )}
-
-            {/* ================= MASTER DROPDOWN ================= */}
-            {isMaster &&
-              activeField === col.column_name &&
-              loadingMaster !== col.master &&
-              (() => {
-
-                const typedValue =
-                  typeof inputValues[col.column_name] === "object"
-                    ? inputValues[col.column_name]?.value || ""
-                    : inputValues[col.column_name] || "";
-
-                const rawOptions = getMasterOptions(
-                  col,
-                  typedValue,
-                  newRow
-                );
-
-                const filteredOptions =
-                  rawOptions.filter((option) => {
-
-                    const label =
-                      typeof option === "object"
-                        ? option.value
-                        : option;
-
-                    return String(label || "")
-                      .toLowerCase()
-                      .includes(
-                        typedValue.toLowerCase()
-                      );
-
-                  });
-
-                return (
-
-                  <div className="
-                    absolute z-50 mt-2 w-full overflow-hidden
-                    rounded-2xl border border-gray-200
-                    bg-white shadow-xl
-                    max-h-64 overflow-y-auto
-                  ">
-
-                    {/* OPTIONS */}
-                    {filteredOptions.map((option, i) => {
-
-                      const label =
-                        typeof option === "object"
-                          ? option.value
-                          : option;
-
-                      return (
-
-                        <div
-                          key={i}
-
-                          className="
-                            px-4 py-3
-                            text-sm text-gray-700
-                            cursor-pointer
-                            hover:bg-blue-50
-                            border-b border-gray-100
-                          "
-
-onMouseDown={async () => {
-
-  const value =
-    typeof option === "object"
-      ? option.key ?? option.id ?? option.value
-      : option;
-
-  const label =
-    typeof option === "object"
-      ? option.value
-      : option;
-
-  // ✅ 1. update NEW ROW FIRST (source of truth)
-setNewRow(prev => ({
-  ...prev,
-  [col.column_name]: value,
-  ...(col.column_name === "products"
-    ? { product_types: "" }
-    : {})
-}));
-
-  // ✅ 2. UI state
-  setInputValues(prev => ({
-    ...prev,
-    [col.column_name]: { key: value, value: label }
-  }));
-
-  // ✅ 3. DB state
- if (col.column_name === "product_types") {
-  console.log("PRODUCT TYPE SELECTED", option);
-}
-  handleNewRowChange(col.column_name, value, col.master);
-
-  // ✅ 4. load dependent data
-  if (col.column_name === "products") {
-
-    const matchedProvider = serviceProviders.find(sp =>
-      String(sp.product || "").trim().toLowerCase() ===
-      String(label || "").trim().toLowerCase()
-    );
-
-    await loadProviderPlans(matchedProvider?.id);
-  }
-
-  setActiveField(null);
-}}
-                        >
-
-                          {label}
-
-                        </div>
-
-                      );
-
-                    })}
-
-                    {/* EMPTY */}
-                    {filteredOptions.length === 0 && (
-                      <div className="px-4 py-3 text-sm text-gray-400 text-center">
-                        No results found
-                      </div>
-                    )}
-
-                  </div>
-
-                );
-
-              })()}
-
-          </div>
-
-        </td>
-
-      );
-
-    })}
-
-    {/* ACTIONS */}
-    <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
-
-      <button
-        onClick={handleSave}
-        className="
-          px-3 py-1.5 text-sm rounded-md
-          border border-blue-300 bg-white
-          hover:bg-blue-100 hover:border-blue-500
-          transition
-        "
-      >
-        Save
-      </button>
-
-      <button
-        onClick={handleCancel}
-        className="
-          px-3 py-1.5 text-sm rounded-md
-          border border-red-300 bg-white
-          hover:bg-red-100 hover:border-red-500
-          transition
-        "
-      >
-        Cancel
-      </button>
-
-    </td>
-
-  </tr>
-)}
+                        <tr className="bg-blue-50">
+                          <td className="px-4 py-3 whitespace-nowrap"></td>
+
+                          {visibleColumns.map((col) => {
+
+                            const isMaster = !!col.master;
+
+                            const isDate =
+                              col.data_type?.toLowerCase().includes("date");
+
+                            const isAmount =
+                              col.data_type?.toLowerCase().includes("decimal");
+
+                            // =========================
+                            // DISPLAY VALUE
+                            // =========================
+                            const fieldValue = inputValues[col.column_name];
+
+                            const displayValue =
+                              typeof fieldValue === "object"
+                                ? fieldValue.value
+                                : fieldValue ??
+                                  newRow[col.column_name] ??
+                                  "";
+
+                            return (
+
+                              <td
+                                key={col.column_id}
+                                className={`
+                                  px-4 py-2 whitespace-nowrap
+                                  ${getAlignClass(col.display_name)}
+                                  ${col.column_name === "company"
+                                    ? "min-w-[450px]"
+                                    : ""
+                                  }
+                                `}
+                              >
+
+                                <div className="relative">
+
+                                  {/* ================= INPUT ================= */}
+                                  <input
+                                    autoComplete="off"
+
+                                    type={
+                                      isNumericColumn(col)
+                                        ? "number"
+                                        : isDate
+                                        ? "date"
+                                        : "text"
+                                    }
+
+                                    className={`
+                                      rounded-xl
+                                      border border-gray-300
+                                      bg-white
+                                      px-3 py-2
+                                      text-sm
+                                      outline-none
+                                      transition-all duration-200
+                                      focus:border-blue-500
+                                      focus:ring-4
+                                      focus:ring-blue-100
+
+                                      ${
+                                        col.column_name === "company"
+                                          ? "w-[450px]"
+                                          : "w-full"
+                                      }
+                                    `}
+
+                                    value={
+                                      col.column_name === "total_amount_aed"
+                                        ? newRow.total_amount_aed || ""
+                                        : isDate
+                                        ? formatForInput(displayValue)
+                                        : displayValue
+                                    }
+
+                                    disabled={
+                                      col.column_name === "total_amount_aed" ||
+                                      col.column_name === "vat_amount" ||
+                                      col.column_name === "total_amount" ||
+                                      col.column_name === "prf_generate"
+                                    }
+
+                                    onChange={(e) => {
+
+                                      let val = e.target.value;
+
+                                      // =========================
+                                      // NUMERIC
+                                      // =========================
+                                      if (isNumericColumn(col.column_name)) {
+                                        val = handleNumericInput(val);
+                                      }
+
+                                      if (col.column_name === "amount") {
+
+                        const totals = calculateRowTotals({
+                          amount: val,
+                          currency: newRow.currency,
+                          service_provider_id: serviceProviders.find(sp => {
+                            //console.log("sp", sp.product_code)
+                            const matched = sp.product_code === (newRow.products?.value || newRow.products);
+                            // console.log("Matched name for amount change:", serviceProviders.product, "with new row product:", newRow.products  );
+                            if (matched) {
+                            }
+                            return matched;
+                          })?.id
+                        
+                        });
+
+                        setNewRow(prev => ({
+                          ...prev,
+                          amount: val,
+                          vat_amount: totals.vat_amount,
+                          total_amount: totals.total_amount,
+                          total_amount_aed: totals.total_amount_aed
+                        }));
+                      }
+
+                                      // =========================
+                                      // MASTER FIELD
+                                      // =========================
+                                      if (isMaster) {
+
+                        setInputValues(prev => ({
+                          ...prev,
+                          [col.column_name]: {
+                            key: "",
+                            value: val
+                          }
+                        }));
+
+                        setActiveField(col.column_name);
+
+                      }
+
+                                      // =========================
+                                      // NORMAL FIELD
+                                      // =========================
+                                      else {
+
+                                        handleNewRowChange(
+                                          col.column_name,
+                                          val,
+                                          col.master
+                                        );
+
+                                      }
+
+                                    }}
+
+                                    onFocus={() => {
+
+                                      setActiveField(col.column_name);
+
+                                      if (col.master) {
+                                        fetchMasterDataForColumn(col.master);
+                                      }
+
+                                    }}
+
+                                    onBlur={(e) => {
+
+                                      if (isAmount && e.target.value !== "") {
+
+                                        handleNewRowChange(
+                                          col.column_name,
+                                          Number(e.target.value).toFixed(2),
+                                          col.master
+                                        );
+
+                                      }
+
+                                      setTimeout(() => {
+                                        setActiveField(null);
+                                      }, 150);
+
+                                    }}
+
+                                  />
+
+                                  {/* ================= LOADER ================= */}
+                                  {isMaster &&
+                                    loadingMaster === col.master && (
+                                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                        <Loader type="dots" />
+                                      </div>
+                                  )}
+
+                                  {/* ================= MASTER DROPDOWN ================= */}
+                                  {isMaster &&
+                                    activeField === col.column_name &&
+                                    loadingMaster !== col.master &&
+                                    (() => {
+
+                                      const typedValue =
+                                        typeof inputValues[col.column_name] === "object"
+                                          ? inputValues[col.column_name]?.value || ""
+                                          : inputValues[col.column_name] || "";
+
+                                      const rawOptions = getMasterOptions(
+                                        col,
+                                        typedValue,
+                                        newRow
+                                      );
+
+                                      const filteredOptions =
+                                        rawOptions.filter((option) => {
+
+                                          const label =
+                                            typeof option === "object"
+                                              ? option.value
+                                              : option;
+
+                                          return String(label || "")
+                                            .toLowerCase()
+                                            .includes(
+                                              typedValue.toLowerCase()
+                                            );
+
+                                        });
+
+                                      return (
+
+                                        <div className="
+                                          absolute z-50 mt-2 w-full overflow-hidden
+                                          rounded-2xl border border-gray-200
+                                          bg-white shadow-xl
+                                          max-h-64 overflow-y-auto
+                                        ">
+
+                                          {/* OPTIONS */}
+                                          {filteredOptions.map((option, i) => {
+
+                                            const label =
+                                              typeof option === "object"
+                                                ? option.value
+                                                : option;
+
+                                            return (
+
+                                              <div
+                                                key={i}
+
+                                                className="
+                                                  px-4 py-3
+                                                  text-sm text-gray-700
+                                                  cursor-pointer
+                                                  hover:bg-blue-50
+                                                  border-b border-gray-100
+                                                "
+
+                      onMouseDown={async () => {
+
+                        const value =
+                          typeof option === "object"
+                            ? option.key ?? option.id ?? option.value
+                            : option;
+
+                        const label =
+                          typeof option === "object"
+                            ? option.value
+                            : option;
+
+                        // ✅ 1. update NEW ROW FIRST (source of truth)
+                      setNewRow(prev => ({
+                        ...prev,
+                        [col.column_name]: value,
+                        ...(col.column_name === "products"
+                          ? { product_types: "" }
+                          : {})
+                      }));
+
+                        // ✅ 2. UI state
+                        setInputValues(prev => ({
+                          ...prev,
+                          [col.column_name]: { key: value, value: label }
+                        }));
+
+                        // ✅ 3. DB state
+                      if (col.column_name === "product_types") {
+                        console.log("PRODUCT TYPE SELECTED", option);
+                      }
+                        handleNewRowChange(col.column_name, value, col.master);
+
+                        // ✅ 4. load dependent data
+                        if (col.column_name === "products") {
+
+                          const matchedProvider = serviceProviders.find(sp =>
+                            String(sp.product || "").trim().toLowerCase() ===
+                            String(label || "").trim().toLowerCase()
+                          );
+
+                          await loadProviderPlans(matchedProvider?.id);
+                        }
+
+                        setActiveField(null);
+                      }}
+                                              >
+
+                                                {label}
+
+                                              </div>
+
+                                            );
+
+                                          })}
+
+                                          {/* EMPTY */}
+                                          {filteredOptions.length === 0 && (
+                                            <div className="px-4 py-3 text-sm text-gray-400 text-center">
+                                              No results found
+                                            </div>
+                                          )}
+
+                                        </div>
+
+                                      );
+
+                                    })()}
+
+                                </div>
+
+                              </td>
+
+                            );
+
+                          })}
+
+                          {/* ACTIONS */}
+                          <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
+
+                            <button
+                              onClick={handleSave}
+                              className="
+                                px-3 py-1.5 text-sm rounded-md
+                                border border-blue-300 bg-white
+                                hover:bg-blue-100 hover:border-blue-500
+                                transition
+                              "
+                            >
+                              Save
+                            </button>
+
+                            <button
+                              onClick={handleCancel}
+                              className="
+                                px-3 py-1.5 text-sm rounded-md
+                                border border-red-300 bg-white
+                                hover:bg-red-100 hover:border-red-500
+                                transition
+                              "
+                            >
+                              Cancel
+                            </button>
+
+                          </td>
+
+                        </tr>
+                      )}
                       {sortedRows.map((row, i) => (
                         <tr
                           key={row.id ?? i}
@@ -3425,76 +3603,76 @@ setNewRow(prev => ({
                             }
                            if (col.column_name === "prf_generate") {
 
-  const val = row[col.column_name];
+                              const val = row[col.column_name];
 
-  if (val && String(val).trim() !== "") {
+                              if (val && String(val).trim() !== "") {
 
-    return (
-      <td
-        key={col.column_id}
-        className="px-4 py-3 whitespace-nowrap"
-      >
-        <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
-          Already Generated ({val})
-        </span>
-      </td>
-    );
+                                return (
+                                  <td
+                                    key={col.column_id}
+                                    className="px-4 py-3 whitespace-nowrap"
+                                  >
+                                    <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+                                      Already Generated ({val})
+                                    </span>
+                                  </td>
+                                );
 
-  } else {
+                              } else {
 
-    return (
-      <td className="px-4 py-3 whitespace-nowrap text-center" key={col.column_id}>
-                           <label className="relative flex items-center justify-center cursor-pointer">
-  <input
-    type="checkbox"
-    checked={selectedRowIds.includes(row.id)}
-    onChange={(e) => {
-      setSelectedRowIds((prev) =>
-        e.target.checked
-          ? [...prev, row.id]
-          : prev.filter((id) => id !== row.id)
-      );
-    }}
-    className="
-      peer
-      appearance-none
-      h-5 w-5
-      rounded-md
-      border-2 border-gray-300
-      bg-white
-      checked:bg-green-500
-      checked:border-green-500
-      transition-all duration-200
-      cursor-pointer
-    "
-  />
+                                return (
+                                  <td className="px-4 py-3 whitespace-nowrap text-center" key={col.column_id}>
+                                                      <label className="relative flex items-center justify-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={selectedRowIds.includes(row.id)}
+                                onChange={(e) => {
+                                  setSelectedRowIds((prev) =>
+                                    e.target.checked
+                                      ? [...prev, row.id]
+                                      : prev.filter((id) => id !== row.id)
+                                  );
+                                }}
+                                className="
+                                  peer
+                                  appearance-none
+                                  h-5 w-5
+                                  rounded-md
+                                  border-2 border-gray-300
+                                  bg-white
+                                  checked:bg-green-500
+                                  checked:border-green-500
+                                  transition-all duration-200
+                                  cursor-pointer
+                                "
+                              />
 
-  <svg
-    className="
-      absolute
-      w-3 h-3
-      text-white
-      opacity-0
-      peer-checked:opacity-100
-      pointer-events-none
-    "
-    xmlns="http://www.w3.org/2000/svg"
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth={3}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M5 13l4 4L19 7"
-    />
-  </svg>
-</label>
-                          </td>
-    );
-  }
-}
+                              <svg
+                                className="
+                                  absolute
+                                  w-3 h-3
+                                  text-white
+                                  opacity-0
+                                  peer-checked:opacity-100
+                                  pointer-events-none
+                                "
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={3}
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M5 13l4 4L19 7"
+                                />
+                              </svg>
+                            </label>
+                                                      </td>
+                                );
+                              }
+                            }
                             return (
                               <td
                                 key={col.column_id}
@@ -3582,97 +3760,97 @@ setNewRow(prev => ({
                                       })()}
                                      onChange={(e) => {
 
-  let val = e.target.value;
+                                      let val = e.target.value;
 
-  // ================= REMOVE MASK =================
-  if (col.master === "credit_card") {
-    val = val.replace(/\D/g, "");
-  }
+                                      // ================= REMOVE MASK =================
+                                      if (col.master === "credit_card") {
+                                        val = val.replace(/\D/g, "");
+                                      }
 
-  // ================= NUMERIC =================
-  if (isNumericColumn(col.column_name)) {
-    val = handleNumericInput(val);
-  }
+                                      // ================= NUMERIC =================
+                                      if (isNumericColumn(col.column_name)) {
+                                        val = handleNumericInput(val);
+                                      }
 
-  let updatedRow = {
-    ...editRow,
-    [col.column_name]: val,
-  };
+                                      let updatedRow = {
+                                        ...editRow,
+                                        [col.column_name]: val,
+                                      };
 
-  // =====================================================
-  // VAT + TOTAL AUTO CALCULATION
-  // =====================================================
+                                      // =====================================================
+                                      // VAT + TOTAL AUTO CALCULATION
+                                      // =====================================================
 
-  const triggerColumns = [
-    "amount",
-    "vendors",
-    "products"
-  ];
+                                      const triggerColumns = [
+                                        "amount",
+                                        "vendors",
+                                        "products"
+                                      ];
 
-  if (triggerColumns.includes(col.column_name)) {
+                                      if (triggerColumns.includes(col.column_name)) {
 
-    let matchedProvider = null;
+                                        let matchedProvider = null;
 
-    // =========================
-    // FIRST CHECK VENDOR
-    // =========================
-    if (updatedRow.vendors) {
+                                        // =========================
+                                        // FIRST CHECK VENDOR
+                                        // =========================
+                                        if (updatedRow.vendors) {
 
-      matchedProvider = serviceProviders.find(
-        sp =>
-          String(sp.vendor || "")
-            .trim()
-            .toLowerCase() ===
-          String(updatedRow.vendors || "")
-            .trim()
-            .toLowerCase()
-      );
-    }
+                                          matchedProvider = serviceProviders.find(
+                                            sp =>
+                                              String(sp.vendor || "")
+                                                .trim()
+                                                .toLowerCase() ===
+                                              String(updatedRow.vendors || "")
+                                                .trim()
+                                                .toLowerCase()
+                                          );
+                                        }
 
-    // =========================
-    // IF NO VENDOR MATCH
-    // CHECK PRODUCT
-    // =========================
-    if (!matchedProvider && updatedRow.products) {
+                                        // =========================
+                                        // IF NO VENDOR MATCH
+                                        // CHECK PRODUCT
+                                        // =========================
+                                        if (!matchedProvider && updatedRow.products) {
 
-      matchedProvider = serviceProviders.find(
-        sp =>
-          String(sp.product || "")
-            .trim()
-            .toLowerCase() ===
-          String(updatedRow.products || "")
-            .trim()
-            .toLowerCase()
-      );
-    }
+                                          matchedProvider = serviceProviders.find(
+                                            sp =>
+                                              String(sp.product || "")
+                                                .trim()
+                                                .toLowerCase() ===
+                                              String(updatedRow.products || "")
+                                                .trim()
+                                                .toLowerCase()
+                                          );
+                                        }
 
-    const amount = parseFloat(updatedRow.amount || 0);
+                                        const amount = parseFloat(updatedRow.amount || 0);
 
-    // =========================
-    // VAT ENABLED
-    // =========================
-    if (matchedProvider?.is_vat) {
+                                        // =========================
+                                        // VAT ENABLED
+                                        // =========================
+                                        if (matchedProvider?.is_vat) {
 
-      const vat = (amount * Number(vatPercent || 0)) / 100;
+                                          const vat = (amount * Number(vatPercent || 0)) / 100;
 
-      updatedRow.vat_amount = vat.toFixed(2);
+                                          updatedRow.vat_amount = vat.toFixed(2);
 
-      updatedRow.total_amount = (
-        amount + vat
-      ).toFixed(2);
+                                          updatedRow.total_amount = (
+                                            amount + vat
+                                          ).toFixed(2);
 
-    } else {
+                                        } else {
 
-      updatedRow.vat_amount = "0.00";
+                                          updatedRow.vat_amount = "0.00";
 
-      updatedRow.total_amount = amount.toFixed(2);
-    }
-  }
+                                          updatedRow.total_amount = amount.toFixed(2);
+                                        }
+                                      }
 
-  setEditRow(updatedRow);
+                                      setEditRow(updatedRow);
 
-  setActiveDropdown(editKey);
-}}
+                                      setActiveDropdown(editKey);
+                                    }}
                                       onFocus={() => {
 
                                         setActiveDropdown(editKey);
@@ -3850,18 +4028,20 @@ setNewRow(prev => ({
                                                         border-b border-gray-100
                                                         last:border-0
                                                       "
-                                                      onMouseDown={() => {
+                                                     onMouseDown={() => {
 
-                                                        setEditRow({
-                                                          ...editRow,
-                                                          [col.column_name]:
-                                                            display,
-                                                        });
+                                                      const selectedValue =
+                                                        typeof val === "object"
+                                                          ? val.key ?? val.id ?? val.value
+                                                          : val;
 
-                                                        setActiveDropdown(
-                                                          null
-                                                        );
-                                                      }}
+                                                      setEditRow(prev => ({
+                                                        ...prev,
+                                                        [col.column_name]: selectedValue,
+                                                      }));
+
+                                                      setActiveDropdown(null);
+                                                    }}
                                                     >
                                                       <span className="truncate">
                                                         {displayValue}
@@ -4144,6 +4324,181 @@ setNewRow(prev => ({
                       </tbody>
 
                     </table>
+                    </div>
+                    {/* ================= MOBILE VIEW ================= */}
+<div className="md:hidden space-y-4">
+
+  {sortedRows.map((row, i) => (
+
+    <div
+      key={row.id ?? i}
+      className="
+        bg-white
+        rounded-2xl
+        border border-gray-200
+        shadow-sm
+        overflow-hidden
+      "
+    >
+
+      {/* Header */}
+      <div className="flex justify-between items-center px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+
+        <div>
+          <div className="text-xs text-gray-500">
+            Record
+          </div>
+
+          <div className="font-semibold text-gray-800">
+            #{(page - 1) * pageSize + i + 1}
+          </div>
+        </div>
+
+        {!row.is_active ? (
+          <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-600">
+            Cancelled
+          </span>
+        ) : (
+          <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-600">
+            Active
+          </span>
+        )}
+      </div>
+
+      {/* Fields */}
+      <div className="divide-y">
+
+        {visibleColumns.map((col) => {
+
+          let value = row[col.column_name];
+
+          if (col.master === "credit_card" && value) {
+            const last4 = String(value).slice(-4);
+            value = `**** **** **** ${last4}`;
+          }
+
+          if (
+            col.data_type?.toLowerCase().includes("date")
+          ) {
+            value = formatDate(value);
+          }
+
+          if (
+            col.data_type?.toLowerCase().includes("decimal") &&
+            value
+          ) {
+            value = Number(value).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            });
+          }
+
+          return (
+            <div
+              key={col.column_id}
+              className="flex justify-between gap-3 px-4 py-3"
+            >
+              <span className="text-gray-500 text-sm">
+                {col.display_name}
+              </span>
+
+              <span className="text-right text-gray-800 font-medium break-all">
+                {value || "-"}
+              </span>
+            </div>
+          );
+        })}
+
+      </div>
+
+      {/* Actions */}
+      <div className="p-4 bg-gray-50 border-t">
+
+        {row.prf_generate ? (
+
+          <button
+            onClick={() =>
+              handlePreview(
+                encodeURIComponent(row.prf_generate)
+              )
+            }
+            className="
+              w-full
+              bg-blue-600
+              text-white
+              py-2.5
+              rounded-xl
+              font-medium
+            "
+          >
+            Preview
+          </button>
+
+        ) : (
+
+          <div className="grid grid-cols-3 gap-2">
+
+            <PermissionButton
+              user={activeUser}
+              permission="modify"
+              onClick={() => {
+                setEditRowId(row.id);
+                setEditRow({ ...row });
+                setOriginalRow(row);
+              }}
+              className="
+                py-2
+                rounded-xl
+                border
+                bg-white
+                text-sm
+              "
+            >
+              Edit
+            </PermissionButton>
+
+            <PermissionButton
+              user={activeUser}
+              permission="delete"
+              onClick={() => handleCancelRow(row)}
+              className="
+                py-2
+                rounded-xl
+                border
+                bg-white
+                text-sm
+              "
+            >
+              Cancel
+            </PermissionButton>
+
+            <PermissionButton
+              user={activeUser}
+              permission="delete"
+              onClick={() => handleDelete(row)}
+              className="
+                py-2
+                rounded-xl
+                border
+                bg-white
+                text-sm
+              "
+            >
+              Delete
+            </PermissionButton>
+
+          </div>
+
+        )}
+
+      </div>
+
+    </div>
+
+  ))}
+
+</div>
+                    </>
                   )}
                     {showImportModal && (
                         <Modal title="Import Data" onClose={() => setShowImportModal(false)}>
@@ -4942,13 +5297,52 @@ setNewRow(prev => ({
     {/* ================= APPROVAL ================= */}
   <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
 
-  <div className="px-5 py-4 border-b bg-gradient-to-r from-slate-50 to-indigo-50">
+ <div className="px-5 py-4 border-b bg-gradient-to-r from-slate-50 to-indigo-50 flex items-center justify-between">
 
-    <h3 className="font-semibold text-slate-800">
-      Approval Workflow
-    </h3>
+  <h3 className="font-semibold text-slate-800">
+    Approval Workflow
+  </h3>
 
-  </div>
+  <label className="flex items-center gap-3 cursor-pointer select-none">
+
+    <span className="text-sm font-medium text-slate-700">
+      Advertising
+    </span>
+
+    <div className="relative">
+      <input
+        type="checkbox"
+        checked={isAdvertising}
+        onChange={(e) => setIsAdvertising(e.target.checked)}
+        className="sr-only peer"
+      />
+
+      <div
+        className="
+          w-12 h-6
+          bg-slate-300
+          rounded-full
+          transition-all duration-300
+          peer-checked:bg-indigo-600
+        "
+      />
+
+      <div
+        className="
+          absolute top-0.5 left-0.5
+          w-5 h-5
+          bg-white
+          rounded-full
+          shadow-md
+          transition-all duration-300
+          peer-checked:translate-x-6
+        "
+      />
+    </div>
+
+  </label>
+
+</div>
 
 <div className="p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 
