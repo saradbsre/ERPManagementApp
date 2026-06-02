@@ -6,6 +6,7 @@ const mainTableConfig = {
     "products",
     "plan_provider",
     "product_types",
+    "transaction_type",
     "company",
     "department",
     "cost_center", 

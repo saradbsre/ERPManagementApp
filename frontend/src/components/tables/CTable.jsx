@@ -184,6 +184,7 @@ export default function DynamicTablePage() {
     const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc", });
     const configOrder = mainTableConfig[module.module_name];
     const [selectedRowIds, setSelectedRowIds] = useState([]);
+    const [showActions, setShowActions] = useState(false);
     const tableContainerRef = useRef(null);
     const [form, setForm] = useState({
       paid_by: "",
@@ -2571,32 +2572,21 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                     {module?.display_name || "Loading..."}
                 </h1>
 
-                <div className="flex items-center gap-2">
+               {/* ================= ACTIONS ================= */}
 
-  {/* NEW */}
+{/* DESKTOP VIEW (UNCHANGED ROW) */}
+<div className="hidden md:flex items-center gap-2">
   
   <PermissionButton
     user={activeUser}
     permission="add"
-onClick={handleCreate}
+    onClick={handleCreate}
     className="px-3 py-1.5 text-sm rounded-md bg-green-600 text-white 
                hover:bg-green-700 hover:shadow-md transition"
   >
     + New
   </PermissionButton>
 
-  {/* IMPORT */}
-  {/* <PermissionButton
-    user={activeUser}
-    permission="add"
-    onClick={() => setShowImportModal(true)}
-    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
-               hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
-  >
-    Import
-  </PermissionButton> */}
-
-  {/* PRINT */}
   <PermissionButton
     user={activeUser}
     permission="print"
@@ -2607,7 +2597,6 @@ onClick={handleCreate}
     Print
   </PermissionButton>
 
-  {/* EXCEL */}
   <PermissionButton
     user={activeUser}
     permission="export"
@@ -2618,7 +2607,6 @@ onClick={handleCreate}
     Excel
   </PermissionButton>
 
-  {/* PDF */}
   <PermissionButton
     user={activeUser}
     permission="export"
@@ -2628,21 +2616,64 @@ onClick={handleCreate}
   >
     PDF
   </PermissionButton>
-   <button
-                    onClick={() => setShowTableColumnModal(true)}
-                      className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
-               hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
-                >
-                    Customize
-                </button>
-                <button
-  className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 transition"
-  disabled={selectedRowIds.length === 0}
-  onClick={() => handleGenerateSelected()}
->
-  Generate
-</button>
 
+  <button
+    onClick={() => setShowTableColumnModal(true)}
+    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
+               hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
+  >
+    Customize
+  </button>
+
+  <button
+    className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 transition"
+    disabled={selectedRowIds.length === 0}
+    onClick={handleGenerateSelected}
+  >
+    Generate
+  </button>
+</div>
+<div className="flex md:hidden">
+  <button
+    onClick={() => setShowActions(!showActions)}
+    className="px-4 py-2 text-sm rounded-md bg-gray-900 text-white w-full"
+  >
+    Actions ▾
+  </button>
+
+  {showActions && (
+    <div className="absolute right-3 mt-12 w-52 bg-white border rounded-lg shadow-lg z-50 overflow-hidden">
+
+      <button onClick={handleCreate} className="w-full text-left px-4 py-2 text-sm hover:bg-green-50">
+        + New
+      </button>
+
+      <button onClick={() => setShowPrintModal(true)} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100">
+        Print
+      </button>
+
+      <button onClick={() => setShowExcelModal(true)} className="w-full text-left px-4 py-2 text-sm hover:bg-green-50">
+        Excel
+      </button>
+
+      <button onClick={() => setShowPdfModal(true)} className="w-full text-left px-4 py-2 text-sm hover:bg-red-50">
+        PDF
+      </button>
+
+      <button onClick={() => setShowTableColumnModal(true)} className="w-full text-left px-4 py-2 text-sm hover:bg-blue-50">
+        Customize
+      </button>
+
+      <button
+        disabled={selectedRowIds.length === 0}
+        onClick={handleGenerateSelected}
+        className="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 disabled:opacity-40"
+      >
+        Generate
+      </button>
+
+    </div>
+  )}
 </div>
 
             </div>

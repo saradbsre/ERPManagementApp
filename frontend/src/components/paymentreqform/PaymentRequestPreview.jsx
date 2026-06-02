@@ -61,6 +61,7 @@ const currencyNames = {
   const [plans, setPlans] = useState([]);
   const [products, setProducts] = useState([]);
   const [productTypes, setProductTypes] = useState([]);
+  const [transactionType, setTransactionType] = useState("");
   const barcodeRef = useRef(null);
   const activeUser = JSON.parse(localStorage.getItem("user"));
   const activeUserEmail = activeUser?.email;
@@ -254,12 +255,13 @@ useEffect(() => {
     const result = Array.isArray(res?.data) ? res.data : [];
     setProductTypes(result);
   });
-
+  getMasterData("transaction_types", activeUser.email).then(res => {
+    const result = Array.isArray(res?.data) ? res.data : [];
+    setTransactionType(result);
+  });
 }, []);
 
-// console.log("products:", products);
-// console.log("productTypes:", productTypes);
-// console.log("plans:", plans);
+
 
 const selectedVendor =
   Array.isArray(vendor) && header.vendors
@@ -359,6 +361,13 @@ const selectedCostCenter = Array.isArray(costCenters) && header.cost_center ? co
 const selectedDepartment = Array.isArray(departments) && header.department ? departments.find(
     (d) => (d.department_code || "").toString().trim().toUpperCase() === header.department.toString().trim().toUpperCase()
 ) : null;
+
+const selectedTransactionType = Array.isArray(transactionType) && header.transaction_type ? transactionType.find(
+    (tt) => (tt.transaction_code || "").toString().trim().toUpperCase() === header.transaction_type.toString().trim().toUpperCase()
+) : null;
+
+//console.log("Selected Transaction Type:", selectedTransactionType); 
+
 // console.log("Selected currency:", selectedCurrency);
 // console.log("Selected term:", selectedTerm);
 // console.log("Selected cost center:", selectedCostCenter);
@@ -605,6 +614,12 @@ const currentDate = new Date();
     <h2 className="font-bold text-[12px] uppercase mb-1">
       REQUEST SUMMARY
     </h2>
+
+      <div className="mt-1">
+    <b>Transaction Type:</b>{" "}
+    {selectedTransactionType?.transaction_name || "N/A"}
+  </div>
+
 
     <h1 className="font-bold text-[13px]">
       {selectedTerm?.value || header.term} Subscription Fees
@@ -880,7 +895,7 @@ const currentDate = new Date();
       </td>
 
      
-   <td className="border border-gray-800 p-2 align-top text-left">
+<td className="border border-gray-800 p-2 align-top text-left">
   {headers?.map((item, i) => {
     const product = products?.find(
       p =>
@@ -890,28 +905,27 @@ const currentDate = new Date();
 
     return (
       <div key={i} className="py-1 flex flex-col">
-
-        {/* PRODUCT + DETAILS */}
         <div>
           {getProductName(item?.products)}
-
           {item?.plan_provider &&
             ` - ${getPlanName(item.plan_provider)}`}
-
           {item?.product_types &&
             ` - ${getServiceName(item.product_types)}`}
         </div>
 
-        {/* ICANN (from product master) */}
         {product?.is_icann && product?.icann_fee ? (
-          <div className="text-[9px]  mt-1">
+          <div className="text-[9px] mt-1">
             ICANN Fee added for {getProductName(item?.products)}
           </div>
         ) : null}
-
       </div>
     );
   })}
+
+  {/* Show after entries */}
+  <div className="mt-4 pt-2 border-gray-400 text-center text-[9px]  text-gray-500">
+    *** SPACE INTENTIONALLY LEFT BLANK ***
+  </div>
 </td>
 
     
