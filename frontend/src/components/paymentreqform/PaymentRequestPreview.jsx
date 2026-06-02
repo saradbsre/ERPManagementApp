@@ -366,7 +366,7 @@ const selectedTransactionType = Array.isArray(transactionType) && header.transac
     (tt) => (tt.transaction_code || "").toString().trim().toUpperCase() === header.transaction_type.toString().trim().toUpperCase()
 ) : null;
 
-//console.log("Selected Transaction Type:", selectedTransactionType); 
+console.log("Selected Transaction Type:", selectedTransactionType); 
 
 // console.log("Selected currency:", selectedCurrency);
 // console.log("Selected term:", selectedTerm);
@@ -614,16 +614,19 @@ const currentDate = new Date();
     <h2 className="font-bold text-[12px] uppercase mb-1">
       REQUEST SUMMARY
     </h2>
-
-      <div className="mt-1">
-    <b>Transaction Type:</b>{" "}
-    {selectedTransactionType?.transaction_name || "N/A"}
-  </div>
-
-
     <h1 className="font-bold text-[13px]">
       {selectedTerm?.value || header.term} Subscription Fees
     </h1>
+    <div>
+  {selectedTransactionType?.transaction_code === "TT003" &&
+    `This payment request is for a new subscription.`}
+
+  {selectedTransactionType?.transaction_code === "TT001" &&
+    `This payment request is for the renewal of a subscription.`}
+
+  {selectedTransactionType?.transaction_code === "TT004" &&
+    `This payment request is related to the cancellation of a subscription service.`}
+</div>
 
     <p className="text-[12px] text-gray-700">
       Subscription expiry on {expiryDate}
