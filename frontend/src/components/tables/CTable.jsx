@@ -272,20 +272,21 @@ const getCurrentMonth = () => {
 
 const handleDragEnd = (event) => {
   const { active, over } = event;
-
   if (!over || active.id === over.id) return;
 
-  const oldIndex = columns.findIndex(
-    c => c.column_name === active.id
-  );
-
-  const newIndex = columns.findIndex(
-    c => c.column_name === over.id
-  );
+  const oldIndex = columns.findIndex((c) => c.column_name === active.id);
+  const newIndex = columns.findIndex((c) => c.column_name === over.id);
 
   const reordered = arrayMove(columns, oldIndex, newIndex);
-  setTempSelectedColumns(reordered.map(c => c.column_name));
+
   setColumns(reordered);
+
+  // Keep only previously selected columns, but in new order
+  setTempSelectedColumns((prev) =>
+    reordered
+      .map((c) => c.column_name)
+      .filter((name) => prev.includes(name))
+  );
 };
 
 const [dateFilters, setDateFilters] = useState(getCurrentMonth());
