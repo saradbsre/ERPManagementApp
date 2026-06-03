@@ -8,16 +8,32 @@ import {
   ResponsiveContainer
 } from "recharts";
 
-import { getTopExpensiveAssets } from "../../api/api";
+import { getTopExpensiveAssets, getMasterData } from "../../api/api";
 
 export default function ChartforTop5() {
   const [data, setData] = useState([]); // This will be the flattened data for charting
   const [modules, setModules] = useState([]); // List of modules for dropdown
   const [selectedModule, setSelectedModule] = useState("");
+  const [serviceProviders, setServiceProviders] = useState([]);
+  const activeUser = JSON.parse(localStorage.getItem("user"));
+  const activeUserEmail = activeUser?.email;
 
-  // -----------------------------
-  // FETCH DATA
-  // -----------------------------
+  useEffect(() => {
+    getMasterData("service_providers", activeUserEmail).then((res) => {
+      const result = Array.isArray(res?.data) ? res.data : [];
+      setServiceProviders(result);
+    }).catch(() => setServiceProviders([]));
+  }, []);
+
+  const productNameByCode = useMemo(() => {
+    const map = new Map();
+    serviceProviders.forEach((sp) => {
+      const code = String(sp.product_code || "").trim();
+      const name = String(sp.product_name || sp.product || "").trim();
+      if (code) map.set(code, name || code);
+    });
+    return map;
+  }, [serviceProviders]);
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -62,11 +78,14 @@ export default function ChartforTop5() {
 
     return data
       .filter((item) => item.module_display_name === selectedModule)
-      .map((item) => ({
-        name: item.service_providers,
-        total: item.total_amount_aed || 0
-      }));
-  }, [data, selectedModule]);
+      .map((item) => {
+        const code = String(item.products || "").trim(); // e.g. PR010
+        return {
+          name: productNameByCode.get(code) || code, // show product_name
+          "total AED": Number(item.total_amount_aed) || 0
+        };
+      });
+  }, [data, selectedModule, productNameByCode]);
 
   // -----------------------------
   // UI
@@ -151,7 +170,7 @@ export default function ChartforTop5() {
 
             {/* BAR */}
             <Bar
-              dataKey="total"
+              dataKey="total AED"
               fill="url(#barColor)"
               radius={[0, 10, 10, 0]}
               barSize={18}

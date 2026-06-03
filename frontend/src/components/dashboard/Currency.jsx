@@ -95,7 +95,7 @@ export default function CurrencyWidget() {
         >
           {currencies.map(c => (
             <option key={c.id} value={c.currency_code}>
-              {c.currency_code}
+              {c.currency}
             </option>
           ))}
         </select>
@@ -115,7 +115,7 @@ export default function CurrencyWidget() {
         >
           {currencies.map(c => (
             <option key={c.id} value={c.currency_code}>
-              {c.currency_code}
+              {c.currency}
             </option>
           ))}
         </select>

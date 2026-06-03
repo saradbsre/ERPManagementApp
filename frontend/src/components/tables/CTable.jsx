@@ -453,6 +453,29 @@ const fetchCustomizedColumns = async () => {
   }
 };
 
+useEffect(() => {
+let active = true;
+
+const initSavedColumns = async () => {
+const cols = await fetchCustomizedColumns();
+if (!active) return;
+
+if (cols.length > 0) {
+setSavedTableColumns(cols);
+setSelectedColumns(cols);
+setTableColumnMode("saved");
+} else {
+setTableColumnMode("default");
+}
+};
+
+initSavedColumns();
+
+return () => {
+active = false;
+};
+}, [id, activeUserEmail]);
+
 const addMasterValue = async (masterName, value) => { 
     try { 
         await addMasterData(masterName, { value }); 
@@ -624,7 +647,7 @@ useEffect(() => {
   )
 ];
     const [showTableColumnModal, setShowTableColumnModal] = useState(false);
-    const [tableColumnMode, setTableColumnMode] = useState("default");
+    const [tableColumnMode, setTableColumnMode] = useState("saved");
     // default | saved | custom
     const companyList = [
         ...new Set(rows.map(r =>
@@ -1261,13 +1284,12 @@ if (col.column_name === "products") {
 
 if (col.column_name === "product_types") {
 
-  console.log("editRow.products", editRow.products);
+ // console.log("editRow.products", editRow.products);
   const selectedProduct =
     newRow?.products ||
     editRow?.products ||
     null;
-    console.log("DBG product_types selectedProduct:", selectedProduct);
-console.log("DBG product_types serviceProviders sample:", serviceProviders.slice(0, 5).map(sp => ({ product_code: sp.product_code, product: sp.product, services: sp.services })));
+    
 
 
   // =========================
@@ -2069,6 +2091,19 @@ useEffect(() => {
   });
 }, [editRowId, visibleColumns, masterDataMap]);
 
+const isPrfBlockedProductType = (productTypeValue) => {
+  const raw =
+    typeof productTypeValue === "object"
+      ? productTypeValue?.key ?? productTypeValue?.value ?? ""
+      : productTypeValue ?? "";
+
+  const normalized = String(raw).toLowerCase();
+
+  // Block when product type contains any of these words/codes
+  const blockedTerms = ["purchase", "service", "repairs", "s45", "s46"];
+
+  return blockedTerms.some((term) => normalized.includes(term));
+};
 
 
 const filteredRows = rows.filter((row, rowIndex) => {
@@ -2575,7 +2610,9 @@ return `
 
     const handleGenerateSelected = () => {
   // Get the selected rows' data
-  const selectedRows = sortedRows.filter(row => selectedRowIds.includes(row.id));
+ const selectedRows = sortedRows.filter(
+  (row) => selectedRowIds.includes(row.id) && !isPrfBlockedProductType(row.product_types)
+);
   if (selectedRows.length === 0) return;
   // setSelectedRow(selectedRows[0] || null);
   setSelectedRow(selectedRows);
@@ -3653,7 +3690,8 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                            if (col.column_name === "prf_generate") {
 
                               const val = row[col.column_name];
-
+                              const disablePrfCheckbox = isPrfBlockedProductType(row.product_types);
+                              //console.log("disablePrfCheckbox for row", row.id, "with product types", row.product_types, ":", disablePrfCheckbox);
                               if (val && String(val).trim() !== "") {
 
                                 return (
@@ -3672,29 +3710,33 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                                 return (
                                   <td className="px-4 py-3 whitespace-nowrap text-center" key={col.column_id}>
                                                       <label className="relative flex items-center justify-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={selectedRowIds.includes(row.id)}
-                                onChange={(e) => {
-                                  setSelectedRowIds((prev) =>
-                                    e.target.checked
-                                      ? [...prev, row.id]
-                                      : prev.filter((id) => id !== row.id)
-                                  );
-                                }}
-                                className="
-                                  peer
-                                  appearance-none
-                                  h-5 w-5
-                                  rounded-md
-                                  border-2 border-gray-300
-                                  bg-white
-                                  checked:bg-green-500
-                                  checked:border-green-500
-                                  transition-all duration-200
-                                  cursor-pointer
-                                "
-                              />
+                             <input
+  type="checkbox"
+  checked={!disablePrfCheckbox && selectedRowIds.includes(row.id)}
+  disabled={disablePrfCheckbox}
+  onChange={(e) => {
+    if (disablePrfCheckbox) return;
+    setSelectedRowIds((prev) =>
+      e.target.checked
+        ? [...prev, row.id]
+        : prev.filter((id) => id !== row.id)
+    );
+  }}
+  className="
+    peer
+    appearance-none
+    h-5 w-5
+    rounded-md
+    border-2 border-gray-300
+    bg-white
+    checked:bg-green-500
+    checked:border-green-500
+    transition-all duration-200
+    cursor-pointer
+    disabled:cursor-not-allowed
+    disabled:opacity-40
+  "
+/>
 
                               <svg
                                 className="

@@ -41,6 +41,7 @@ const masterTableConfig = {
       { key: "approved", label: "Approved By", data_type: "boolean" },
       { key: "description", label: "Description", data_type: "string" },
       { key: "is_vat", label: "VAT Applicable", data_type: "boolean" },
+      { key: "inventory_type", label: "Inventory Type", data_type: "string" },
       // { key: "is_icann", label: "ICANN Applicable", data_type: "boolean" },
       // { key: "icann_fee", label: "ICANN Fee", data_type: "number" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
@@ -103,6 +104,7 @@ const masterTableConfig = {
 
     columns: [
       { key: "service_name", label: "Name", data_type: "string" },
+      { key: "service_code", label: "ServiceCode", data_type: "string" },
       { key: "description", label: "Description", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
@@ -164,9 +166,29 @@ const masterTableConfig = {
         { key: "transaction_name", label: "Transaction Name", data_type: "string" },
         { key: "transaction_code", label: "Transaction Code", data_type: "string" },
         { key: "description", label: "Description", data_type: "string" },
-        { key: "is_active", label: "Is Active", data_type: "boolean" },
-        
-        
+        { key: "is_active", label: "Is Active", data_type: "boolean" },     
+    ]
+  },
+  inventory_types:{
+    displayName: "Inventory Types Master",
+
+    columns: [
+        { key: "inventory_type", label: "Inventory Name", data_type: "string" },
+        { key: "inventory_type_code", label: "Inventory Code", data_type: "string" },
+        { key: "description", label: "Description", data_type: "string" },
+        { key: "is_active", label: "Is Active", data_type: "boolean" },     
+    ]
+  },
+
+   projects:{
+    displayName: "Projects Master",
+
+    columns: [
+        { key: "project_name", label: "Project Name", data_type: "string" },
+        { key: "project_code", label: "Project Code", data_type: "string" },
+        { key: "description", label: "Description", data_type: "string" },
+        { key: "address", label: "Address", data_type: "string" },
+        { key: "is_active", label: "Is Active", data_type: "boolean" },     
     ]
   },
 };

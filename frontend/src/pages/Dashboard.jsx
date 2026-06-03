@@ -45,10 +45,15 @@ export default function Dashboard() {
           </div>
 
           {/* Exchange Rates (Small) */}
-          {/* <div className="bg-white p-6 rounded-xl shadow">
-            <h2 className="font-semibold mb-2">Exchange Rates</h2>
-            <CurrencyWidget />
-          </div> */}
+          <div className="bg-white p-6 rounded-xl shadow">
+             {user?.role === "ADMIN" ? (
+            <div className="bg-white p-6 rounded-xl shadow">
+              <SignupRequestsCard />
+            </div>
+          ) : (
+            <div />
+          )}
+          </div>
 
         </div>
 
@@ -60,14 +65,14 @@ export default function Dashboard() {
             <h2 className="font-semibold mb-4">Recent Transactions (Last 30 Days)</h2>
             <RecentTransactions />
           </div>
-          {/* New Requests (Top Half) */}
-          {user?.role === "ADMIN" ? (
+         
+          {/* {user?.role === "ADMIN" ? (
             <div className="bg-white p-6 rounded-xl shadow">
               <SignupRequestsCard />
             </div>
           ) : (
             <div />
-          )}
+          )} */}
 
          
         </div>

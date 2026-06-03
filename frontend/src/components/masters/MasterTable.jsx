@@ -70,6 +70,7 @@ export default function MasterTablePage() {
     const [mappedPlans, setMappedPlans] = useState([]);
     const [unmappedPlans, setUnmappedPlans] = useState([]);
     const [selectedPlanToAdd, setSelectedPlanToAdd] = useState("");
+    const [inventoryType, setInventoryType] = useState("");
     const [confirmData, setConfirmData] = useState({
       title: "Are you sure?",
       message: "This action cannot be undone.",
@@ -285,6 +286,20 @@ useEffect(() => {
   };
   loadVendors();
 }, [activeUserEmail]);
+
+useEffect(() => {
+  const loadInventoryType = async () => {
+    try {
+      const res = await getMasterData("inventory_types", activeUserEmail);
+      setInventoryType(res?.data || []);
+    } catch (err) {
+      setInventoryType([]);
+    }
+  };
+  loadInventoryType();
+}, [activeUserEmail]);
+
+
 
   const filteredRows = rows.filter(row => {
   if (!search) return true;
@@ -685,6 +700,9 @@ const getLabel = (key, value) => {
       const isVendor =
         col.key.toLowerCase() === "vendor";
 
+      const isInventoryType =
+        col.key.toLowerCase() === "inventory_type";
+
       const isCodeColumn = col.key.toLowerCase().includes("_code");
 
       const isIcannFee = col.key.toLowerCase() === "icann_fee";
@@ -722,6 +740,37 @@ const getLabel = (key, value) => {
                   value={v.vendor_code}
                 >
                   {v.vendor_name}
+                </option>
+
+              ))}
+
+            </select>
+
+          ) :  isInventoryType ? (
+
+            <select
+              className="border px-2 py-1 rounded w-full"
+              value={newRow.inventory_type || ""}
+              disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
+              onChange={(e) =>
+                setNewRow(prev => ({
+                  ...prev,
+                  inventory_type: e.target.value
+                }))
+              }
+            >
+
+              <option value="">
+                Select Inventory Type
+              </option>
+              
+              {inventoryType.map(v => (
+
+                <option
+                  key={v.inventory_type_code}
+                  value={v.inventory_type_code}
+                >
+                  {v.inventory_type}
                 </option>
 
               ))}
@@ -929,7 +978,8 @@ const getLabel = (key, value) => {
         const isCodeColumn = col.key.toLowerCase().includes("_code");
 
         const isIcannFee = col.key.toLowerCase() === "icann_fee";
-        //console.log("is icann fee column:", isIcannFee, "column key:", col.key);
+        const isInventoryType =
+          col.key.toLowerCase() === "inventory_type";
         return (
 
           <td
@@ -966,6 +1016,37 @@ const getLabel = (key, value) => {
                       value={v.vendor_code}
                     >
                       {v.vendor_name}
+                    </option>
+
+                  ))}
+
+                </select>
+
+              ) : isInventoryType ? (
+
+                /* ================= INVENTORY TYPE DROPDOWN ================= */
+                <select
+                  className="border px-2 py-1 rounded w-full"
+                  value={editRow[col.key] || ""}
+                  disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
+                  onChange={(e) =>
+                    setEditRow(prev => ({
+                      ...prev,
+                      [col.key]: e.target.value
+                    }))
+                  }
+                >
+                  <option value="">
+                    Select Inventory Type
+                  </option>
+
+                  {inventoryType.map((i) => (
+
+                    <option
+                      key={i.inventory_type_code}
+                      value={i.inventory_type_code}
+                    >
+                      {i.inventory_type}
                     </option>
 
                   ))}
@@ -1102,6 +1183,11 @@ const getLabel = (key, value) => {
                   v => v.vendor_code === row[col.key]
                 )?.vendor_name || "-"
 
+              ) : isInventoryType ? (
+
+                inventoryType.find(
+                  i => i.inventory_type_code === row[col.key]
+                )?.inventory_type || "-"
               ) : isService ? (
 
                 servicesList.find(
