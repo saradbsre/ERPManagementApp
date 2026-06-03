@@ -547,22 +547,51 @@ useEffect(() => {
 
   workflowAuth();
 }, []);
+
+const toFilterKey = (masterName, rawVal) => {
+  const input = String(rawVal ?? "").trim().toLowerCase();
+  if (!input) return rawVal;
+
+  if (masterName === "currency") {
+    const hit = currencies.find((c) => {
+      const code = String(c.currency_code ?? "").trim().toLowerCase();
+      const name = String(c.currency ?? "").trim().toLowerCase();
+      return code === input || name === input;
+    });
+
+    return hit?.currency_code ?? rawVal;
+  }
+
+  const options = masterDataMap?.[masterName] || [];
+  const hit = options.find((o) => {
+    const key = String(o?.key ?? o?.id ?? o?.value ?? "").trim().toLowerCase();
+    const val = String(o?.value ?? o ?? "").trim().toLowerCase();
+    return input === key || input === val;
+  });
+
+  return hit ? (hit.key ?? hit.id ?? hit.value) : rawVal;
+};
+
+const saveFiltersAsKeys = filters.map((filter) => ({
+  ...filter,
+  values: (filter.values || []).map((val) => toFilterKey(filter.master, normalize(val))),
+}));
 const handleSaveFilter = async () => {
   if (!saveFilterName.trim()) {
     alert("Filter name is required");
     return;
   }
 
-  const payload = {
-    filterName: saveFilterName.trim(),
-    userId: activeUser?.email,     // ✅ string only
-    module_id: currentModule?.module_id,    // ✅ IMPORTANT
-    filterData: {
-      search,
-      filters,
-      dateFilters
-    }
-  };
+ const payload = {
+  filterName: saveFilterName.trim(),
+  userId: activeUser?.email,
+  module_id: currentModule?.module_id,
+  filterData: {
+    search,
+    filters: saveFiltersAsKeys,
+    dateFilters
+  }
+};
 
   //console.log("Saving filter:", payload);
 
@@ -2198,63 +2227,7 @@ const fieldKey =
 // SORT FILTERED ROWS
 // ======================================================
 
-const sortedRows = [...filteredRows].sort(
-  (a, b) => {
 
-    if (!sortConfig.key) return 0;
-
-    let aValue =
-      a[sortConfig.key];
-
-    let bValue =
-      b[sortConfig.key];
-
-    // =========================
-    // OBJECT VALUE NORMALIZE
-    // =========================
-
-    aValue =
-      typeof aValue === "object"
-        ? aValue?.value ?? ""
-        : aValue ?? "";
-
-    bValue =
-      typeof bValue === "object"
-        ? bValue?.value ?? ""
-        : bValue ?? "";
-
- 
-
-    // =========================
-    // NUMERIC SORT
-    // =========================
-
-    if (
-      !isNaN(aValue) &&
-      !isNaN(bValue)
-    ) {
-
-      return sortConfig.direction === "asc"
-        ? Number(aValue) -
-            Number(bValue)
-        : Number(bValue) -
-            Number(aValue);
-    }
-
-    // =========================
-    // STRING SORT
-    // =========================
-
-    return sortConfig.direction ===
-      "asc"
-      ? String(aValue).localeCompare(
-          String(bValue)
-        )
-      : String(bValue).localeCompare(
-          String(aValue)
-        );
-  }
-);
 
 const toNumber = (val) => {
   if (val === null || val === undefined || val === "") return 0;
@@ -2604,10 +2577,68 @@ return `
 `;
 };
 
-  const paginatedRows = sortedRows.slice(
+  const paginatedRows = filteredRows.slice(
         (page - 1) * pageSize,
         page * pageSize
     );
+
+    const sortedRows = [...paginatedRows].sort(
+  (a, b) => {
+
+    if (!sortConfig.key) return 0;
+
+    let aValue =
+      a[sortConfig.key];
+
+    let bValue =
+      b[sortConfig.key];
+
+    // =========================
+    // OBJECT VALUE NORMALIZE
+    // =========================
+
+    aValue =
+      typeof aValue === "object"
+        ? aValue?.value ?? ""
+        : aValue ?? "";
+
+    bValue =
+      typeof bValue === "object"
+        ? bValue?.value ?? ""
+        : bValue ?? "";
+
+ 
+
+    // =========================
+    // NUMERIC SORT
+    // =========================
+
+    if (
+      !isNaN(aValue) &&
+      !isNaN(bValue)
+    ) {
+
+      return sortConfig.direction === "asc"
+        ? Number(aValue) -
+            Number(bValue)
+        : Number(bValue) -
+            Number(aValue);
+    }
+
+    // =========================
+    // STRING SORT
+    // =========================
+
+    return sortConfig.direction ===
+      "asc"
+      ? String(aValue).localeCompare(
+          String(bValue)
+        )
+      : String(bValue).localeCompare(
+          String(aValue)
+        );
+  }
+);
 
     const handleGenerateSelected = () => {
   // Get the selected rows' data

@@ -347,6 +347,7 @@ useEffect(() => {
       ...prev,
       [master]: res.data.data || []
     }));
+    console.log(`Master data loaded for ${master}:`, res.data.data || []);
   } catch (err) {
     console.error("Master fetch failed:", master, err);
   } finally {
@@ -488,7 +489,15 @@ useEffect(() => {
         setShowPrintOptions(false);
     };
    
+const getDisplayValue = (masterName, selectedVal) => {
+  const list = masterDataMap?.[masterName] || [];
 
+  const match = list.find(item =>
+    normalize(item.key ?? item.code ?? item.vendor_code ?? item.value) === normalize(selectedVal)
+  );
+
+  return match?.value ?? match?.name ?? match?.vendor_name ?? selectedVal;
+};
      
    
     
@@ -1340,6 +1349,7 @@ return `
 `;
 };
 
+
     return (
         <div className="h-full flex flex-col">
 
@@ -1600,33 +1610,34 @@ return `
 
         {/* SELECTED VALUES */}
         <div className="flex gap-1 flex-wrap">
-          {selectedValues.map((val, idx) => (
-            <span
-              key={idx}
-              className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
-            >
-              {val}
-              <button
-                onClick={() => {
-               setFilters(prev =>
-                  prev.map((item, index) => {
-                    if (index !== i) return item;
+          {console.log("Rendering filter values for master:", masterName, "Selected:", selectedValues)}
+         {selectedValues.map((val, idx) => (
+  <span
+    key={idx}
+    className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
+  >
+    {getDisplayValue(masterName, val)}
+    <button
+      onClick={() => {
+        setFilters(prev =>
+          prev.map((item, index) => {
+            if (index !== i) return item;
 
-                    return {
-                      ...item,
-                      values: (item.values || [])
-                        .map(normalize)
-                        .filter(v => v !== val),
-                    };
-                  })
-                );
-                }}
-                className="text-blue-500 hover:text-red-500"
-              >
-                ✕
-              </button>
-            </span>
-          ))}
+            return {
+              ...item,
+              values: (item.values || [])
+                .map(normalize)
+                .filter(v => v !== val),
+            };
+          })
+        );
+      }}
+      className="text-blue-500 hover:text-red-500"
+    >
+      ✕
+    </button>
+  </span>
+))}
         </div>
 
         {/* ADD BUTTON */}
@@ -1648,42 +1659,50 @@ return `
             onClick={e => e.stopPropagation()}
           >
 
-            {options.map((opt, idx) => {
-              const label = normalize(opt);
+           {options.map((opt, idx) => {
+  const optionKey = normalize(
+    typeof opt === "object"
+      ? opt.key ?? opt.code ?? opt.vendor_code ?? opt.value
+      : opt
+  );
 
-              const checked = selectedValues.includes(label);
+  const optionLabel =
+    typeof opt === "object"
+      ? opt.value ?? opt.name ?? opt.vendor_name ?? optionKey
+      : opt;
 
-              return (
-                <label
-                  key={idx}
-                  className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => {
-                     setFilters(prev =>
-                        prev.map((item, index) => {
-                          if (index !== i) return item;
+  const checked = selectedValues.includes(optionKey);
 
-                          const current =
-                            (item.values || []).map(normalize);
+  return (
+    <label
+      key={idx}
+      className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer"
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => {
+          setFilters(prev =>
+            prev.map((item, index) => {
+              if (index !== i) return item;
 
-                          return {
-                            ...item,
-                            values: checked
-                              ? current.filter(v => v !== label)
-                              : [...current, label],
-                          };
-                        })
-                      );
-                    }}
-                  />
+              const current = (item.values || []).map(normalize);
 
-                  <span className="text-sm">{label}</span>
-                </label>
-              );
-            })}
+              return {
+                ...item,
+                values: checked
+                  ? current.filter(v => v !== optionKey)
+                  : [...current, optionKey],
+              };
+            })
+          );
+        }}
+      />
+
+      <span className="text-sm">{optionLabel}</span>
+    </label>
+  );
+})}
 
           </div>
         )}
