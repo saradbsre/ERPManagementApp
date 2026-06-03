@@ -70,7 +70,7 @@ export default function MasterTablePage() {
     const [mappedPlans, setMappedPlans] = useState([]);
     const [unmappedPlans, setUnmappedPlans] = useState([]);
     const [selectedPlanToAdd, setSelectedPlanToAdd] = useState("");
-    const [inventoryType, setInventoryType] = useState("");
+    const [inventoryType, setInventoryType] = useState([]);
     const [confirmData, setConfirmData] = useState({
       title: "Are you sure?",
       message: "This action cannot be undone.",
