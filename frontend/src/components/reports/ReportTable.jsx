@@ -1263,7 +1263,7 @@ return `
                   if (isNumericColumn(col) || col.isDynamicCurrency) {
                     return `
                       <td style="text-align:right">
-                        ${value !== "" ? formatNumber(value) : ""}
+                        ${value === "" ? "" : toNumber(value) === 0 ? "-" : formatNumber(value)}
                       </td>
                     `;
                   }
@@ -1853,20 +1853,18 @@ return `
 
   // ================= DECIMAL =================
   if (col.data_type?.toLowerCase().includes("decimal")) {
-    const num = safeNumber(value);
-
-    return num !== null
-      ? num.toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2
-        })
-      : "-";
+  const num = safeNumber(value);
+  return num !== null && num !== 0
+    ? num.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })
+    : "-";
   }
 
-  // ================= AMOUNT FIELDS =================
   if (col.column_name.toLowerCase().includes("amount")) {
     const num = safeNumber(value);
-    return num !== null ? num.toLocaleString() : "-";
+    return num !== null && num !== 0 ? num.toLocaleString() : "-";
   }
 
   // ================= CREDIT CARD =================
@@ -1925,10 +1923,12 @@ return `
         key={idx}
         className={`px-4 py-3 whitespace-nowrap text-right`}
       >
-        {total.toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2
-        })}
+        {total === 0
+        ? "-"
+        : total.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          })}
       </td>
     );
   })}

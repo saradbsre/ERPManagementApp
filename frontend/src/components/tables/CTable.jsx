@@ -2491,7 +2491,7 @@ return `
                   if (isNumericColumn(col) || col.isDynamicCurrency) {
                     return `
                       <td style="text-align:right">
-                        ${value !== "" ? formatNumber(value) : ""}
+                        ${value === "" ? "" : toNumber(value) === 0 ? "-" : formatNumber(value)}
                       </td>
                     `;
                   }
@@ -2525,7 +2525,9 @@ return `
 
                 return `
                   <td style="text-align:right;">
-                    ${formatNumber(groupTotals[col.column_name] || 0)}
+                    ${groupTotals[col.column_name] === 0
+                      ? "-"
+                      : formatNumber(groupTotals[col.column_name] || 0)}
                   </td>
                 `;
               }).join("")}
@@ -2564,7 +2566,9 @@ return `
 
         return `
           <td style="text-align:right;">
-            ${formatNumber(grandTotals[col.column_name] || 0)}
+            ${grandTotals[col.column_name] === 0
+              ? "-"
+              : formatNumber(grandTotals[col.column_name] || 0)}
           </td>
         `;
       }).join("")}
@@ -4253,19 +4257,17 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
 
                                     // ================= DECIMAL =================
                                     if (
-                                      col.data_type
-                                        ?.toLowerCase()
-                                        .includes("decimal") &&
-                                      value !== ""
-                                    ) {
-                                      return Number(value).toLocaleString(
-                                        undefined,
-                                        {
-                                          minimumFractionDigits: 2,
-                                          maximumFractionDigits: 2,
-                                        }
-                                      );
-                                    }
+  col.data_type?.toLowerCase().includes("decimal") &&
+  value !== ""
+) {
+  const num = Number(value);
+  return !isNaN(num) && num !== 0
+    ? num.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    : "-";
+}
 
                                     // ================= AMOUNT =================
                                     if (
