@@ -9,6 +9,7 @@ export default function TableFilters({
   masterDataMap,
   setMasterDataMap,
 }) {
+  console.log("Rendering TableFilters with masterList:", masterList);
   const [open, setOpen] = useState(false);
  
 
@@ -18,6 +19,8 @@ export default function TableFilters({
   const masterList1 = [
     ...new Set([...(masterList || []), "currency", "services"])
   ];
+
+  console.log("Master List for Filters:", masterList1);
 
   // ================= GET OPTIONS =================
 const getOptions = (master) => {

@@ -669,6 +669,7 @@ useEffect(() => {
     // const masterList = [
     //     ...new Set(columns.map(c => c.master).filter(Boolean))
     // ];
+    console.log("Columns for master list:", columns);
     const masterList = [
   ...new Set(
     columns
@@ -2130,7 +2131,7 @@ const isPrfBlockedProductType = (productTypeValue) => {
   const normalized = String(raw).toLowerCase();
 
   // Block when product type contains any of these words/codes
-  const blockedTerms = ["purchase", "service", "repairs", "s45", "s46"];
+  const blockedTerms = ["purchase",  "repairs", "s45", "s46"];
 
   return blockedTerms.some((term) => normalized.includes(term));
 };
@@ -3727,6 +3728,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
 
                               const val = row[col.column_name];
                               const disablePrfCheckbox = isPrfBlockedProductType(row.product_types);
+                              console.log("Row ID:", row.id, "Product Types:", row.product_types, "Disable PRF Checkbox:", disablePrfCheckbox);
                               //console.log("disablePrfCheckbox for row", row.id, "with product types", row.product_types, ":", disablePrfCheckbox);
                               if (val && String(val).trim() !== "") {
 
