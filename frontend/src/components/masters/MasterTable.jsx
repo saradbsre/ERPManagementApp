@@ -842,7 +842,7 @@ const getLabel = (key, value) => {
 
                   <option
                     key={i}
-                    value={s.id}
+                    value={s.service_code}
                   >
                     {s.service_name}
                   </option>
