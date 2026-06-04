@@ -692,7 +692,7 @@ const getLabel = (key, value) => {
       const isToggle =
         col.key.toLowerCase() === "is_active" ||
         col.key.toLowerCase() === "is_vat" ||
-        col.key.toLowerCase() === "is_icann";
+        col.key.toLowerCase() === "is_inventory";
 
       const isServiceMaster =
         col.key.toLowerCase() === "services";
@@ -720,7 +720,7 @@ const getLabel = (key, value) => {
             <select
               className="border px-2 py-1 rounded w-full"
               value={newRow.vendor || ""}
-              disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
+              //disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
               onChange={(e) =>
                 setNewRow(prev => ({
                   ...prev,
@@ -751,7 +751,7 @@ const getLabel = (key, value) => {
             <select
               className="border px-2 py-1 rounded w-full"
               value={newRow.inventory_type || ""}
-              disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
+             // disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
               onChange={(e) =>
                 setNewRow(prev => ({
                   ...prev,
@@ -788,7 +788,7 @@ const getLabel = (key, value) => {
                   [col.key]: prev[col.key] ? 0 : 1
                 }))
               }
-              disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
+             // disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
               className={`
                 w-12 h-6 flex items-center
                 rounded-full p-1
@@ -823,7 +823,7 @@ const getLabel = (key, value) => {
 
               <select
                 className="border px-2 py-1 rounded w-full"
-                disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
+               // disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
                 value={newRow[col.key] || ""}
 
                 onChange={(e) =>
@@ -860,7 +860,7 @@ const getLabel = (key, value) => {
             <input
 
               type={isDate ? "date" : "text"}
-              disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
+             // disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
               className={`
                 border px-2 py-1 rounded w-full
                 ${getAlignClass(col.key)}
@@ -965,7 +965,7 @@ const getLabel = (key, value) => {
         const isToggle =
           col.key.toLowerCase() === "is_active" ||
           col.key.toLowerCase() === "is_vat" ||
-          col.key.toLowerCase() === "is_icann";
+          col.key.toLowerCase() === "is_inventory";
 
         const isService =
           col.key.toLowerCase() === "services";
@@ -1059,7 +1059,7 @@ const getLabel = (key, value) => {
                 <select
                   className="border px-2 py-1 rounded w-full"
                   value={editRow[col.key] || ""}
-                    disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
+                  disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
                   onChange={(e) =>
                     setEditRow(prev => ({
                       ...prev,
@@ -1095,7 +1095,7 @@ const getLabel = (key, value) => {
                       [col.key]: prev[col.key] ? 0 : 1
                     }))
                   }
-                  disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
+                  //disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
                   className={`
                     w-12 h-6 flex items-center rounded-full p-1 transition
                     ${editRow[col.key]
@@ -1120,7 +1120,7 @@ const getLabel = (key, value) => {
                 /* ================= INPUT ================= */
                 <input
                   type={isDate ? inputType : "text"}
-                  disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
+                  //disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
                   className={`
                     border px-2 py-1 rounded w-full
                     ${getAlignClass(col.key)}
