@@ -778,7 +778,22 @@ const currentDate = new Date();
       </td>
 
       <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {header.payment_mode || "CREDIT CARD"}
+        {(() => {
+        let paidBy = (paid_by || "")
+          .toString()
+          .trim()
+          .toUpperCase();
+
+        const card = creditCards.find(
+          c =>
+            (c.card_holder_name || "")
+              .toString()
+              .trim()
+              .toUpperCase() === paidBy
+        );
+
+        return card?.card_brand || card?.card_brand || "";
+      })()}
       </td>
 
     </tr>
