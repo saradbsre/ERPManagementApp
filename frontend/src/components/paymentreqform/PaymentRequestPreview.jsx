@@ -903,174 +903,195 @@ const currentDate = new Date();
 
   </thead>
 
-  <tbody>
-
-    {/* DATA ROW */}
-    <tr className="text-center align-top h-[250px] bg-[#f8fafc] border border-black-800">
-
-     
-      <td className="border border-gray-800 p-2 align-top">
-        {headers?.map((_, i) => (
-          <div key={i} className="py-1">
-            {i + 1}.
-          </div>
-        ))}
-      </td>
-
-      
-      <td className="border border-gray-800 p-2 align-top">
-        {headers?.map((_, i) => (
-          <div key={i} className="py-1">
-            {headers?.[i]?.date
-              ? formatDate(headers[i].date)
-              : ""}
-          </div>
-        ))}
-      </td>
-
-     
-      <td className="border border-gray-800 p-2 align-top">
-        {headers?.map((_, i) => (
-          <div key={i} className="py-1">
-            {headers[i]?.invoice_number || " - "}
-          </div>
-        ))}
-      </td>
-
-     
-<td className="border border-gray-800 p-2 align-top text-left">
-  {headers?.map((item, i) => {
-    const product = products?.find(
-      p =>
-        (p.product_code || "").toUpperCase() ===
-        (item?.products || "").toUpperCase()
-    );
+<tbody>
+  {(() => {
+    const rowHeight = "min-h-[38px]";
 
     return (
-      <div key={i} className="py-1 flex flex-col">
-        <div>
-          {getProductName(item?.products)}
-          {item?.plan_provider &&
-            ` - ${getPlanName(item.plan_provider)}`}
-          {item?.product_types &&
-            ` - ${getServiceName(item.product_types)}`}
-        </div>
+      <>
+        <tr className="text-center align-top h-[250px] bg-[#f8fafc] border border-black-800">
 
-        {product?.is_icann && product?.icann_fee ? (
-          <div className="text-[9px] mt-1">
-            ICANN Fee added for {getProductName(item?.products)}
-          </div>
-        ) : null}
-      </div>
+          {/* S/N */}
+          <td className="border border-gray-800 p-2 align-top">
+            {headers?.map((_, i) => (
+              <div
+                key={i}
+                className={`${rowHeight} flex items-start py-1`}
+              >
+                {i + 1}.
+              </div>
+            ))}
+          </td>
+
+          {/* DATE */}
+          <td className="border border-gray-800 p-2 align-top">
+            {headers?.map((item, i) => (
+              <div
+                key={i}
+                className={`${rowHeight} flex items-start py-1`}
+              >
+                {item?.date ? formatDate(item.date) : ""}
+              </div>
+            ))}
+          </td>
+
+          {/* INVOICE NUMBER */}
+          <td className="border border-gray-800 p-2 align-top">
+            {headers?.map((item, i) => (
+              <div
+                key={i}
+                className={`${rowHeight} flex items-start py-1`}
+              >
+                {item?.invoice_number || "-"}
+              </div>
+            ))}
+          </td>
+
+          {/* PRODUCT DESCRIPTION */}
+          <td className="border border-gray-800 p-2 align-top text-left">
+            {headers?.map((item, i) => {
+              const product = products?.find(
+                p =>
+                  (p.product_code || "").toUpperCase() ===
+                  (item?.products || "").toUpperCase()
+              );
+
+              return (
+                <div
+                  key={i}
+                  className={`${rowHeight} flex flex-col py-1`}
+                >
+                  <div>
+                    {getProductName(item?.products)}
+                    {item?.plan_provider &&
+                      ` - ${getPlanName(item.plan_provider)}`}
+                    {item?.product_types &&
+                      ` - ${getServiceName(item.product_types)}`}
+                  </div>
+
+                  {product?.is_icann && product?.icann_fee ? (
+                    <div className="text-[9px] mt-1">
+                      ICANN Fee added for{" "}
+                      {getProductName(item?.products)}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+
+            <div className="mt-4 text-center text-[9px] text-gray-500">
+              *** SPACE INTENTIONALLY LEFT BLANK ***
+            </div>
+          </td>
+
+          {/* AMOUNT */}
+          <td className="border border-gray-800 p-2 align-top text-right">
+            {headers?.map((item, i) => (
+              <div
+                key={i}
+                className={`${rowHeight} flex justify-end items-start py-1`}
+              >
+                {formatDecimal(item?.amount ?? 0)}
+              </div>
+            ))}
+          </td>
+
+          {/* VAT */}
+          <td className="border border-gray-800 p-2 align-top text-right">
+            {headers?.map((item, i) => (
+              <div
+                key={i}
+                className={`${rowHeight} flex justify-end items-start py-1`}
+              >
+                {formatDecimal(item?.vat_amount ?? 0)}
+              </div>
+            ))}
+          </td>
+
+          {/* TOTAL */}
+          <td className="border border-gray-800 p-2 align-top text-right">
+            {headers?.map((item, i) => {
+              const product = products?.find(
+                p =>
+                  (p.product_code || "").toUpperCase() ===
+                  (item?.products || "").toUpperCase()
+              );
+
+              const mainAmount = Number(
+                item?.total_amount ?? 0
+              );
+
+              const icannFee = product?.is_icann
+                ? Number(product?.icann_fee ?? 0)
+                : 0;
+
+              return (
+                <div
+                  key={i}
+                  className={`${rowHeight} flex flex-col items-end py-1`}
+                >
+                  <div>
+                    {formatDecimal(mainAmount)}
+                  </div>
+
+                  {icannFee > 0 && (
+                    <div className="text-[10px] mt-1">
+                      {formatDecimal(icannFee)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </td>
+
+        </tr>
+
+        {/* TOTAL */}
+        <tr className="bg-[#e5e7eb]">
+          <td
+            colSpan={4}
+            className="border border-gray-800 p-2 font-bold text-right"
+          >
+            TOTAL
+          </td>
+
+          <td className="border border-gray-800 p-2 text-right font-bold">
+            {formatDecimal(Total)}
+          </td>
+
+          <td className="border border-gray-800 p-2 text-right font-bold">
+            {formatDecimal(TotalVAT)}
+          </td>
+
+          <td className="border border-gray-800 p-2 text-right font-bold text-[12px]">
+            {formatDecimal(grandTotal)}
+          </td>
+        </tr>
+
+        {/* AMOUNT IN WORDS */}
+        <tr className="bg-[#f1f5f9]">
+          <td
+            colSpan={3}
+            className="border border-gray-800 p-2 font-bold"
+          >
+            TOTAL AMOUNT IN WORDS
+          </td>
+
+          <td
+            colSpan={4}
+            className="border border-gray-800 p-2 font-bold"
+          >
+            {numberToWords(
+              grandTotal,
+              selectedCurrency?.currency
+            )}{" "}
+            ONLY
+          </td>
+        </tr>
+      </>
     );
-  })}
-
-  {/* Show after entries */}
-  <div className="mt-4 pt-2 border-gray-400 text-center text-[9px]  text-gray-500">
-    *** SPACE INTENTIONALLY LEFT BLANK ***
-  </div>
-</td>
-
-    
-      <td className="border border-gray-800 p-2 align-top text-right">
-        {headers?.map((_, i) => (
-          <div key={i} className="py-1">
-           
-            {formatDecimal(headers[i]?.amount ?? 0)}
-          </div>
-        ))}
-      </td>
-
-      
-      <td className="border border-gray-800 p-2 align-top text-right">
-        {headers?.map((_, i) => (
-          <div key={i} className="py-1">
-           
-            {formatDecimal(headers[i]?.vat_amount ?? 0)}
-          </div>
-        ))}
-      </td>
-
-     
-     <td className="border border-gray-800 p-2 align-top text-right">
-  {headers?.map((item, i) => {
-    const product = products?.find(
-      p =>
-        (p.product_code || "").toUpperCase() ===
-        (item?.products || "").toUpperCase()
-    );
-
-    const mainAmount = Number(item?.total_amount ?? 0);
-    const icannFee = product?.is_icann ? Number(product?.icann_fee ?? 0) : 0;
-
-    return (
-      <div key={i} className="py-1 flex flex-col items-end">
-
-        {/* LINE 1: NORMAL TOTAL */}
-        <div>
-          {formatDecimal(mainAmount)}
-        </div>
-
-        {/* LINE 2: ICANN FEE */}
-        {icannFee > 0 && (
-          <div className="text-[10px] text-black mt-1">
-             {formatDecimal(icannFee)} 
-          </div>
-        )}
-
-      </div>
-    );
-  })}
-</td>
-
-    </tr>
-
-   
-    <tr className="bg-[#e5e7eb]">
-
-      <td
-        colSpan={4}
-        className="border border-gray-800 p-2 font-bold text-right"
-      >
-        TOTAL
-      </td>
-
-      <td className="border border-gray-800 p-2 text-right font-bold">
-        {formatDecimal(Total)}
-      </td>
-
-      <td className="border border-gray-800 p-2 text-right font-bold">
-        {formatDecimal(TotalVAT)}
-      </td>
-
-      <td className="border border-gray-800 p-2 text-right font-bold text-[12px]">
-        {/* {selectedCurrency?.currency || header.currency} {formatDecimal(grandTotal)} */}
-        {formatDecimal(grandTotal)}
-      </td>
-
-    </tr>
-
-    {/* AMOUNT IN WORDS */}
-    <tr className="bg-[#f1f5f9]">
-
-      <td
-        colSpan={3}
-        className="border border-gray-800 p-2 font-bold"
-      >
-        TOTAL AMOUNT IN WORDS 
-      </td>
-
-      <td
-        colSpan={4}
-        className="border border-gray-800 p-2 font-bold"
-      >
-        {numberToWords(grandTotal, selectedCurrency?.currency)}  ONLY
-      </td>
-
-    </tr>
-     
-
-  </tbody>
+  })()}
+</tbody>
 
 </table>
 
