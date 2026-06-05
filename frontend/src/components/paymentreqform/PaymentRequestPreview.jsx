@@ -507,9 +507,16 @@ const startDate = header.date
   ? formatDateLong(header.date)
   : details?.[0]?.doc_date
     ? formatDateLong(details[0].doc_date)
-    : "N/A";
-const expiryDate = header?.expiry_date ? formatDateLong(header.expiry_date) : "N/A";
-const periodDisplay = `${startDate} to ${expiryDate}`;
+    : null;
+
+const expiryDate = header?.expiry_date
+  ? formatDateLong(header.expiry_date)
+  : null;
+
+const periodDisplay =
+  startDate && expiryDate
+    ? `${startDate} to ${expiryDate}`
+    : "-";
 const currentDate = new Date();
 
   return (
@@ -628,9 +635,11 @@ const currentDate = new Date();
   {selectedTransactionType?.transaction_code === "TT004" &&
     `This payment request is related to the cancellation of a subscription service.`}
     </p>
-    <p className="text-[12px] text-gray-700">
-      Subscription expiry on {expiryDate}
-    </p>
+   {expiryDate && (
+  <p className="text-[12px] text-gray-700">
+    Subscription expiry on {expiryDate}
+  </p>
+)}
 
     <p className="text-[12px] text-gray-700">
       Paid by {paid_by} using credit card ending with ****
