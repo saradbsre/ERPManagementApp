@@ -642,7 +642,23 @@ const currentDate = new Date();
 )}
 
     <p className="text-[12px] text-gray-700">
-      Paid by {paid_by} using credit card ending with ****
+      {console.log("creditCards value:", creditCards.card_brand)}
+      Paid by {paid_by} using {(() => {
+        let paidBy = (paid_by || "")
+          .toString()
+          .trim()
+          .toUpperCase();
+
+        const card = creditCards.find(
+          c =>
+            (c.card_holder_name || "")
+              .toString()
+              .trim()
+              .toUpperCase() === paidBy
+        );
+
+        return card?.card_brand || card?.card_brand || "";
+      })()} ending with ****
       {(() => {
         let paidBy = (paid_by || "")
           .toString()
