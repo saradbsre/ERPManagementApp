@@ -634,6 +634,10 @@ const currentDate = new Date();
 
   {selectedTransactionType?.transaction_code === "TT004" &&
     `This payment request is related to the cancellation of a subscription service.`}
+     {selectedTransactionType?.transaction_code === "TT005" &&
+    `This payment request is related to the transfer of a service.`}
+      {selectedTransactionType?.transaction_code === "TT006" &&
+    `This payment request is related to the bill payment of a service.`}
     </p>
    {expiryDate && (
   <p className="text-[12px] text-gray-700">
