@@ -21,7 +21,7 @@ import {
 
 export default function Sidebar({ collapsed, setCollapsed }) {
   const location = useLocation();
-
+  const [hoverMenu, setHoverMenu] = useState(null);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const [sections, setSections] = useState([]);
@@ -176,6 +176,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
           fixed top-0 left-0 h-screen
           bg-gray-100 text-gray-900
           overflow-y-auto
+          overflow-x-visible
           z-50
           transition-all duration-300
 
@@ -245,15 +246,15 @@ export default function Sidebar({ collapsed, setCollapsed }) {
                   to={item.path}
                   onClick={closeMobile}
                   className={`
-                    flex items-center gap-3
-                    px-3 py-2 rounded
-
-                    ${
-                      isActive(item.path)
-                        ? "bg-gray-300"
-                        : "hover:bg-gray-200"
-                    }
-                  `}
+  flex items-center
+  ${collapsed ? "justify-center" : "gap-3"}
+  px-3 py-2 rounded
+  ${
+    isActive(item.path)
+      ? "bg-gray-300"
+      : "hover:bg-gray-200"
+  }
+`}
                 >
                   <span>{item.icon}</span>
 
@@ -263,23 +264,42 @@ export default function Sidebar({ collapsed, setCollapsed }) {
                 </Link>
               ) : (
                 <div
-                  onClick={() =>
-                    setOpenMain(
-                      openMain === item.name
-                        ? null
-                        : item.name
-                    )
-                  }
-                  className="
-                    flex justify-between
-                    items-center
-                    px-3 py-2
-                    rounded
-                    cursor-pointer
-                    hover:bg-gray-200
-                  "
-                >
-                  <div className="flex items-center gap-3">
+  className="
+    relative
+    flex justify-between
+    items-center
+    px-3 py-2
+    rounded
+    cursor-pointer
+    hover:bg-gray-200
+  "
+  onClick={() => {
+    if (!collapsed) {
+      setOpenMain(
+        openMain === item.name
+          ? null
+          : item.name
+      );
+    }
+  }}
+  onMouseEnter={() => {
+    if (collapsed) {
+      setHoverMenu(item.name);
+    }
+  }}
+  onMouseLeave={() => {
+    if (collapsed) {
+      setHoverMenu(null);
+    }
+  }}
+>
+                  <div
+  className={`flex items-center ${
+    collapsed
+      ? "justify-center w-full"
+      : "gap-3"
+  }`}
+>
                     <span>{item.icon}</span>
 
                     {!collapsed && (
@@ -345,6 +365,67 @@ export default function Sidebar({ collapsed, setCollapsed }) {
                     )}
                   </div>
                 )}
+                {collapsed &&
+  item.children &&
+  hoverMenu === item.name && (
+    <div
+      className="
+        absolute
+        left-full
+        top-0
+        ml-2
+        min-w-[260px]
+        bg-white
+        border
+        rounded-lg
+        shadow-xl
+        z-[9999]
+        py-2
+      "
+      onMouseEnter={() =>
+        setHoverMenu(item.name)
+      }
+      onMouseLeave={() =>
+        setHoverMenu(null)
+      }
+    >
+      <div
+        className="
+          px-3
+          py-2
+          font-semibold
+          border-b
+          bg-gray-50
+        "
+      >
+        {item.name}
+      </div>
+
+      {item.children.map((child) => (
+        <Link
+          key={child.key}
+          to={child.path}
+          onClick={closeMobile}
+          state={
+            child.master
+              ? { master: child.master }
+              : child.report
+              ? { report: child.report }
+              : { module: child.module }
+          }
+          className="
+            block
+            px-3
+            py-2
+            text-sm
+            hover:bg-gray-100
+          "
+        >
+          {child.name}
+        </Link>
+      ))}
+    </div>
+)}
             </div>
           ))}
         </nav>

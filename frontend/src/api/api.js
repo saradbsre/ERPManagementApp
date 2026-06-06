@@ -387,6 +387,26 @@ export const createprf = (data,activeUserEmail, selectedRow) => {
   });
 };
 
+export const unpostPRFTransaction = (prfNum, activeUserEmail) => {
+  return API.put(
+    `/unpost-prf/${encodeURIComponent(prfNum)}`,
+    {},
+    {
+      params: { activeUserEmail }
+    }
+  );
+};
+
+export const postPRFTransaction = (prfNum, activeUserEmail) => {
+  return API.put(
+    `/post-prf/${encodeURIComponent(prfNum)}`,
+    {},
+    {
+      params: { activeUserEmail }
+    }
+  );
+};
+
 export const getPreviewPRF = (prfNum) => {
   return API.get(`/preview-prf/${prfNum}`);
 };

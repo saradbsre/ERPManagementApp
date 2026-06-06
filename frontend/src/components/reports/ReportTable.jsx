@@ -90,9 +90,18 @@ export default function ReportPage() {
       key: null,
       direction: "asc",
     });
-    const masterList = [
-        ...new Set(columns.map(c => c.master).filter(Boolean))
-    ];
+const masterMap = {};
+
+columns.forEach((c) => {
+  if (c.master) {
+    masterMap[c.master] = {
+      master: c.master,
+      display_name: c.display_name || c.label || c.column_name
+    };
+  }
+});
+
+const masterList = Object.values(masterMap);
 
 
     const handleSort = (columnName) => {
@@ -347,7 +356,7 @@ useEffect(() => {
       ...prev,
       [master]: res.data.data || []
     }));
-    console.log(`Master data loaded for ${master}:`, res.data.data || []);
+   
   } catch (err) {
     console.error("Master fetch failed:", master, err);
   } finally {
@@ -1610,7 +1619,7 @@ return `
 
         {/* SELECTED VALUES */}
         <div className="flex gap-1 flex-wrap">
-          {console.log("Rendering filter values for master:", masterName, "Selected:", selectedValues)}
+        
          {selectedValues.map((val, idx) => (
   <span
     key={idx}

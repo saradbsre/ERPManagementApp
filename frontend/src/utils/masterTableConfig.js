@@ -115,7 +115,7 @@ const masterTableConfig = {
       { key: "cc_code", label: "Card Code", data_type: "string" },
       { key: "card_holder_name", label: "Cardholder Name", data_type: "string" },
       { key: "card_4number", label: "Card Number - Last 4 Digits", data_type: "string" },
-      { key: "card_brand", label: "Card Brand", data_type: "string" },
+      { key: "card_brand", label: "Card Type", data_type: "string" },
       { key: "expiry_date", label: "Expiry Date", data_type: "datetime" },
       { key: "description", label: "Description", data_type: "string" },
       { key: "billing_address", label: "Billing Address", data_type: "string" }

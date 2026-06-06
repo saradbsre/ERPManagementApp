@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef, act, use } from "react";
+import { useEffect, useState, useRef, useLayoutEffect, act, use } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow, getPreviewPRF  } from "../../api/api";
+import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow, getPreviewPRF, unpostPRFTransaction, postPRFTransaction  } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -22,6 +22,11 @@ import ValidatePopups from "../Validatepopups";
 import PaymentRequestPreview from "../paymentreqform/PaymentRequestPreview"
 import { DndContext, closestCenter } from "@dnd-kit/core";
 import mainTableConfig from "../../utils/mainTableConfig";
+import { getDateRange } from "../../utils/dateRanges";
+import TableFiltersDrawer from "../filters/TableFiltersDrawer";
+import ShowHideColumnsPopup from "./ShowHideColumnsPopup";
+import { createPortal } from "react-dom";
+import EditRowPopup from "./EditRowPopup";
 
 import {
   arrayMove,
@@ -122,6 +127,7 @@ export default function DynamicTablePage() {
     const [loading, setLoading] = useState(false);
     const [showImportExport, setShowImportExport] = useState(false);
     const [search, setSearch] = useState("");
+    const [searchColumnKey, setSearchColumnKey] = useState(null);
     const [page, setPage] = useState(1);
     const [file, setFile] = useState(null);
     const printRef = useRef();
@@ -179,17 +185,46 @@ export default function DynamicTablePage() {
     const [prfNumber, setPrfNumber] = useState("");
     const [showPreview, setShowPreview] = useState(false);
     const [previewData, setPreviewData] = useState(null);
+    const [previewFromGenerateModal, setPreviewFromGenerateModal] = useState(false);
     const [workflow, setWorkflow] = useState({});
     const [availableProducts, setAvailableProducts] = useState([]);
     const [availableServices, setAvailableServices] = useState([]);
     const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc", });
-    const configOrder = mainTableConfig[module.module_name];
+    const configOrder = mainTableConfig[module?.module_name] || [];
+    const [pinnedColumns, setPinnedColumns] = useState([]);
+    const [showEditPopup, setShowEditPopup] = useState(false);
+    const orderColumnsByConfig = (cols = []) => {
+      if (!Array.isArray(cols)) return [];
+      if (!configOrder.length) return cols;
+
+      const orderMap = new Map(
+        configOrder.map((name, index) => [name, index])
+      );
+
+      return [...cols].sort((a, b) => {
+        const aIndex = orderMap.has(a.column_name)
+          ? orderMap.get(a.column_name)
+          : Number.MAX_SAFE_INTEGER;
+        const bIndex = orderMap.has(b.column_name)
+          ? orderMap.get(b.column_name)
+          : Number.MAX_SAFE_INTEGER;
+
+        return aIndex - bIndex;
+      });
+    };
     const [selectedRowIds, setSelectedRowIds] = useState([]);
     const [showActions, setShowActions] = useState(false);
     const [showMobileFilters, setShowMobileFilters] = useState(false);
     const tableContainerRef = useRef(null);
+    const searchInputRef = useRef(null);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [isAdvertising, setIsAdvertising] = useState(false);
+    const [showFilters, setShowFilters] = useState(false);
+    const [openMenu, setOpenMenu] = useState(null);
+    const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+    const [showHidePopup, setShowHidePopup] = useState(false);
+    const [hidePopupColumn, setHidePopupColumn] = useState(null);
+    const [tempHideColumns, setTempHideColumns] = useState([]);
     useEffect(() => {
       const handleResize = () => {
         setIsMobile(window.innerWidth < 768);
@@ -210,12 +245,7 @@ export default function DynamicTablePage() {
       setModalItems((prev) => prev.filter((_, i) => i !== index));
     };
     
-    let orderedColumns = columns;
-if (configOrder) {
-  orderedColumns = [...columns].sort(
-    (a, b) => configOrder.indexOf(a.column_name) - configOrder.indexOf(b.column_name)
-  );
-}
+    const orderedColumns = orderColumnsByConfig(columns);
     useEffect(() => {
       if (!columns.length) return;
 
@@ -279,7 +309,7 @@ const handleDragEnd = (event) => {
 
   const reordered = arrayMove(columns, oldIndex, newIndex);
 
-  setColumns(reordered);
+  setColumns(orderColumnsByConfig(reordered));
 
   // Keep only previously selected columns, but in new order
   setTempSelectedColumns((prev) =>
@@ -311,28 +341,73 @@ const toggleTempColumn = (colName) => {
   );
 };
 
-const saveColumnSelection = async () => {
+const saveColumnSelection = async (selectedCols) => {
   try {
 
-    // 1️⃣ Save to DB (use TEMP state)
-    console.log("Saving columns for module", currentModule?.module_id, ":", tempSelectedColumns);
+    const columnSettings = {
+      visibleColumns: selectedCols,
+      pinnedColumns: pinnedColumns,
+    };
+
     await upsertCustomizedColumns(
       currentModule?.module_id,
       activeUserEmail,
-      tempSelectedColumns
+      columnSettings
     );
 
-    // 2️⃣ Commit TEMP → LIVE
-    setSelectedColumns(tempSelectedColumns);
-    setSavedTableColumns(tempSelectedColumns);
+    setSelectedColumns(selectedCols);
+    setSavedTableColumns(selectedCols);
 
-    // 3️⃣ UI updates
-    setShowColumnSelector(false);
     setTableColumnMode("custom");
-
   } catch (err) {
     console.error("Failed to save customized columns:", err);
   }
+};
+
+const handlePinColumn = async (columnName) => {
+  try {
+    const newPinnedColumns = pinnedColumns.includes(columnName)
+      ? pinnedColumns.filter((col) => col !== columnName)
+      : [...pinnedColumns, columnName];
+
+    setPinnedColumns(newPinnedColumns);
+
+    const columnSettingsPin = {
+      pinnedColumns: newPinnedColumns,
+    };
+
+    await upsertCustomizedColumns(
+      currentModule?.module_id,
+      activeUserEmail,
+      columnSettingsPin
+    );
+
+    setOpenMenu(null);
+
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+const handleHeaderMenuToggle = (columnName, e) => {
+  e.stopPropagation();
+
+  if (openMenu === columnName) {
+    setOpenMenu(null);
+    return;
+  }
+
+  const rect = e.currentTarget.getBoundingClientRect();
+  const menuWidth = 224; // Tailwind w-56
+  const gutter = 8;
+  const maxLeft = window.innerWidth - menuWidth - gutter;
+  const nextLeft = Math.min(Math.max(rect.left, gutter), maxLeft);
+
+  setMenuPosition({
+    top: rect.bottom + 4,
+    left: nextLeft,
+  });
+  setOpenMenu(columnName);
 };
 
 const onInputChange = (e) => {
@@ -371,21 +446,21 @@ const getCurrentMonthRange = () => {
   };
 };
 
-const handleSort = (columnName) => {
-  let direction = "asc";
+// const handleSort = (columnName) => {
+//   let direction = "asc";
 
-  if (
-    sortConfig.key === columnName &&
-    sortConfig.direction === "asc"
-  ) {
-    direction = "desc";
-  }
+//   if (
+//     sortConfig.key === columnName &&
+//     sortConfig.direction === "asc"
+//   ) {
+//     direction = "desc";
+//   }
 
-  setSortConfig({
-    key: columnName,
-    direction,
-  });
-};
+//   setSortConfig({
+//     key: columnName,
+//     direction,
+//   });
+// };
 
 const applyDateFilter = async () => {
   try {
@@ -446,11 +521,22 @@ const fetchCustomizedColumns = async () => {
       activeUserEmail
     );
 
-    return res?.data?.data?.columns || [];
+    const savedColumns = res?.data?.data?.columns;
+
+    if (Array.isArray(savedColumns)) {
+      return { visibleColumns: savedColumns, pinnedColumns: [] };
+    }
+    if (savedColumns && typeof savedColumns === "object") {
+      return {
+        visibleColumns: Array.isArray(savedColumns.visibleColumns) ? savedColumns.visibleColumns : [],
+        pinnedColumns: Array.isArray(savedColumns.pinnedColumns) ? savedColumns.pinnedColumns : [],
+      };
+    }
+    return { visibleColumns: [], pinnedColumns: [] };
 
   } catch (err) {
     console.error("Failed to load customized columns:", err);
-    return [];
+    return { visibleColumns: [], pinnedColumns: [] };
   }
 };
 
@@ -458,16 +544,18 @@ useEffect(() => {
 let active = true;
 
 const initSavedColumns = async () => {
-const cols = await fetchCustomizedColumns();
-if (!active) return;
+  const settings = await fetchCustomizedColumns();
+  if (!active) return;
 
-if (cols.length > 0) {
-setSavedTableColumns(cols);
-setSelectedColumns(cols);
-setTableColumnMode("saved");
-} else {
-setTableColumnMode("default");
-}
+  setPinnedColumns(settings.pinnedColumns || []);
+
+  if ((settings.visibleColumns || []).length > 0) {
+    setSavedTableColumns(settings.visibleColumns);
+    setSelectedColumns(settings.visibleColumns);
+    setTableColumnMode("saved");
+  } else {
+    setTableColumnMode("default");
+  }
 };
 
 initSavedColumns();
@@ -669,14 +757,21 @@ useEffect(() => {
     // const masterList = [
     //     ...new Set(columns.map(c => c.master).filter(Boolean))
     // ];
-    console.log("Columns for master list:", columns);
-    const masterList = [
-  ...new Set(
-    columns
-      .flatMap((c) => [c.master, c.master1]) // 👈 include both
-      .filter(Boolean)
-  )
-];
+   // console.log("Columns for master list:", columns);
+    const masterMap = {};
+
+columns.forEach((c) => {
+  if (c.master) {
+    masterMap[c.master] = {
+      master: c.master,
+      display_name: c.display_name || c.label || c.column_name
+    };
+  }
+});
+
+const masterList = Object.values(masterMap);
+
+//console.log("Master List for Filters:", masterList);
     const [showTableColumnModal, setShowTableColumnModal] = useState(false);
     const [tableColumnMode, setTableColumnMode] = useState("saved");
     // default | saved | custom
@@ -796,10 +891,82 @@ useEffect(() => {
       .filter(Boolean);
   }
 
+  const ordered = orderColumnsByConfig(cols);
 
-  return cols;
+  if (!pinnedColumns.length) return ordered;
+
+  const pinnedSet = new Set(pinnedColumns);
+  const pinnedFirst = ordered.filter(col => pinnedSet.has(col.column_name));
+  const others = ordered.filter(col => !pinnedSet.has(col.column_name));
+  return [...pinnedFirst, ...others];
 };
     const visibleColumns = getVisibleColumns();
+
+const SNO_STICKY_LEFT = 64;
+const DEFAULT_PINNED_COL_WIDTH = 180;
+const pinnedHeaderRefs = useRef({});
+const [pinnedLeftMap, setPinnedLeftMap] = useState({});
+
+const areLeftMapsEqual = (a, b) => {
+  const aKeys = Object.keys(a || {});
+  const bKeys = Object.keys(b || {});
+  if (aKeys.length !== bKeys.length) return false;
+
+  for (const key of aKeys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+};
+
+const computePinnedLeftMap = () => {
+  const pinnedSet = new Set(pinnedColumns);
+  const pinnedVisible = visibleColumns.filter((col) =>
+    pinnedSet.has(col.column_name)
+  );
+
+  let runningLeft = SNO_STICKY_LEFT;
+  const nextMap = {};
+
+  pinnedVisible.forEach((col) => {
+    nextMap[col.column_name] = runningLeft;
+    const measuredWidth = pinnedHeaderRefs.current[col.column_name]?.offsetWidth;
+    runningLeft += measuredWidth || DEFAULT_PINNED_COL_WIDTH;
+  });
+
+  setPinnedLeftMap((prev) =>
+    areLeftMapsEqual(prev, nextMap) ? prev : nextMap
+  );
+};
+
+useLayoutEffect(() => {
+  computePinnedLeftMap();
+}, [visibleColumns, pinnedColumns, rows.length, isCreating]);
+
+useEffect(() => {
+  const onResize = () => computePinnedLeftMap();
+  window.addEventListener("resize", onResize);
+  return () => window.removeEventListener("resize", onResize);
+}, [visibleColumns, pinnedColumns, rows.length, isCreating]);
+
+const getPinnedHeaderClass = (columnName) => {
+  if (!pinnedColumns.includes(columnName)) return "";
+  return "sticky z-30 bg-gray-100 border-r border-gray-200";
+};
+
+const getPinnedHeaderStyle = (columnName) => {
+  if (!pinnedColumns.includes(columnName)) return undefined;
+  return { left: `${pinnedLeftMap[columnName] ?? SNO_STICKY_LEFT}px` };
+};
+
+const getPinnedCellClass = (columnName, rowBg = "bg-white group-hover:bg-gray-50") => {
+  if (!pinnedColumns.includes(columnName)) return "";
+  return `sticky z-20 ${rowBg} border-r border-gray-200`;
+};
+
+const getPinnedCellStyle = (columnName) => {
+  if (!pinnedColumns.includes(columnName)) return undefined;
+  return { left: `${pinnedLeftMap[columnName] ?? SNO_STICKY_LEFT}px` };
+};
 const getCreateVisibleColumns = () => {
   return normalizeCreateColumns(columns);
 };
@@ -958,6 +1125,8 @@ const handleGenerate = async () => {
     is_advertising: isAdvertising ? 1 : 0,
   };
 
+  setPreviewFromGenerateModal(false);
+
   await createprf(
     payload,
     activeUserEmail,
@@ -994,9 +1163,91 @@ const handleGenerate = async () => {
     approved_by: ""
   });
 };
+console.log("creditCards ", creditCards);
+const handleDraftPreviewFromModal = () => {
+  if (!modalItems?.length) {
+    setPopupMessage("No details found to preview");
+    setPopupType("error");
+    return;
+  }
+
+  const sourceRows = Array.isArray(selectedRow)
+    ? selectedRow
+    : selectedRow
+      ? [selectedRow]
+      : [];
+
+  const headers = modalItems.map((item, idx) => {
+    const row = sourceRows[idx] || sourceRows[0] || {};
+
+    return {
+      ...row,
+      date: item.doc_date || row.date || "",
+      invoice_number: item.doc_no || row.invoice_number || "",
+      products: item.product || row.products || "",
+      amount: Number(item.amount || 0),
+      vat_amount: Number(item.vat || 0),
+      total_amount: Number(item.total_amount || 0),
+    };
+  });
+
+  const totalAmount = modalItems.reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0
+  );
+
+  const totalVat = modalItems.reduce(
+    (sum, item) => sum + Number(item.vat || 0),
+    0
+  );
+
+  const grandTotal = modalItems.reduce(
+    (sum, item) => sum + Number(item.total_amount || 0),
+    0
+  );
+
+  const previewDetails = {
+    prf_num: prfNumber,
+    receipt_number: form.receipt_number || "",
+    amount: totalAmount,
+    vat_amount: totalVat,
+    total_amount: grandTotal,
+    prepared_by: activeUserName || "",
+    checked_by: form.checked_by || "",
+    verified_by_it: form.verified_by_it || "",
+    verified_by: form.verified_by || "",
+    signed_by: form.signed_by || "",
+    approved_by: form.approved_by || "",
+    exchange_rate,
+    prf_date: new Date().toISOString(),
+    sysdate: new Date().toISOString(),
+    is_advertising: isAdvertising ? 1 : 0,
+  };
+ 
+  const paidByName =
+  creditCards.find(
+    c =>
+      String(c.card_4number || "").trim() ===
+      String(headers?.[0]?.credit_card || "").trim()
+  )?.card_holder_name || "";
+
+setPreviewData({
+  header: headers,
+  details: previewDetails,
+  paid_by:
+    form.paid_by ||
+    paidByName ||
+    "",
+});
+
+  setPreviewFromGenerateModal(true);
+  setShowGenerateModal(false);
+  setShowPreview(true);
+};
 
 const handlePreview = async (prfNum) => {
   try {
+    setPreviewFromGenerateModal(false);
     const res = await getPreviewPRF(prfNum);
     // The API returns: { data: [ { header, details } ] }
     const previewObj = Array.isArray(res.data) ? res.data[0] : res.data;
@@ -1012,6 +1263,44 @@ const handlePreview = async (prfNum) => {
   } catch (err) {
     setPopupMessage("Failed to load preview data");
     setPopupType("error");
+  }
+};
+
+const handleUnpost = async (prfNum) => {
+  const confirmed = window.confirm("Are you sure you want to unpost this PRF?");
+  if (!confirmed) return;
+
+  try {
+    setLoading(true);
+    await unpostPRFTransaction(prfNum, activeUserEmail);
+    setPopupMessage("PRF unposted successfully");
+    setPopupType("success");
+    loadModule();
+  } catch (err) {
+    console.error("Failed to unpost PRF:", err);
+    setPopupMessage("Failed to unpost PRF");
+    setPopupType("error");
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handlePost = async (prfNum) => {
+  const confirmed = window.confirm("Are you sure you want to post this PRF?");
+  if (!confirmed) return;
+
+  try {
+    setLoading(true);
+    await postPRFTransaction(prfNum, activeUserEmail);
+    setPopupMessage("PRF posted successfully");
+    setPopupType("success");
+    loadModule();
+  } catch (err) {
+    console.error("Failed to post PRF:", err);
+    setPopupMessage("Failed to post PRF");
+    setPopupType("error");
+  } finally {
+    setLoading(false);
   }
 };
 
@@ -1134,7 +1423,7 @@ const transformColumns = (mod, dataRows = []) => {
   // ================= 4. SET STATE =================
   const result = finalCols.filter(c => c.is_active !== false);
 
-  setColumns(result);
+  setColumns(orderColumnsByConfig(result));
 
   // console.log("🔥 Final Transformed Columns:", result);
 };
@@ -1176,8 +1465,10 @@ const loadModule = async (
       setRows(dataRes.data || []);
 
       setColumns(
-        (mod?.columns || []).filter(
-          (c) => c.is_active !== false
+        orderColumnsByConfig(
+          (mod?.columns || []).filter(
+            (c) => c.is_active !== false
+          )
         )
       );
     }
@@ -1616,6 +1907,7 @@ useEffect(() => {
         setEditRowId(row.id);
         setEditRow({ ...row });
         setOriginalRow({ ...row });
+      setShowEditPopup(true);
     };
 
     const toMasterKey = (columnName, rawVal) => {
@@ -1753,6 +2045,42 @@ const handleUndoCancelRow = (row) => {
   });
   setConfirmOpen(true);
 };
+
+const isRowUnposted = (row) => {
+  const postedValue = row?.is_posted;
+  return (
+    postedValue === false ||
+    postedValue === 0 ||
+    postedValue === "0" ||
+    postedValue === "false"
+  );
+};
+
+const handlePostRow = (row) => {
+  setConfirmData({
+    title: "Post Record",
+    message: "Do you want to post this record?",
+    confirmText: "Post",
+    type: "info",
+    onConfirm: async () => {
+      try {
+        setLoading(true);
+        await updateModuleRow(id, row.id, { is_posted: true }, activeUserEmail);
+        setPopupMessage("Record posted successfully");
+        setPopupType("success");
+        loadModule();
+      } catch (err) {
+        console.error(err);
+        setPopupMessage("Error posting record");
+        setPopupType("error");
+      } finally {
+        setLoading(false);
+        setConfirmOpen(false);
+      }
+    }
+  });
+  setConfirmOpen(true);
+};
 const handleExcel = async (mode, savedCols = null, groupBy) => {
   const cols = getExcelColumns(mode, savedCols);
   //console.log("Excel export columns:", cols);
@@ -1886,6 +2214,12 @@ const handleClear = async () => {
         return () => window.removeEventListener("click", close);
     }, []);
 
+    useEffect(() => {
+      const closeMenu = () => setOpenMenu(null);
+      window.addEventListener("click", closeMenu);
+      return () => window.removeEventListener("click", closeMenu);
+    }, []);
+
     const handlePrint = (mode, savedCols = [], groupBy) => {
     const cols = getColumnsToUse(mode, savedCols);
    // console.log("Print columns:", cols);
@@ -1894,7 +2228,7 @@ const handleClear = async () => {
         userName: activeUser?.name || "User",
         groupBy,
     });
-    setColumns(cols); // Ensure columns are set for the print view
+    setColumns(orderColumnsByConfig(cols)); // Ensure print updates keep configured order
     setShowPrintModal(false);
     };
 
@@ -1965,20 +2299,30 @@ const handleClear = async () => {
    const normalizeString = (str) =>
   String(str).toLowerCase().replace(/\s+/g, "");
 
-const finalRows = filtered.filter(row => {
+const getSearchableColumns = () => {
+  if (!searchColumnKey) return visibleColumns;
+
+  const selectedCol = visibleColumns.find(
+    (col) => col.column_name === searchColumnKey
+  );
+
+  return selectedCol ? [selectedCol] : visibleColumns;
+};
+
+const rowMatchesSearch = (row) => {
   const searchNorm = normalizeString(search);
-  //console.log("Filtering row with search:", searchNorm);
-  return visibleColumns.some(col => {
+  if (!searchNorm) return true;
+
+  return getSearchableColumns().some((col) => {
     const val = row[col.column_name];
-    //console.log(`Checking column "${col.column_name}" with value:`, val);
     const cellNorm = normalizeString(
       typeof val === "object" ? val?.value ?? "" : val ?? ""
     );
-    const searchresult = cellNorm.includes(searchNorm);
-    //console.log("Search result for column", col.column_name, ":", searchresult);
-    return searchresult;
+    return cellNorm.includes(searchNorm);
   });
-});
+};
+
+const finalRows = filtered.filter((row) => rowMatchesSearch(row));
 
     const normalizedRows = finalRows.map(row => {
   const currency = (row.currency || "").toLowerCase();
@@ -2186,41 +2530,7 @@ const fieldKey =
   // 2. SEARCH FILTER
   // =========================
 
-  if (!search) {
-
-    return true;
-  }
-
-  const searchNorm =
-    normalizeString(search);
-
-
-
-  const searchMatch =
-    visibleColumns.some(
-      (col, cIndex) => {
-
-        const val =
-          row[col.column_name];
-
-        const cellNorm =
-          normalizeString(
-            typeof val === "object"
-              ? val?.value ?? ""
-              : val ?? ""
-          );
-
-        const match =
-          cellNorm.includes(searchNorm);
-
-   
-        return match;
-      }
-    );
-
-
-
-  return searchMatch;
+  return rowMatchesSearch(row);
 });
 
 
@@ -2688,6 +2998,49 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
     total_amount_aed: totalAed.toFixed(2),
   };
 }
+
+const handleQuickDateChange = (value) => {
+  setActiveDateFilter(value);
+
+  const range = getDateRange(value);
+
+  if (range) {
+    setDateFilters(range);
+  }
+};
+
+const handleSort = (key, direction) => {
+  setSortConfig({ key, direction });
+  setOpenMenu(null);
+};
+
+const handleSearch = (key) => {
+  console.log("Search column:", key);
+  setSearchColumnKey(key);
+  searchInputRef.current?.focus();
+  searchInputRef.current?.select();
+  setOpenMenu(null);
+};
+
+const handleGroup = (key, direction) => {
+  console.log("Group:", key, direction);
+  setOpenMenu(null);
+};
+
+const hideColumn = (key) => {
+  setVisibleColumns(prev =>
+    prev.filter(col => col.column_name !== key)
+  );
+  setOpenMenu(null);
+};
+
+const togglePinColumn = (columnName) => {
+  setPinnedColumns((prev) =>
+    prev.includes(columnName)
+      ? prev.filter((c) => c !== columnName)
+      : [...prev, columnName]
+  );
+};
     return (
         <div className="h-full flex flex-col">
              <ValidatePopups
@@ -2757,14 +3110,56 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
   >
     Customize
   </button>
-
   <button
-    className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 transition"
-    disabled={selectedRowIds.length === 0}
-    onClick={handleGenerateSelected}
-  >
-    Generate
-  </button>
+  onClick={() => window.location.reload()}
+  className="
+    px-3 py-1.5 text-sm rounded-md
+    border border-gray-300
+    bg-white
+    hover:bg-blue-50
+    hover:border-blue-400
+    hover:text-blue-600
+    transition
+    flex items-center gap-2
+  "
+>
+ 
+  Refresh
+</button>
+   <button 
+   onClick={() => setShowFilters(true)}
+   className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
+               hover:bg-orange-50 hover:border-orange-400 hover:text-orange-600 transition">
+        Filters
+   </button>
+ 
+ <TableFiltersDrawer
+  open={showFilters}
+  onClose={() => setShowFilters(false)}
+  masterList={masterList}
+  filters={filters}
+  setFilters={setFilters}
+  currencies={currencies}
+  masterDataMap={masterDataMap}
+  setMasterDataMap={setMasterDataMap}
+  saveFilterName={saveFilterName}
+  setSaveFilterName={setSaveFilterName}
+  handleSaveFilter={handleSaveFilter}
+/>
+ <button
+  className="
+    px-3 py-1.5 text-sm rounded-md
+    bg-blue-600 text-white
+    transition
+    enabled:hover:bg-blue-700
+    disabled:bg-gray-400
+    disabled:cursor-not-allowed
+  "
+  disabled={selectedRowIds.length === 0}
+  onClick={handleGenerateSelected}
+>
+  Generate
+</button>
 </div>
 <div className="flex md:hidden">
   <button
@@ -2797,6 +3192,10 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
         Customize
       </button>
 
+      <button  className="w-full text-left px-4 py-2 text-sm hover:bg-orange-50">
+        Filters
+      </button>
+
       <button
         disabled={selectedRowIds.length === 0}
         onClick={handleGenerateSelected}
@@ -2815,335 +3214,210 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
             {/* ================= CONTROL BAR (LEFT ALIGNED) ================= */}
            <div className="bg-white p-3 rounded-xl shadow mb-4">
 
-  {/* ================= MOBILE ================= */}
-  <div className="md:hidden">
 
-    {/* Search + Toggle */}
-    <div className="flex gap-2">
-      <input
-        type="text"
-        placeholder="Search records..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="flex-1 border px-3 py-2 rounded-lg"
-      />
-
-   <button
-  onClick={() => setShowMobileFilters(!showMobileFilters)}
-  className={`flex items-center justify-between w-full px-4 py-2 rounded-xl shadow-sm transition-all ${
-    showMobileFilters
-      ? "bg-gradient-to-r from-pink-200 to-indigo-400 text-white"
-      : "bg-white border border-slate-200"
-  }`}
->
-
-  <span
-    className={`transition-transform ${
-      showMobileFilters ? "rotate-180" : ""
-    }`}
-  >
-    ▼
-  </span>
-</button>
-    </div>
-
-    {/* Drawer */}
-    {showMobileFilters && (
-  <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
-
-    {/* Header */}
-    <div className="bg-gradient-to-r from-pink-200 to-indigo-400 px-4 py-3">
-      <h3 className="text-black font-semibold text-sm">
-        Filters & Date Range
-      </h3>
-    </div>
-
-    <div className="p-4 space-y-4">
-
-      {/* Filters */}
-      <div className="rounded-xl bg-slate-50 p-3 border border-slate-200">
-        <TableFilters
-          masterList={masterList}
-          filters={filters}
-          setFilters={setFilters}
-          currencies={currencies}
-          masterDataMap={masterDataMap}
-          setMasterDataMap={setMasterDataMap}
-        />
-      </div>
-
-      {/* Save Filter */}
-      {isFilterActive && (
-        <div className="space-y-2">
-          <input
-            type="text"
-            placeholder="Save current filter..."
-            value={saveFilterName}
-            onChange={(e) => setSaveFilterName(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          />
-
-          <button
-            onClick={handleSaveFilter}
-            disabled={!saveFilterName.trim()}
-            className={`w-full rounded-xl py-2 text-sm font-medium text-white transition ${
-              saveFilterName.trim()
-                ? "bg-blue-600 hover:bg-blue-700"
-                : "bg-slate-300 cursor-not-allowed"
-            }`}
-          >
-            Save Filter
-          </button>
-        </div>
-      )}
-
-      {/* Date Range */}
-      <div>
-        <label className="block text-xs font-medium text-slate-600 mb-2">
-          Date Range
-        </label>
-
-        <div className="grid grid-cols-2 gap-2">
-          <input
-            type="date"
-            name="startDate"
-            value={dateFilters.startDate}
-            onChange={onInputChange}
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm bg-slate-50"
-          />
-
-          <input
-            type="date"
-            name="endDate"
-            value={dateFilters.endDate}
-            onChange={onInputChange}
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm bg-slate-50"
-          />
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="grid grid-cols-3 gap-2">
-
-        <button
-          onClick={applyDateFilter}
-          className="rounded-xl bg-green-600 py-2 text-sm font-medium text-white shadow hover:bg-green-700"
-        >
-          Apply
-        </button>
-
-        <button
-          onClick={handleClear}
-          className="rounded-xl bg-red-500 py-2 text-sm font-medium text-white shadow hover:bg-red-600"
-        >
-          Clear
-        </button>
-
-        <button
-          onClick={() =>
-            setActiveDateFilter(
-              activeDateFilter === "custom" ? null : "custom"
-            )
-          }
-          className={`rounded-xl py-2 text-sm font-medium shadow ${
-            activeDateFilter === "custom"
-              ? "bg-indigo-600 text-white"
-              : "bg-slate-100 text-slate-700"
-          }`}
-        >
-          Custom
-        </button>
-
-      </div>
-
-    </div>
-  </div>
-)}
-  </div>
 
   {/* ================= DESKTOP ================= */}
   <div className="hidden md:flex flex-wrap items-center gap-3">
 
     <input
+      ref={searchInputRef}
       type="text"
-      placeholder="Search records..."
-      className="border px-3 py-2 rounded-lg w-64"
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
-    />
-
-    <TableFilters
-      masterList={masterList}
-      filters={filters}
-      setFilters={setFilters}
-      currencies={currencies}
-      masterDataMap={masterDataMap}
-      setMasterDataMap={setMasterDataMap}
-    />
-
-    {isFilterActive && (
-      <div className="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border">
-        <input
-          type="text"
-          placeholder="Enter filter name (required)"
-          value={saveFilterName}
-          onChange={(e) => setSaveFilterName(e.target.value)}
-          className="border px-2 py-1 rounded text-sm w-52"
-        />
-
-        <button
-          onClick={handleSaveFilter}
-          disabled={!saveFilterName.trim()}
-          className={`px-3 py-1 rounded text-sm text-white ${
-            saveFilterName.trim()
-              ? "bg-blue-500 hover:bg-blue-600"
-              : "bg-gray-300 cursor-not-allowed"
-          }`}
-        >
-          Save As
-        </button>
-      </div>
-    )}
-
-    <div className="flex gap-3 items-center">
-      <input
-        type="date"
-        name="startDate"
-        value={dateFilters.startDate}
-        onChange={onInputChange}
-        className="border rounded px-3 py-2 bg-slate-50 w-[150px]"
-      />
-
-      <span className="text-gray-500">to</span>
-
-      <input
-        type="date"
-        name="endDate"
-        value={dateFilters.endDate}
-        onChange={onInputChange}
-        className="border rounded px-3 py-2 bg-slate-50 w-[150px]"
-      />
-    </div>
-
-    <button
-      onClick={applyDateFilter}
-      className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
-    >
-      Apply
-    </button>
-
-    <button
-      onClick={handleClear}
-      className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
-    >
-      Clear
-    </button>
-
-    <button
-      onClick={() =>
-        setActiveDateFilter(
-          activeDateFilter === "custom" ? null : "custom"
-        )
+      placeholder={
+        searchColumnKey
+          ? `Search in ${
+              visibleColumns.find((c) => c.column_name === searchColumnKey)
+                ?.display_name || searchColumnKey
+            }...`
+          : "Search records..."
       }
-      className={`px-3 py-2 border rounded-lg text-sm hover:bg-gray-100 ${
-        activeDateFilter === "custom" ? "bg-gray-100" : ""
-      }`}
+      className="border px-3 py-2 rounded-lg w-60"
+      value={search}
+      onChange={(e) => {
+        const value = e.target.value;
+        setSearch(value);
+        if (value === "") {
+          setSearchColumnKey(null);
+        }
+      }}
+    />
+
+    
+
+<div className="flex flex-wrap items-center gap-3">
+
+  {/* Start Date */}
+  <input
+    type="date"
+    name="startDate"
+    value={dateFilters.startDate}
+    onChange={onInputChange}
+    className="
+      h-9 w-[130px]
+      rounded-xl
+      border border-gray-200
+      bg-white
+      px-4
+      text-sm
+      shadow-sm
+      hover:border-gray-300
+      focus:outline-none
+      focus:ring-2
+      focus:ring-blue-500
+    "
+  />
+
+  {/* <span className="text-gray-400 font-medium">→</span> */}
+
+  {/* End Date */}
+  <input
+    type="date"
+    name="endDate"
+    value={dateFilters.endDate}
+    onChange={onInputChange}
+    className="
+      h-9 w-[130px]
+      rounded-xl
+      border border-gray-200
+      bg-white
+      px-4
+      text-sm
+      shadow-sm
+      hover:border-gray-300
+      focus:outline-none
+      focus:ring-2
+      focus:ring-blue-500
+    "
+  />
+
+  {/* Quick Date Dropdown */}
+  <select
+    value={activeDateFilter || ""}
+    onChange={(e) => handleQuickDateChange(e.target.value)}
+    className="
+      h-9
+      min-w-[140px]
+      rounded-xl
+      border border-gray-200
+      bg-white
+      px-4
+      text-sm
+      shadow-sm
+      hover:border-gray-300
+      focus:outline-none
+      focus:ring-2
+      focus:ring-blue-500
+      cursor-pointer
+    "
+  >
+    <option value="">📅 Quick Range</option>
+    <option value="today">Today</option>
+    <option value="yesterday">Yesterday</option>
+    <option value="tomorrow">Tomorrow</option>
+    <option value="thisWeek">This Week</option>
+    <option value="lastWeek">Last Week</option>
+    <option value="thisMonth">This Month</option>
+    <option value="lastMonth">Last Month</option>
+    <option value="thisYear">This Year</option>
+    <option value="lastYear">Last Year</option>
+    <option value="custom">Custom Range</option>
+  </select>
+
+  {/* Apply */}
+  <button
+    onClick={applyDateFilter}
+    className="
+      h-9
+      px-5
+      rounded-xl
+      bg-blue-600
+      text-white
+      text-sm
+      font-medium
+      shadow-sm
+      hover:bg-blue-700
+      transition
+    "
+  >
+    Apply
+  </button>
+
+  {/* Clear */}
+  <button
+    onClick={handleClear}
+    className="
+      h-9
+      px-5
+      rounded-xl
+      border border-gray-200
+      bg-white
+      text-sm
+      font-medium
+      shadow-sm
+      hover:bg-gray-50
+      transition
+    "
+  >
+    Clear
+  </button>
+
+</div>
+
+  {/* Right side: Pagination + Total */}
+<div className="ml-auto flex items-center gap-4">
+  <div className="flex items-end gap-2 text-sm">
+    <button
+      disabled={page === 1}
+      onClick={() => setPage(1)}
+      className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+      title="First Page"
     >
-      Custom Range
+      ⏮
     </button>
 
-    {/* Desktop only Pagination */}
-    <div className="flex items-center gap-2 text-sm ml-4">
-      <button
-        disabled={page === 1}
-        onClick={() => setPage((p) => p - 1)}
-        className="px-3 py-1 border rounded disabled:opacity-40"
-      >
-        Prev
-      </button>
+    <button
+      disabled={page === 1}
+      onClick={() => setPage((p) => Math.max(p - 1, 1))}
+      className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+      title="Previous"
+    >
+      ◀
+    </button>
 
-      <span className="text-gray-600">
-        {page} / {totalPages || 1}
-      </span>
-
-      <button
-        disabled={page === totalPages}
-        onClick={() => setPage((p) => p + 1)}
-        className="px-3 py-1 border rounded disabled:opacity-40"
-      >
-        Next
-      </button>
+    <div className="px-3 py-1 rounded-md bg-gray-50 border text-gray-700 font-medium">
+      {page} / {totalPages || 1}
     </div>
 
-    {/* Desktop only Total */}
-    <span className="text-sm text-gray-500 ml-auto">
-      Total: {finalRows.length}
-    </span>
+    <button
+      disabled={page === totalPages}
+      onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+      className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+      title="Next"
+    >
+      ▶
+    </button>
 
+    <button
+      disabled={page === totalPages}
+      onClick={() => setPage(totalPages)}
+      className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+      title="Last Page"
+    >
+      ⏭
+    </button>
+  </div>
+
+  <span className="text-sm text-gray-500">
+    Total: {finalRows.length}
+  </span>
+</div>
   </div>
 
 </div>
-           {activeDateFilter && !isMobile && (
-  <div className="mb-4">
-    <DateOnlyFilter
-      onApply={(range) => {
-        if (!range?.start || !range?.end) return;
+          
 
-        const updatedFilters = {
-          startDate: range.start,
-          endDate: range.end,
-        };
-
-        setDateFilters(updatedFilters);
-        setActiveDateFilter(null);
-        loadModule(updatedFilters);
-      }}
-    />
-  </div>
-)}
-{activeDateFilter && isMobile && (
-  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4">
-    
-    <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
-
-      {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <h3 className="font-semibold text-gray-800">
-          Select Date Range
-        </h3>
-
-        <button
-          onClick={() => setActiveDateFilter(null)}
-          className="text-gray-500 text-lg"
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="p-4">
-        <DateOnlyFilter
-          onApply={(range) => {
-            if (!range?.start || !range?.end) return;
-
-            const updatedFilters = {
-              startDate: range.start,
-              endDate: range.end,
-            };
-
-            setDateFilters(updatedFilters);
-            setActiveDateFilter(null);
-            loadModule(updatedFilters);
-          }}
-        />
-      </div>
-
-    </div>
-
-  </div>
-)}
 
             {/* ACTIVE FILTER CHIPS */}
+            <div className="flex items-start justify-between flex-wrap gap-3">
             <div className="flex flex-wrap gap-2 mt-0 mb-4">
 
   {filters.map((f, i) => {
@@ -3273,7 +3547,8 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
   })}
 
 </div>
-
+          
+    </div>
 
             {/* ================= TABLE WRAPPER ================= */}
             <div className="bg-white rounded-xl shadow flex-1 flex flex-col overflow-hidden">
@@ -3285,33 +3560,136 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                   ) : (
                     <>
                     <div className="hidden md:block ">
-                    <table className="min-w-max w-full text-sm">
+                    <table className="min-w-max w-full text-sm border-separate border-spacing-0">
                         <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
                             <tr>
-                                <th className="px-4 py-3 border-b text-left">S.No</th> 
-                                {visibleColumns.map(col => (
-                                   <th
-                                      key={col.column_id}
-                                      onClick={() => handleSort(col.column_name)}
-                                      className={`${getAlignClass(
-                                        col.display_name
-                                      )} px-4 py-3 whitespace-nowrap border-b cursor-pointer select-none hover:bg-gray-200`}
-                                    >
-                                      <div className="flex items-center gap-1">
-                                        <span>{col.display_name}</span>
+                                <th className="px-4 py-3 border-b text-left sticky left-0 z-40 bg-gray-100 w-16 min-w-16 border-r border-gray-200">S.No</th> 
+                               {visibleColumns.map((col) => (
+  <th
+    key={col.column_id}
+    ref={(el) => {
+      if (el) {
+        pinnedHeaderRefs.current[col.column_name] = el;
+      } else {
+        delete pinnedHeaderRefs.current[col.column_name];
+      }
+    }}
+    className={`px-4 py-3 border-b text-left relative overflow-visible select-none ${getPinnedHeaderClass(
+      col.column_name
+    )}`}
+    style={getPinnedHeaderStyle(col.column_name)}
+  >
+    {/* HEADER */}
+    <div
+      className="flex items-center gap-1 cursor-pointer hover:bg-gray-200 px-2 py-1 rounded"
+      onClick={(e) => handleHeaderMenuToggle(col.column_name, e)}
+    >
+      <span>{col.display_name}</span>
+      <span className="text-gray-400">▾</span>
+    </div>
 
-                                        {sortConfig.key === col.column_name ? (
-                                          sortConfig.direction === "asc" ? (
-                                            <span>▲</span>
-                                          ) : (
-                                            <span>▼</span>
-                                          )
-                                        ) : (
-                                          <span className="text-gray-400">↕</span>
-                                        )}
-                                      </div>
-                                    </th>
-                                ))}
+    {/* DROPDOWN MENU */}
+    {openMenu === col.column_name && createPortal(
+      <div
+        className="fixed mt-1 w-56 bg-white border shadow-xl rounded-lg z-[9999]"
+        style={{ top: menuPosition.top, left: menuPosition.left }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={() => handleSearch(col.column_name)}
+          className="w-full text-left px-3 py-2 hover:bg-gray-100"
+        >
+          🔍 Search
+        </button>
+
+        <button
+          onClick={() => handlePinColumn(col.column_name)}
+          className="w-full text-left px-3 py-2 hover:bg-gray-100"
+        >
+          {pinnedColumns.includes(col.column_name)
+            ? "📌 Unpin Column"
+            : "📍 Pin Column"}
+        </button>
+
+        <button
+          onClick={() =>
+            handleSort(col.column_name, "asc")
+          }
+          className="w-full text-left px-3 py-2 hover:bg-gray-100"
+        >
+          Sort by Ascending
+        </button>
+
+        <button
+          onClick={() =>
+            handleSort(col.column_name, "desc")
+          }
+          className="w-full text-left px-3 py-2 hover:bg-gray-100"
+        >
+          Sort by Descending
+        </button>
+
+        <button
+          onClick={() =>
+            handleGroup(col.column_name, "asc")
+          }
+          className="w-full text-left px-3 py-2 hover:bg-gray-100"
+        >
+          Group by Ascending
+        </button>
+
+        <button
+          onClick={() =>
+            handleGroup(col.column_name, "desc")
+          }
+          className="w-full text-left px-3 py-2 hover:bg-gray-100"
+        >
+          Group by Descending
+        </button>
+
+        <hr />
+
+        <button
+          onClick={() => {
+            setHidePopupColumn(col.column_name);
+
+            setTempHideColumns(
+              visibleColumns.map((c) => c.column_name)
+            );
+
+            setShowHidePopup(true);
+          }}
+          className="w-full text-left px-3 py-2 hover:bg-red-50 text-red-600"
+        >
+          Show & Hide Columns
+        </button>
+      </div>,
+      document.body
+    )}
+
+    {/* SHOW / HIDE POPUP */}
+    {showHidePopup &&
+      hidePopupColumn === col.column_name && (
+        <ShowHideColumnsPopup
+          columns={columns}
+          tempHideColumns={tempHideColumns}
+          setTempHideColumns={setTempHideColumns}
+          anchorPosition={menuPosition}
+          onCancel={() => {
+            setShowHidePopup(false);
+          }}
+          onSave={async () => {
+            await saveColumnSelection(
+              tempHideColumns
+            );
+
+            setShowHidePopup(false);
+            setOpenMenu(null);
+          }}
+        />
+      )}
+  </th>
+))}
 
                                 <th className="px-4 py-3 border-b text-right">Actions</th>
                             </tr>
@@ -3321,7 +3699,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                     <tbody className="divide-y">
                       {isCreating && (
                         <tr className="bg-blue-50">
-                          <td className="px-4 py-3 whitespace-nowrap"></td>
+                          <td className="px-4 py-3 whitespace-nowrap sticky left-0 z-20 bg-blue-50 w-16 min-w-16 border-r border-gray-200"></td>
 
                           {visibleColumns.map((col) => {
 
@@ -3352,11 +3730,13 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                                 className={`
                                   px-4 py-2 whitespace-nowrap
                                   ${getAlignClass(col.display_name)}
+                                  ${getPinnedCellClass(col.column_name, "bg-blue-50")}
                                   ${col.column_name === "company"
                                     ? "min-w-[450px]"
                                     : ""
                                   }
                                 `}
+                                style={getPinnedCellStyle(col.column_name)}
                               >
 
                                 <div className="relative">
@@ -3685,13 +4065,26 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                         </tr>
                       )}
                       {sortedRows.map((row, i) => (
-                        <tr
-                          key={row.id ?? i}
-                          className="hover:bg-gray-50 transition-colors"
-                        >
+                       <tr
+  key={row.id ?? i}
+  className="group hover:bg-gray-50 transition-colors cursor-pointer"
+  onDoubleClick={() => {
+                          if (!row.prf_generate || isRowUnposted(row)) {
+      setEditRowId(row.id);
+
+      setEditRow({
+        ...row,
+      });
+
+      setOriginalRow(row);
+
+      setShowEditPopup(true);
+    }
+  }}
+>
                           
                           {/* ================= SERIAL NO ================= */}
-                          <td className="px-4 py-3 whitespace-nowrap">
+                          <td className="px-4 py-3 whitespace-nowrap sticky left-0 z-20 bg-white group-hover:bg-gray-50 w-16 min-w-16 border-r border-gray-200">
                             {(page - 1) * pageSize + i + 1}
                           </td>
 
@@ -3728,17 +4121,24 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
 
                               const val = row[col.column_name];
                               const disablePrfCheckbox = isPrfBlockedProductType(row.product_types);
-                              console.log("Row ID:", row.id, "Product Types:", row.product_types, "Disable PRF Checkbox:", disablePrfCheckbox);
+                              //console.log("Row ID:", row.id, "Product Types:", row.product_types, "Disable PRF Checkbox:", disablePrfCheckbox);
                               //console.log("disablePrfCheckbox for row", row.id, "with product types", row.product_types, ":", disablePrfCheckbox);
                               if (val && String(val).trim() !== "") {
+
+                                const generatedLabel = isRowUnposted(row)
+                                  ? `PRF Unposted (${val})`
+                                  : `Already Generated (${val})`;
+                                const generatedClass = isRowUnposted(row)
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-green-100 text-green-700";
 
                                 return (
                                   <td
                                     key={col.column_id}
                                     className="px-4 py-3 whitespace-nowrap"
                                   >
-                                    <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
-                                      Already Generated ({val})
+                                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${generatedClass}`}>
+                                      {generatedLabel}
                                     </span>
                                   </td>
                                 );
@@ -3807,7 +4207,8 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                                 key={col.column_id}
                                 className={`px-4 py-3 whitespace-nowrap ${getAlignClass(
                                   col.display_name
-                                )}`}
+                                )} ${getPinnedCellClass(col.column_name)}`}
+                                style={getPinnedCellStyle(col.column_name)}
                               >
 
                                 {editRowId === row.id ? (
@@ -4314,7 +4715,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
       <button
         onClick={handleSaveEdit}
         className="
-          px-3 py-1.5 text-sm rounded-md border transition
+          px-3 py-1 text-sm rounded-md border transition
           border-blue-300
           bg-white
           hover:bg-blue-100
@@ -4328,7 +4729,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
       <button
         onClick={handleCancelEdit}
         className="
-          px-3 py-1.5 text-sm rounded-md border transition
+          px-3 py-1 text-sm rounded-md border transition
           border-red-300
           bg-white
           hover:bg-red-100
@@ -4345,7 +4746,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
           permission="modify"
           onClick={() => handleUndoCancelRow(row)}
           className="
-            px-3 py-1.5 text-sm rounded-md border transition
+            px-3 py-1 text-sm rounded-md border transition
             border-gray-400
             bg-gray-100
             hover:bg-gray-200
@@ -4360,7 +4761,45 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
   ) : row.prf_generate ? (
 
     <>
-      {/* PREVIEW */}
+      {isRowUnposted(row) ? (
+        <>
+          <PermissionButton
+            user={activeUser}
+            permission="modify"
+            onClick={() => {
+              setEditRowId(row.id);
+              setEditRow({
+                ...row,
+              });
+              setOriginalRow(row);
+              setShowEditPopup(true);
+            }}
+            className="
+              px-3 py-1 text-sm rounded-md border transition
+              border-blue-300
+              bg-white
+              hover:bg-blue-100
+              hover:border-blue-500
+            "
+          >
+            Edit
+          </PermissionButton>
+
+          <button
+            onClick={() => handlePost(encodeURIComponent(row.prf_generate))}
+             className="px-3 py-1 bg-green-400 hover:bg-green-500 text-white rounded-md text-sm font-medium"
+          >
+            Post
+          </button>
+        </>
+      ) : (
+        <button
+          onClick={() => handleUnpost(encodeURIComponent(row.prf_generate))}
+          className="px-3 py-1 bg-red-400 hover:bg-red-500 text-white rounded-md text-sm font-medium"
+        >
+          Unpost
+        </button>
+      )}
        
      <button
   
@@ -4390,7 +4829,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
 
         }}
         className="
-          px-3 py-1.5 text-sm rounded-md border transition
+          px-3 py-1 text-sm rounded-md border transition
           border-blue-300
           bg-white
           hover:bg-blue-100
@@ -4409,7 +4848,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
             handleCancelRow(row);
           }}
           className="
-            px-3 py-1.5 text-sm rounded-md border transition
+            px-3 py-1 text-sm rounded-md border transition
             border-red-300
             bg-white
             hover:bg-red-100
@@ -4421,7 +4860,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
       ) : (
         <span
           className="
-            px-3 py-1.5 text-sm rounded-md
+            px-3 py-1 text-sm rounded-md
             bg-gray-100 text-gray-500
           "
         >
@@ -4437,7 +4876,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
           handleDelete(row);
         }}
         className="
-          px-3 py-1.5 text-sm rounded-md border transition
+          px-3 py-1 text-sm rounded-md border transition
           border-red-300
           bg-white
           hover:bg-red-100
@@ -4453,6 +4892,28 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
 </td>
                         </tr>
                       ))}
+                      {showEditPopup && (
+                        <EditRowPopup
+                          visibleColumns={visibleColumns}
+                          editRow={editRow}
+                          setEditRow={setEditRow}
+                          columns={columns}
+                          getMasterOptions={getMasterOptions}
+                          loadingMaster={loadingMaster}
+                          fetchMasterDataForColumn={fetchMasterDataForColumn}
+                          serviceProviders={serviceProviders}
+                          vatPercent={vatPercent}
+                          onClose={() => {
+                            setShowEditPopup(false);
+                            setEditRowId(null);
+                          }}
+                          onSave={async () => {
+                            await handleSaveEdit();
+                            setShowEditPopup(false);
+                            setEditRowId(null);
+                          }}
+                        />
+                      )}
                       </tbody>
 
                     </table>
@@ -4548,23 +5009,83 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
 
         {row.prf_generate ? (
 
-          <button
-            onClick={() =>
-              handlePreview(
-                encodeURIComponent(row.prf_generate)
-              )
-            }
-            className="
-              w-full
-              bg-blue-600
-              text-white
-              py-2.5
-              rounded-xl
-              font-medium
-            "
-          >
-            Preview
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            {isRowUnposted(row) ? (
+              <>
+                <PermissionButton
+                  user={activeUser}
+                  permission="modify"
+                  onClick={() => {
+                    setEditRowId(row.id);
+                    setEditRow({ ...row });
+                    setOriginalRow(row);
+                    setShowEditPopup(true);
+                  }}
+                  className="
+                    py-2
+                    rounded-xl
+                    border
+                    bg-white
+                    text-sm
+                  "
+                >
+                  Edit
+                </PermissionButton>
+
+                <button
+                  onClick={() => handlePost(encodeURIComponent(row.prf_generate))}
+                  className="
+                    w-full
+                    bg-emerald-600
+                    text-white
+                    py-2.5
+                    rounded-xl
+                    font-medium
+                  "
+                >
+                  Post
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() =>
+                    handleUnpost(
+                      encodeURIComponent(row.prf_generate)
+                    )
+                  }
+                  className="
+                    w-full
+                    bg-amber-600
+                    text-white
+                    py-2.5
+                    rounded-xl
+                    font-medium
+                  "
+                >
+                  Unpost
+                </button>
+
+                <button
+                  onClick={() =>
+                    handlePreview(
+                      encodeURIComponent(row.prf_generate)
+                    )
+                  }
+                  className="
+                    w-full
+                    bg-blue-600
+                    text-white
+                    py-2.5
+                    rounded-xl
+                    font-medium
+                  "
+                >
+                  Preview
+                </button>
+              </>
+            )}
+          </div>
 
         ) : (
 
@@ -5308,6 +5829,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                             .split("T")[0]
                         : ""
                     }
+                    readOnly
                     onChange={(e) =>
                       handleItemChange(i, "doc_date", e.target.value)
                     }
@@ -5324,6 +5846,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                     onChange={(e) =>
                       handleItemChange(i, "doc_no", e.target.value)
                     }
+                    readOnly
                     placeholder="Enter doc no"
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none"
                   />
@@ -5338,6 +5861,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
   onChange={(e) =>
     handleItemChange(i, "product", e.target.value)
   }
+  readOnly
   className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium"
 />
 
@@ -5349,6 +5873,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                   <input
                     type="number"
                     step="0.01"
+                    readOnly
                     value={Number(item.amount || 0).toFixed(2)}
                     // onChange={(e) => {
 
@@ -5494,11 +6019,8 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
       </label>
 
       <input
-        value={
-          field.key === "prepared_by"
-            ? (form[field.key] || activeUserName || "")
-            : (form[field.key] || workflow?.[field.key] || "")
-        }
+        value={field.key === "prepared_by" ? (activeUserName || "") : (form[field.key] ?? "")}
+        readOnly={field.key === "prepared_by"}
         onChange={(e) =>
           setForm((prev) => ({
             ...prev,
@@ -5525,6 +6047,13 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
       className="px-5 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-sm"
     >
       Cancel
+    </button>
+
+     <button
+      onClick={handleDraftPreviewFromModal}
+      className="px-5 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-sm"
+    >
+      Preview
     </button>
 
     <button
@@ -5596,8 +6125,13 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
       {/* YOUR COMPONENT */}
       <PaymentRequestPreview
         data={previewData}
+        disablePrint={previewFromGenerateModal}
          onBack={() => {
           setShowPreview(false);
+          if (previewFromGenerateModal) {
+            setShowGenerateModal(true);
+            return;
+          }
           loadModule(); // <-- refresh table data after closing preview
         }}
       />

@@ -5,8 +5,8 @@ import { formatDate } from "../../utils/formatDate";
 import { useEffect, useState, useRef } from "react";
 import JsBarcode from "jsbarcode";
 import { getMasterData, createPaymentRequest, incrementPRFExportCount  } from "../../api/api";
-export default function PaymentRequestPreview({ data, onBack }) {
- // console.log("PaymentRequestPreview data:", data);
+export default function PaymentRequestPreview({ data, onBack, disablePrint = false }) {
+  console.log("PaymentRequestPreview data:", data);
   if (!data) {
     return (
       <div className="p-10 text-center text-gray-500">
@@ -23,6 +23,11 @@ const headers = Array.isArray(data?.header)
 const header = headers[0] || {};
 // console.log("Using header:", header);
 const details = data?.details || {};
+const isAdvertisingEnabled =
+  details?.is_advertising === true ||
+  details?.is_advertising === 1 ||
+  details?.is_advertising === "1" ||
+  String(details?.is_advertising || "").toLowerCase() === "true";
 
 const paid_by = data?.paid_by || "";
 
@@ -263,7 +268,7 @@ useEffect(() => {
 }, []);
 
 
-
+console.log("vendor:", vendor);
 const selectedVendor =
   Array.isArray(vendor) && header.vendors
     ? vendor.find((v) => {
@@ -289,7 +294,8 @@ const selectedVendor =
       })
     : null;
 
-//console.log("Selected Vendor:", selectedVendor);
+console.log("Selected Vendor:", selectedVendor);
+console.log("header.vendors value:", header.vendors); 
 const isVatApplicable = selectedVendor ? selectedVendor.is_vat : false;
 
 
@@ -319,7 +325,7 @@ const selectedCompany =
         );
       })
     : null;
-
+console.log("Selected Company:", selectedCompany);
 
 
 
@@ -367,7 +373,7 @@ const selectedTransactionType = Array.isArray(transactionType) && header.transac
     (tt) => (tt.transaction_code || "").toString().trim().toUpperCase() === header.transaction_type.toString().trim().toUpperCase()
 ) : null;
 
-console.log("Selected Transaction Type:", selectedTransactionType); 
+//console.log("Selected Transaction Type:", selectedTransactionType); 
 
 // console.log("Selected currency:", selectedCurrency);
 // console.log("Selected term:", selectedTerm);
@@ -380,7 +386,7 @@ const getProductName = (productCode) => {
       (p.product_code || "").toUpperCase() ===
       (productCode || "").toUpperCase()
   );
-  console.log("products:", product);
+  //console.log("products:", product);
   return product?.product || productCode;
 };
 
@@ -592,7 +598,7 @@ const currentDate = new Date();
     </h2>
 
     <h1 className="font-bold text-[13px]">
-      {selectedVendor?.vendor_name || "Vendor Name"}
+      {selectedVendor?.vendor_name || header.vendors || "Vendor Name"}
       {isVatApplicable ? " (VAT Included)" : ""}
     </h1>
 
@@ -646,7 +652,7 @@ const currentDate = new Date();
 )}
 
     <p className="text-[12px] text-gray-700">
-      {console.log("creditCards value:", creditCards.card_brand)}
+      
       Paid by {paid_by} using {(() => {
         let paidBy = (paid_by || "")
           .toString()
@@ -1173,7 +1179,7 @@ const currentDate = new Date();
     <tr className="bg-gray-200 text-black">
 
       <th
-        colSpan={details?.is_advertising ? 6 : 5}
+        colSpan={isAdvertisingEnabled ? 6 : 5}
         className="text-left px-2 py-1 border border-gray-800 text-[14px] font-bold"
       >
         APPROVALS
@@ -1187,7 +1193,7 @@ const currentDate = new Date();
       <th className="border border-gray-800 px-2 py-1">
         PREPARED BY
       </th>
-    {details?.is_advertising && (
+    {isAdvertisingEnabled && (
       <th className="w-1/6 border border-gray-800 px-2 py-1">
         CHECKED BY 
       </th>
@@ -1231,7 +1237,7 @@ const currentDate = new Date();
       </td>
 
       {/* CHECKED */}
-      {details?.is_advertising && (
+      {isAdvertisingEnabled && (
       <td className="border border-gray-800 px-2 py-1 font-semibold">
 
         <div className="text-[8px]">
@@ -1341,15 +1347,19 @@ const currentDate = new Date();
 
           <button
            onClick={() => {
+  if (disablePrint) return;
   handlePrint();
-  handleExportPrf(details?.[0]?.prf_num);
+  handleExportPrf(details?.prf_num);
 }}
+            disabled={disablePrint}
             className="
               px-5 py-2
               bg-blue-600
               text-white
               rounded
               hover:bg-blue-700
+              disabled:bg-gray-400
+              disabled:cursor-not-allowed
             "
           >
             Print

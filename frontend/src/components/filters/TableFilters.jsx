@@ -9,7 +9,7 @@ export default function TableFilters({
   masterDataMap,
   setMasterDataMap,
 }) {
-  console.log("Rendering TableFilters with masterList:", masterList);
+ // console.log("Rendering TableFilters with masterList:", masterList);
   const [open, setOpen] = useState(false);
  
 
@@ -17,10 +17,11 @@ export default function TableFilters({
 
   // ================= MASTER LIST =================
   const masterList1 = [
-    ...new Set([...(masterList || []), "currency", "services"])
-  ];
+  ...(masterList || []),
+  { master: "currency", display_name: "Currency" }
+];
 
-  console.log("Master List for Filters:", masterList1);
+ // console.log("Master List for Filters:", masterList1);
 
   // ================= GET OPTIONS =================
 const getOptions = (master) => {
@@ -80,19 +81,19 @@ const getOptions = (master) => {
             Select Filter
           </div>
 
-          {masterList1.map((master, i) => (
-            <div
-              key={i}
-              onClick={() => addFilter(master)}
-              className="px-3 py-2 text-sm hover:bg-blue-50 cursor-pointer flex justify-between"
-            >
-              <span>{master}</span>
+         {masterList1.map((item, i) => (
+  <div
+    key={i}
+    onClick={() => addFilter(item.master)}
+    className="px-3 py-2 text-sm hover:bg-blue-50 cursor-pointer flex justify-between"
+  >
+    <span>{item.display_name}</span>
 
-              {filters.some(f => f.master === master) && (
-                <span className="text-blue-500 text-xs">✓</span>
-              )}
-            </div>
-          ))}
+    {filters.some(f => f.master === item.master) && (
+      <span className="text-blue-500 text-xs">✓</span>
+    )}
+  </div>
+))}
 
         </div>
       )}

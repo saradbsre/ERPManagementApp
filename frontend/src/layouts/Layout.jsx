@@ -6,7 +6,7 @@ import { Outlet } from "react-router-dom";
 export default function Layout() {
 
   // ✅ SIDEBAR STATE
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   return (
 
