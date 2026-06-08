@@ -922,11 +922,11 @@ const currentDate = new Date();
         <tr className="text-center align-top h-[250px] bg-[#f8fafc] border border-black-800">
 
           {/* S/N */}
-          <td className="border border-gray-800 p-2 align-top">
+          <td className="border border-gray-800 p-2 align-top ">
             {headers?.map((_, i) => (
               <div
                 key={i}
-                className={`${rowHeight} flex items-start py-1`}
+                className={`${rowHeight} flex  justify-center items-start w-full py-1`}
               >
                 {i + 1}.
               </div>
@@ -938,7 +938,7 @@ const currentDate = new Date();
             {headers?.map((item, i) => (
               <div
                 key={i}
-                className={`${rowHeight} flex items-start py-1`}
+                className={`${rowHeight} flex  justify-center items-start w-full py-1`}
               >
                 {item?.date ? formatDate(item.date) : ""}
               </div>
@@ -946,11 +946,11 @@ const currentDate = new Date();
           </td>
 
           {/* INVOICE NUMBER */}
-          <td className="border border-gray-800 p-2 align-top">
+          <td className="border border-gray-800 p-2 align-top ">
             {headers?.map((item, i) => (
               <div
                 key={i}
-                className={`${rowHeight} flex items-start py-1`}
+                className={`${rowHeight} flex  justify-center items-start w-full py-1`}
               >
                 {item?.invoice_number || "-"}
               </div>
