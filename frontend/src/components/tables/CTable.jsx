@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useLayoutEffect, act, use } from "react";
+import React,{ useEffect, useState, useRef, useLayoutEffect, act, use, useMemo } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow, getPreviewPRF, unpostPRFTransaction, postPRFTransaction  } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
@@ -27,6 +27,7 @@ import TableFiltersDrawer from "../filters/TableFiltersDrawer";
 import ShowHideColumnsPopup from "./ShowHideColumnsPopup";
 import { createPortal } from "react-dom";
 import EditRowPopup from "./EditRowPopup";
+import CustomizeDrawer from "./CustomizeDrawer";
 
 import {
   arrayMove,
@@ -157,7 +158,10 @@ export default function DynamicTablePage() {
     const [providerPlans, setProviderPlans] = useState([]);
     const [autoFilledFields, setAutoFilledFields] = useState({});
     const [planManuallyChanged, setPlanManuallyChanged] = useState(false);
-    const [groupBy, setGroupBy] = useState("service");
+    const [groupBy, setGroupBy] = useState({
+  key: null,
+  direction: "asc"
+});
     const [activeDateFilter, setActiveDateFilter] = useState(null);
     const [showSaveFilter, setShowSaveFilter] = useState(false);
     const [saveFilterName, setSaveFilterName] = useState("");
@@ -176,6 +180,7 @@ export default function DynamicTablePage() {
     const [popupMessage, setPopupMessage] = useState("");
     const [popupType, setPopupType] = useState("");
     const [vendors, setVendors] = useState([]);
+    const [company, setCompany] = useState([]);
     const [serviceProviders, setServiceProviders] = useState([]);
     const [creditCards, setCreditCards] = useState([]);
     const [serviceTypes, setServiceTypes] = useState([]);
@@ -189,10 +194,16 @@ export default function DynamicTablePage() {
     const [workflow, setWorkflow] = useState({});
     const [availableProducts, setAvailableProducts] = useState([]);
     const [availableServices, setAvailableServices] = useState([]);
-    const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc", });
+    //const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc", });
     const configOrder = mainTableConfig[module?.module_name] || [];
     const [pinnedColumns, setPinnedColumns] = useState([]);
+    const [visibleColumnsState, setVisibleColumnsState] = useState([]);
     const [showEditPopup, setShowEditPopup] = useState(false);
+    const [showCustomizeDrawer, setShowCustomizeDrawer] = useState(false);
+    const [columnChips, setColumnChips] = useState([]);
+    const [sortConfig, setSortConfig] = useState([]);
+    const [groupByColumn, setGroupByColumn] = useState(null);
+   // const [columnOrder, setColumnOrder] = useState(visibleColumns.map(c => c.column_name));
     const orderColumnsByConfig = (cols = []) => {
       if (!Array.isArray(cols)) return [];
       if (!configOrder.length) return cols;
@@ -278,6 +289,15 @@ export default function DynamicTablePage() {
         setCreditCards(result);
       //  console.log("Credit Cards:", result);
       });
+    getMasterData("company", activeUserEmail).then(res => {
+  const result = Array.isArray(res?.data) ? res.data : [];
+
+  const tradeNames = result.map(item => item.trade_name);
+
+  setCompany(tradeNames);
+
+ // console.log("Company trade names:", tradeNames);
+});
     }, []);
 
 const getCurrentMonth = () => {
@@ -302,16 +322,23 @@ const getCurrentMonth = () => {
 
 const handleDragEnd = (event) => {
   const { active, over } = event;
+
   if (!over || active.id === over.id) return;
 
-  const oldIndex = columns.findIndex((c) => c.column_name === active.id);
-  const newIndex = columns.findIndex((c) => c.column_name === over.id);
+  const oldIndex = columns.findIndex(
+    (c) => c.column_name === active.id
+  );
+
+  const newIndex = columns.findIndex(
+    (c) => c.column_name === over.id
+  );
 
   const reordered = arrayMove(columns, oldIndex, newIndex);
 
-  setColumns(orderColumnsByConfig(reordered));
+  // ❌ DO NOT re-sort again
+  setColumns(reordered);
 
-  // Keep only previously selected columns, but in new order
+  // keep selection stable
   setTempSelectedColumns((prev) =>
     reordered
       .map((c) => c.column_name)
@@ -341,12 +368,11 @@ const toggleTempColumn = (colName) => {
   );
 };
 
-const saveColumnSelection = async (selectedCols) => {
+const saveColumnSelection = async (selectedCols = []) => {
   try {
-
     const columnSettings = {
       visibleColumns: selectedCols,
-      pinnedColumns: pinnedColumns,
+      pinnedColumns: pinnedColumns || [],
     };
 
     await upsertCustomizedColumns(
@@ -355,10 +381,13 @@ const saveColumnSelection = async (selectedCols) => {
       columnSettings
     );
 
+    // ✅ UPDATE UI IMMEDIATELY (NO REFRESH NEEDED)
+    setVisibleColumnsState(selectedCols);
+
     setSelectedColumns(selectedCols);
     setSavedTableColumns(selectedCols);
-
     setTableColumnMode("custom");
+
   } catch (err) {
     console.error("Failed to save customized columns:", err);
   }
@@ -854,15 +883,26 @@ useEffect(() => {
 
 }, []);
 
-    
+useEffect(() => {
+  const init = async () => {
+    const res = await fetchCustomizedColumns();
 
-   const getVisibleColumns = () => {
-  let cols = orderedColumns;
+    setVisibleColumnsState(res?.visibleColumns || []);
+    setPinnedColumns(res?.pinnedColumns || []);
+  };
 
-  // ✅ APPLY CURRENCY FILTER ON COLUMNS
+  init();
+}, [id, activeUserEmail]);
+
+const getVisibleColumns = () => {
+  let cols = [...orderedColumns];
+
+  // =========================
+  // currency filter (keep)
+  // =========================
   const currencyFilter = filters.find(f => f.master === "currency");
 
-  if (currencyFilter && currencyFilter.values.length > 0) {
+  if (currencyFilter?.values?.length) {
     const selectedCurrencies = currencyFilter.values.map(v =>
       v.toLowerCase()
     );
@@ -870,103 +910,79 @@ useEffect(() => {
     cols = cols.filter(col => {
       const name = col.column_name.toLowerCase();
 
-      // keep non-amount columns
       if (!name.includes("amount")) return true;
 
-      // keep only selected currency columns
       return selectedCurrencies.some(cur =>
         name.includes(cur)
       );
     });
   }
 
-  // ✅ existing modes (keep your logic)
-   if (tableColumnMode === "saved" && savedTableColumns.length) {
-    cols = savedTableColumns
-      .map(colName => columns.find(c => c.column_name === colName))
-      .filter(Boolean);
-  } else if (tableColumnMode === "custom" && selectedColumns.length) {
-    cols = selectedColumns
-      .map(colName => columns.find(c => c.column_name === colName))
-      .filter(Boolean);
+  // =========================
+  // 🔥 USE FETCHED CUSTOMIZED ORDER ONLY
+  // =========================
+  const visibleOrder = (visibleColumnsState || []).map(v =>
+    typeof v === "string" ? v : v.column_name
+  );
+
+  if (visibleOrder.length > 0) {
+    const orderMap = new Map(
+      visibleOrder.map((name, i) => [name, i])
+    );
+
+    cols = [...cols]
+      .filter(c => visibleOrder.includes(c.column_name))
+      .sort((a, b) =>
+        orderMap.get(a.column_name) - orderMap.get(b.column_name)
+      );
+  } else {
+    cols = orderColumnsByConfig(cols);
   }
 
-  const ordered = orderColumnsByConfig(cols);
+  // =========================
+  // pinned override (optional)
+  // =========================
+  if (pinnedColumns.length) {
+    const pinnedSet = new Set(pinnedColumns);
 
-  if (!pinnedColumns.length) return ordered;
+    const pinnedFirst = cols.filter(c =>
+      pinnedSet.has(c.column_name)
+    );
 
-  const pinnedSet = new Set(pinnedColumns);
-  const pinnedFirst = ordered.filter(col => pinnedSet.has(col.column_name));
-  const others = ordered.filter(col => !pinnedSet.has(col.column_name));
-  return [...pinnedFirst, ...others];
+    const others = cols.filter(c =>
+      !pinnedSet.has(c.column_name)
+    );
+
+    cols = [...pinnedFirst, ...others];
+  }
+
+  return cols;
 };
-    const visibleColumns = getVisibleColumns();
+const visibleColumns = getVisibleColumns();
+const [columnOrder, setColumnOrder] = useState(visibleColumns.map(c => c.column_name));
 
-const SNO_STICKY_LEFT = 64;
+const SNO_STICKY_LEFT = 64; 
 const DEFAULT_PINNED_COL_WIDTH = 180;
 const pinnedHeaderRefs = useRef({});
-const [pinnedLeftMap, setPinnedLeftMap] = useState({});
+const getPinnedLeft = (columnName) => {
+  if (!pinnedColumns.includes(columnName)) return undefined;
 
-const areLeftMapsEqual = (a, b) => {
-  const aKeys = Object.keys(a || {});
-  const bKeys = Object.keys(b || {});
-  if (aKeys.length !== bKeys.length) return false;
+  let left = SNO_STICKY_LEFT;
 
-  for (const key of aKeys) {
-    if (a[key] !== b[key]) return false;
+  for (const col of visibleColumns) {
+    if (!pinnedColumns.includes(col.column_name)) continue;
+    if (col.column_name === columnName) break;
+
+    const width =
+      pinnedHeaderRefs.current[col.column_name]?.offsetWidth ||
+      DEFAULT_PINNED_COL_WIDTH;
+
+    left += width;
   }
-  return true;
+
+  return { left: `${left}px` };
 };
 
-const computePinnedLeftMap = () => {
-  const pinnedSet = new Set(pinnedColumns);
-  const pinnedVisible = visibleColumns.filter((col) =>
-    pinnedSet.has(col.column_name)
-  );
-
-  let runningLeft = SNO_STICKY_LEFT;
-  const nextMap = {};
-
-  pinnedVisible.forEach((col) => {
-    nextMap[col.column_name] = runningLeft;
-    const measuredWidth = pinnedHeaderRefs.current[col.column_name]?.offsetWidth;
-    runningLeft += measuredWidth || DEFAULT_PINNED_COL_WIDTH;
-  });
-
-  setPinnedLeftMap((prev) =>
-    areLeftMapsEqual(prev, nextMap) ? prev : nextMap
-  );
-};
-
-useLayoutEffect(() => {
-  computePinnedLeftMap();
-}, [visibleColumns, pinnedColumns, rows.length, isCreating]);
-
-useEffect(() => {
-  const onResize = () => computePinnedLeftMap();
-  window.addEventListener("resize", onResize);
-  return () => window.removeEventListener("resize", onResize);
-}, [visibleColumns, pinnedColumns, rows.length, isCreating]);
-
-const getPinnedHeaderClass = (columnName) => {
-  if (!pinnedColumns.includes(columnName)) return "";
-  return "sticky z-30 bg-gray-100 border-r border-gray-200";
-};
-
-const getPinnedHeaderStyle = (columnName) => {
-  if (!pinnedColumns.includes(columnName)) return undefined;
-  return { left: `${pinnedLeftMap[columnName] ?? SNO_STICKY_LEFT}px` };
-};
-
-const getPinnedCellClass = (columnName, rowBg = "bg-white group-hover:bg-gray-50") => {
-  if (!pinnedColumns.includes(columnName)) return "";
-  return `sticky z-20 ${rowBg} border-r border-gray-200`;
-};
-
-const getPinnedCellStyle = (columnName) => {
-  if (!pinnedColumns.includes(columnName)) return undefined;
-  return { left: `${pinnedLeftMap[columnName] ?? SNO_STICKY_LEFT}px` };
-};
 const getCreateVisibleColumns = () => {
   return normalizeCreateColumns(columns);
 };
@@ -1163,7 +1179,7 @@ const handleGenerate = async () => {
     approved_by: ""
   });
 };
-console.log("creditCards ", creditCards);
+
 const handleDraftPreviewFromModal = () => {
   if (!modalItems?.length) {
     setPopupMessage("No details found to preview");
@@ -1347,6 +1363,80 @@ const getExcelColumns = (mode, savedCols = [], groupBy = "service") => {
   finalCols.groupBy = groupBy;
 
   return finalCols;
+};
+
+const getValue = (row, col) => {
+  let value = "";
+
+  // dynamic currency
+  if (col.isDynamicCurrency) {
+    value =
+      row.currency === col.currency
+        ? row.amount
+        : "";
+  } else {
+    const raw = row?.[col.column_name];
+    value =
+      typeof raw === "object"
+        ? raw?.value ?? ""
+        : raw ?? "";
+  }
+
+  // credit card mask
+  if (col.master === "credit_card") {
+    const str = String(value || "");
+    value = str
+      ? `**** **** **** ${str.slice(-4)}`
+      : "";
+  }
+
+  // date format
+  if (col.data_type?.toLowerCase().includes("date")) {
+    value = value
+      ? new Date(value).toLocaleDateString()
+      : "";
+  }
+
+  return value;
+};
+
+const handleExcel = async () => {
+  const cols = orderedVisibleColumns;
+
+  const moduleName =
+    printModuleName ||
+    localStorage.getItem("print_module_name") ||
+    module?.display_name;
+
+  const groups = printableGroupedRows; // ✅ already grouped correctly
+
+  const rows = [];
+  let serialNo = 1;
+
+  groups.forEach(group => {
+    group.rows.forEach(row => {
+      const newRow = {
+        SNo: serialNo++,
+        Group: group.group // keep group name only for data rows
+      };
+
+      cols.forEach(col => {
+        newRow[col.display_name] = getValue(row, col);
+      });
+
+      rows.push(newRow);
+    });
+  });
+
+  exportToExcel(
+    printableGroupedRows,
+    cols.map(c => c.display_name),
+    moduleName,
+    groupBy,
+    columns
+  );
+
+  //console.log("Excel exported rows:", printableGroupedRows);
 };
     
 const dateColumns = visibleColumns.filter(col =>
@@ -1774,6 +1864,11 @@ const calculateCost = (amount, currencyCode, term) => {
   return Number(amount) * Number(rate);
 };
 
+const groupedChips = columnChips.reduce((acc, chip) => {
+  if (!acc[chip.type]) acc[chip.type] = [];
+  acc[chip.type].push(chip);
+  return acc;
+}, {});
 
 
 const handleNewRowChange = async (key, value, masterName) => {
@@ -2081,61 +2176,7 @@ const handlePostRow = (row) => {
   });
   setConfirmOpen(true);
 };
-const handleExcel = async (mode, savedCols = null, groupBy) => {
-  const cols = getExcelColumns(mode, savedCols);
-  //console.log("Excel export columns:", cols);
-  const company = localStorage.getItem("print_company") || "";
-  const moduleName =
-    printModuleName ||
-    localStorage.getItem("print_module_name") ||
-    module?.display_name;
 
-  const formattedRows = finalRows.map((row, index) => {
-    const newRow = {
-      SNo: index + 1,
-      __groupKey: getGroupKey(row, groupBy) // ✅ ADD THIS
-    };
-    //console.log("Formatting row for Excel with groupBy:", groupBy, "Row:", row);
-
-    cols.forEach(col => {
-      let value = "";
-
-      if (col.isDynamicCurrency) {
-        value =
-          row.currency === col.currency
-            ? row.amount
-            : "";
-      } else {
-        const raw = row[col.column_name];
-        value =
-          typeof raw === "object"
-            ? raw?.value ?? ""
-            : raw ?? "";
-      }
-
-      if (col.master === "credit_card") {
-        const str = String(value || "");
-        value = str ? `**** **** **** ${str.slice(-4)}` : "";
-      }
-
-      if (col.data_type?.toLowerCase().includes("date")) {
-        value = value ? new Date(value).toLocaleDateString() : "";
-      }
-
-      newRow[col.display_name] = value;
-    });
-
-    return newRow;
-  });
-   
-  exportToExcel(
-    formattedRows,
-    cols.map(c => c.display_name),
-    moduleName,
-    groupBy // ✅ PASS IT
-  );
-  
-};
 
     const handleExport = async () => {
         try {
@@ -2182,12 +2223,43 @@ const handleExcel = async (mode, savedCols = null, groupBy) => {
 const handleClear = async () => {
   const defaults = getCurrentMonth();
 
-  setDateFilters(defaults);
+  // ================= RESET SEARCH =================
+  setSearch("");
+  setSearchColumnKey(null);
 
+  // ================= RESET FILTERS =================
+  setFilters([]);
+
+  // ================= RESET DATE =================
+  setDateFilters(defaults);
+  setActiveDateFilter("");
+
+  // ================= RESET SORT + GROUP =================
+  setSortConfig([]);
+  setSortKey(null);
+  setSortOrder(null);
+  setGroupBy("");
+
+  // ================= RESET CHIPS =================
+  setColumnChips([]);
+
+  // 🔥 IMPORTANT: RESET DERIVED CHIPS
+  setGroupedChips({
+    search: [],
+    sort: [],
+    group: []
+  });
+
+  // ================= RESET UI =================
+  setOpenIndex(null);
+
+  // ================= API =================
   const payload = {
-    search,
-    filters: JSON.stringify(filters || []),
+    search: "",
+    filters: JSON.stringify([]),
     dateFilters: JSON.stringify(buildDatePayload(defaults)),
+    sort: JSON.stringify([]),
+    groupBy: ""
   };
 
   try {
@@ -2220,48 +2292,23 @@ const handleClear = async () => {
       return () => window.removeEventListener("click", closeMenu);
     }, []);
 
-    const handlePrint = (mode, savedCols = [], groupBy) => {
-    const cols = getColumnsToUse(mode, savedCols);
-   // console.log("Print columns:", cols);
-    openPrintWindow({
-        content: generateTableHTML(cols),
-        userName: activeUser?.name || "User",
-        groupBy,
-    });
-    setColumns(orderColumnsByConfig(cols)); // Ensure print updates keep configured order
-    setShowPrintModal(false);
-    };
+    const handlePrint = () => {
+  const cols = orderedVisibleColumns;
+
+openPrintWindow({
+  content: generateTableHTML(
+    orderedVisibleColumns,
+    printableGroupedRows
+  ),
+  userName: activeUser?.name || "User",
+});
+
+  setColumns(cols); // optional UI sync
+  setShowPrintModal(false);
+};
 
    
 
-// const handlePrint = (
-//   mode = "default",
-//   customCols = null
-// ) => {
-
-//   if (!printRef.current) return;
-
-//   let cols;
-
-//   if (customCols && Array.isArray(customCols)) {
-
-//     cols = columns.filter(col =>
-//       customCols.includes(col.column_name)
-//     );
-
-//   } else {
-
-//     cols = getColumnsToUse(mode);
-
-//   }
-
-//   openPrintWindow({
-//     content: printRef.current.innerHTML,
-//     userName: activeUser?.email || "User",
-//     groupBy,
-//     columns: cols
-//   });
-// };
 
     useEffect(() => {
         const saved = localStorage.getItem(`print_columns_${id}`);
@@ -2337,82 +2384,61 @@ const finalRows = filtered.filter((row) => rowMatchesSearch(row));
     // ================= PAGINATION =================
     const totalPages = Math.ceil(normalizedRows.length / pageSize);
 
-//     const sortedRows = [...rows].sort((a, b) => {
-//   if (!sortConfig.key) return 0;
-
-//   let aValue = a[sortConfig.key];
-//   let bValue = b[sortConfig.key];
-
-//   // normalize object values
-//   aValue =
-//     typeof aValue === "object"
-//       ? aValue?.value ?? ""
-//       : aValue ?? "";
-
-//   bValue =
-//     typeof bValue === "object"
-//       ? bValue?.value ?? ""
-//       : bValue ?? "";
-
-//   // numeric sort
-//   if (!isNaN(aValue) && !isNaN(bValue)) {
-//     return sortConfig.direction === "asc"
-//       ? Number(aValue) - Number(bValue)
-//       : Number(bValue) - Number(aValue);
-//   }
-
-//   // string sort
-//   return sortConfig.direction === "asc"
-//     ? String(aValue).localeCompare(String(bValue))
-//     : String(bValue).localeCompare(String(aValue));
-// });
-
   
 
-    const handlePdf = async (mode, customCols = null, groupBy= "service" ) => {
-        let cols;
+  const handlePdf = async (
+  mode,
+  customCols = null,
+  groupBy = "service",
+  pdfColumns = orderedVisibleColumns,
+  pdfRows = printableGroupedRows
+) => {
 
-        if (customCols && Array.isArray(customCols)) {
-            cols = columns.filter(col =>
-                customCols.includes(col.column_name)
-            );
-        } else {
-            cols = getColumnsToUse(mode);
-        }
+  let cols;
 
-        // ✅ GET PRINT SETTINGS
-        const company = selectedCompany || localStorage.getItem("print_company") || "";
-        const moduleTitle = printModuleName || module?.display_name;
+  if (customCols && Array.isArray(customCols)) {
+    cols = pdfColumns.filter(col =>
+      customCols.includes(col.column_name)
+    );
+  } else {
+    cols = pdfColumns;
+  }
 
-        try {
-            const res = await exportPdf({
-                rows: normalizedRows,
-                columns: cols,
-                userName: activeUser?.name || "User",
+  const company =
+    selectedCompany || localStorage.getItem("print_company") || "";
 
-                // ✅ SEND BOTH TO BACKEND
-                moduleName: moduleTitle,
-                companyName: company,
-                groupBy
-            });
+  const moduleTitle =
+    printModuleName || module?.display_name;
 
-            const url = window.URL.createObjectURL(new Blob([res.data]));
+  try {
+    const res = await exportPdf({
+      rows: pdfRows,        // ✅ PRINT DATA USED HERE
+      columns: cols,        // ✅ PRINT COLUMNS USED HERE
+      userName: activeUser?.name || "User",
 
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = `${moduleTitle || "report"}.pdf`;
+      moduleName: moduleTitle,
+      companyName: company,
+      groupBy
+    });
 
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+    const url = window.URL.createObjectURL(new Blob([res.data]));
 
-            window.URL.revokeObjectURL(url);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${moduleTitle || "report"}.pdf`;
 
-            setShowPdfModal(false);
-        } catch (err) {
-            console.error("PDF export failed:", err);
-        }
-    };
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+
+    setShowPdfModal(false);
+
+  } catch (err) {
+    console.error("PDF export failed:", err);
+  }
+};
 
 
     useEffect(() => {
@@ -2589,77 +2615,62 @@ const sortColumns = (cols) => {
   return [...normal, ...total];
 };
 
-const getGroupKey = (row, groupBy = "service") => {
-
-  const normalize = (v) =>
-    String(v || "")
-      .replace(/^product\s*types?:?\s*/i, "") // removes "Product Types:"
-      .trim();
-
-  if (groupBy === "terms") {
-    return normalize(
-      row.term?.value ||
-      row.term ||
-      "UNKNOWN"
-    );
+const getGroupKey = (row, groupBy) => {
+  if (!groupBy?.key) {
+    return "All Records";
   }
 
-  // DEFAULT → PRODUCT TYPES
-  return normalize(
-    row.product_types?.value ||
-    row.product_types ||
-    "UNKNOWN"
-  );
+  const value = row[groupBy.key];
+
+  const finalValue =
+    typeof value === "object"
+      ? value?.value
+      : value;
+
+  return String(finalValue || "(Blank)").trim();
 };
-
-const groupedRows = finalRows.reduce((acc, row) => {
-
-  const key = getGroupKey(row, groupBy); // 👈 dynamic
-
-  if (!acc[key]) acc[key] = [];
-
-  acc[key].push(row);
-
-  return acc;
-
-}, {});
 
 const grandTotals = {};
 
-const generateTableHTML = (cols = columns) => {
+//console.log("Current groupBy:", groupBy);
+//console.log("Current printableGroupedRows:", printableGroupedRows);
 
-  const company = localStorage.getItem("print_company");
+const generateTableHTML = (cols, groupedData) => {
+  //console.log("groupedData for HTML generation:", groupedData);
+
+  // ✅ KEEP ORDER FROM UI (DO NOT regroup)
+  const rows = groupedData.flatMap(g => g.rows);
+
+const groupedRows = Array.isArray(groupedData)
+  ? groupedData
+  : Object.entries(groupedData || {}).map(([group, rows]) => ({
+      group,
+      rows
+    }));
+
+  //console.log("rows for HTML generation:", rows);
+
+  const company = localStorage.getItem("print-company");
 
   // =====================================================
   // DISTINCT CURRENCIES
   // =====================================================
   const currencies = [
     ...new Set(
-      finalRows
+      rows
         .map(r => r.currency)
         .filter(Boolean)
     )
   ];
 
   // =====================================================
-  // REMOVE:
-  // 1. amount column
-  // 2. currency column
+  // REMOVE amount + currency columns
   // =====================================================
-const normalCols = cols.filter(c => {
+  const normalCols = cols.filter(c => {
+    const name = c.column_name.toLowerCase();
+    return name !== "amount" && name !== "currency";
+  });
 
-  const name = c.column_name.toLowerCase();
-
-  // REMOVE ONLY PURE amount COLUMN
-  // KEEP total_amount_aed
-  return (
-    name !== "amount" &&
-    name !== "currency"
-  );
-
-});
-
-  
   const currencyCols = currencies.map(cur => ({
     column_name: `amount_${cur.toLowerCase()}`,
     display_name: `AMOUNT (${cur.toUpperCase()})`,
@@ -2675,285 +2686,191 @@ const normalCols = cols.filter(c => {
     ...currencyCols
   ]);
 
-  const firstTotalIndex = sortedCols.findIndex(col =>
-  isTotalColumn(col)
-);
+  const firstTotalIndex = sortedCols.findIndex(isTotalColumn);
 
   // =====================================================
-  // TOTALS
+  // GRAND TOTALS
   // =====================================================
-  const totals = {};
+  const grandTotals = {};
 
   sortedCols.forEach(col => {
+    if (isTotalColumn(col)) {
+      grandTotals[col.column_name] = rows.reduce((sum, row) => {
+        return sum + toNumber(row[col.column_name]);
+      }, 0);
+    }
+  });
 
-  // ONLY TOTAL COLUMNS
-  if (isTotalColumn(col)) {
-
-    totals[col.column_name] = finalRows.reduce((sum, row) => {
-      return sum + toNumber(row[col.column_name]);
-    }, 0);
-
-  }
-
-});
-
-
+  // =====================================================
+  // HELPERS
+  // =====================================================
   const isDateColumn = (col) => {
-  const data_type = (col.data_type || "").toLowerCase();
-  return data_type.includes("date");
-};
+    const data_type = (col.data_type || "").toLowerCase();
+    return data_type.includes("date");
+  };
+
   // =====================================================
   // HTML
   // =====================================================
-return `
-  <div style="text-align:center; margin-bottom:20px;">
+  return `
+    <div style="text-align:center; margin-bottom:20px;">
 
-    ${
-      company
-        ? `<h1 style="font-size:24px; margin-bottom:5px;">${company}</h1>`
-        : ``
-    }
-
-    <h2>${printModuleName?.trim() || module?.display_name}</h2>
-
-  </div>
-
-  ${Object.entries(groupedRows).map(([serviceType, rows]) => {
-
-    // ================= GROUP TOTALS =================
-    const groupTotals = {};
-
-    sortedCols.forEach(col => {
-      if (isTotalColumn(col)) {
-        groupTotals[col.column_name] = rows.reduce((sum, row) => {
-          return sum + toNumber(row[col.column_name]);
-        }, 0);
-
-        // add to grand total
-        grandTotals[col.column_name] =
-          (grandTotals[col.column_name] || 0) +
-          groupTotals[col.column_name];
+      ${
+        company
+          ? `<h1 style="font-size:24px; margin-bottom:5px;">${company}</h1>`
+          : ``
       }
-    });
 
-    const firstTotalIndex = sortedCols.findIndex(isTotalColumn);
+      <h2>${printModuleName?.trim() || module?.display_name}</h2>
 
-    return `
-      <div style="margin-bottom:40px; text: 5px;">
+    </div>
 
-        <!-- GROUP TITLE -->
-        <h3 style="margin:10px 0; text-align:center;">
-          ${serviceType}
-        </h3>
+    <table border="1" cellspacing="0" cellpadding="5"
+      style="width:100%; border-collapse:collapse;">
 
-        <table border="1" cellspacing="0" cellpadding="5"
-          style="width:100%; border-collapse:collapse;">
+      <!-- HEADER -->
+      <thead>
+        <tr>
+          <th>S.No</th>
+          ${sortedCols.map(col => `
+            <th>${col.display_name}</th>
+          `).join("")}
+        </tr>
+      </thead>
 
-          <!-- HEADER -->
-          <thead>
-            <tr>
-              <th style="text-align:center">S.No</th>
-              ${sortedCols.map(col => `
-                <th>${col.display_name}</th>
-              `).join("")}
-            </tr>
-          </thead>
+      <!-- BODY -->
+     <tbody>
 
-          <!-- BODY -->
-          <tbody>
+${groupedRows.map(group => `
 
-            ${rows.map((row, index) => `
-              <tr>
-                <td style="text-align:center">${index + 1}</td>
+  ${groupBy?.key ? `
+    <tr>
+      <td
+        colspan="${sortedCols.length + 1}"
+        style="
+          font-weight:bold;
+          background:#f5f5f5;
+          text-align:left;
+          padding:8px;
+        "
+      >
+        ${group.group}
+      </td>
+    </tr>
+  ` : ""}
 
-                ${sortedCols.map(col => {
+  ${group.rows.map((row, index) => `
+    <tr>
 
-                  let value = "";
-
-                  if (col.isDynamicCurrency) {
-                    value =
-                      row.currency === col.currency
-                        ? row.amount
-                        : "";
-                  } else {
-                    const raw = row[col.column_name];
-                    value =
-                      typeof raw === "object"
-                        ? raw?.value ?? ""
-                        : raw ?? "";
-                  }
-
-                  if (col.master === "credit_card") {
-                    const str = String(value);
-                    const last4 = str.slice(-4);
-                    return `
-                      <td style="text-align:center">
-                        **** **** **** ${last4}
-                      </td>
-                    `;
-                  }
-
-                  if (isDateColumn(col)) {
-                    value = value
-                      ? formatDate(value)
-                      : "";
-                  }
-
-                  if (isNumericColumn(col) || col.isDynamicCurrency) {
-                    return `
-                      <td style="text-align:right">
-                        ${value === "" ? "" : toNumber(value) === 0 ? "-" : formatNumber(value)}
-                      </td>
-                    `;
-                  }
-
-                  return `
-                    <td style="text-align:center">
-                      ${value || "-"}
-                    </td>
-                  `;
-
-                }).join("")}
-              </tr>
-            `).join("")}
-
-            <!-- ================= GROUP TOTAL ROW ================= -->
-            <tr style="font-weight:bold; background:#f5f5f5;">
-
-              <td></td>
-
-              <!-- 🔥 TOTAL LABEL BEFORE FIRST TOTAL COLUMN -->
-              <td colspan="${firstTotalIndex > 0 ? firstTotalIndex : 1}" style="text-align:right;">
-                TOTAL
-              </td>
-
-              <!-- TOTAL VALUES -->
-              ${sortedCols.slice(firstTotalIndex).map(col => {
-
-                if (!isTotalColumn(col)) {
-                  return `<td></td>`;
-                }
-
-                return `
-                  <td style="text-align:right;">
-                    ${groupTotals[col.column_name] === 0
-                      ? "-"
-                      : formatNumber(groupTotals[col.column_name] || 0)}
-                  </td>
-                `;
-              }).join("")}
-
-            </tr>
-
-          </tbody>
-
-        </table>
-
-      </div>
-    `;
-  }).join("")}
-
- <!-- ================= GRAND TOTAL (INLINE STYLE) ================= -->
-
-<table border="1" cellspacing="0" cellpadding="5"
-  style="width:100%; margin-top:30px; border-collapse:collapse;">
-
-  <tbody>
-
-    <tr style="font-weight:bold; background:#ddd;">
-
-      <td></td>
-
-      <!-- LABEL BEFORE FIRST TOTAL COLUMN -->
-      <td colspan="${firstTotalIndex > 0 ? firstTotalIndex : 1}" style="text-align:right;">
-        GRAND TOTAL
+      <td style="text-align:center">
+        ${index + 1}
       </td>
 
-      ${sortedCols.slice(firstTotalIndex).map(col => {
+      ${sortedCols.map(col => {
 
-        if (!isTotalColumn(col)) {
-          return `<td></td>`;
+        let value = "";
+
+        if (col.isDynamicCurrency) {
+          value =
+            row.currency === col.currency
+              ? row.amount
+              : "";
+        } else {
+          const raw = row[col.column_name];
+
+          value =
+            typeof raw === "object"
+              ? raw?.value ?? ""
+              : raw ?? "";
+        }
+
+        if (col.master === "credit_card") {
+          const str = String(value);
+          const last4 = str.slice(-4);
+
+          return `
+            <td style="text-align:center">
+              **** **** **** ${last4}
+            </td>
+          `;
+        }
+
+        if (isDateColumn(col)) {
+          value = value
+            ? formatDate(value)
+            : "";
+        }
+
+        if (
+          isNumericColumn(col) ||
+          col.isDynamicCurrency
+        ) {
+          return `
+            <td style="text-align:right">
+              ${
+                value === ""
+                  ? ""
+                  : toNumber(value) === 0
+                    ? "-"
+                    : formatNumber(value)
+              }
+            </td>
+          `;
         }
 
         return `
-          <td style="text-align:right;">
-            ${grandTotals[col.column_name] === 0
-              ? "-"
-              : formatNumber(grandTotals[col.column_name] || 0)}
+          <td style="text-align:center">
+            ${value || "-"}
           </td>
         `;
+
       }).join("")}
 
     </tr>
+  `).join("")}
 
-  </tbody>
+`).join("")}
 
-</table>
-`;
+</tbody>
+
+    </table>
+
+    <!-- ================= GRAND TOTAL ================= -->
+    <table border="1" cellspacing="0" cellpadding="5"
+      style="width:100%; margin-top:30px; border-collapse:collapse;">
+
+      <tbody>
+        <tr style="font-weight:bold; background:#ddd;">
+
+          <td></td>
+
+          <td colspan="${firstTotalIndex > 0 ? firstTotalIndex : 1}" style="text-align:right;">
+            GRAND TOTAL
+          </td>
+
+          ${sortedCols.slice(firstTotalIndex).map(col => {
+
+            if (!isTotalColumn(col)) {
+              return `<td></td>`;
+            }
+
+            return `
+              <td style="text-align:right;">
+                ${grandTotals[col.column_name] === 0
+                  ? "-"
+                  : formatNumber(grandTotals[col.column_name] || 0)}
+              </td>
+            `;
+          }).join("")}
+
+        </tr>
+      </tbody>
+
+    </table>
+  `;
 };
 
-  const paginatedRows = filteredRows.slice(
-        (page - 1) * pageSize,
-        page * pageSize
-    );
-
-    const sortedRows = [...paginatedRows].sort(
-  (a, b) => {
-
-    if (!sortConfig.key) return 0;
-
-    let aValue =
-      a[sortConfig.key];
-
-    let bValue =
-      b[sortConfig.key];
-
-    // =========================
-    // OBJECT VALUE NORMALIZE
-    // =========================
-
-    aValue =
-      typeof aValue === "object"
-        ? aValue?.value ?? ""
-        : aValue ?? "";
-
-    bValue =
-      typeof bValue === "object"
-        ? bValue?.value ?? ""
-        : bValue ?? "";
-
  
-
-    // =========================
-    // NUMERIC SORT
-    // =========================
-
-    if (
-      !isNaN(aValue) &&
-      !isNaN(bValue)
-    ) {
-
-      return sortConfig.direction === "asc"
-        ? Number(aValue) -
-            Number(bValue)
-        : Number(bValue) -
-            Number(aValue);
-    }
-
-    // =========================
-    // STRING SORT
-    // =========================
-
-    return sortConfig.direction ===
-      "asc"
-      ? String(aValue).localeCompare(
-          String(bValue)
-        )
-      : String(bValue).localeCompare(
-          String(aValue)
-        );
-  }
-);
 
     const handleGenerateSelected = () => {
   // Get the selected rows' data
@@ -2964,7 +2881,7 @@ return `
   // setSelectedRow(selectedRows[0] || null);
   setSelectedRow(selectedRows);
   // If you want to show all products from selected rows in the modal:
-  console.log("Preparing row for modal:", selectedRows);
+  //console.log("Preparing row for modal:", selectedRows);
   setModalItems(selectedRows.map(row => ({
     doc_date: row.date || "",
     doc_no: row.invoice_number || "",
@@ -2980,7 +2897,7 @@ return `
 
 function calculateRowTotals({ amount, currency, service_provider_id }) {
   const provider = serviceProviders.find(p => p.id === service_provider_id);
-  console.log("Calculating totals for amount:", amount, "currency:", currency, "provider ID:", service_provider_id, "provider:", provider);
+  //console.log("Calculating totals for amount:", amount, "currency:", currency, "provider ID:", service_provider_id, "provider:", provider);
   const isVat = provider?.is_vat;
   const amt = Number(amount) || 0;
   const vat = isVat ? (amt * vatPercent) / 100 : 0;
@@ -3010,21 +2927,99 @@ const handleQuickDateChange = (value) => {
 };
 
 const handleSort = (key, direction) => {
-  setSortConfig({ key, direction });
+  setSortConfig(prev => {
+    const safe = Array.isArray(prev) ? prev : [];
+
+    return [
+      ...safe.filter(s => s.key !== key),
+      { key, direction }
+    ];
+  });
+
+  setColumnChips(prev => {
+    const filtered = prev.filter(
+      c => !(c.type === "sort" && c.column === key)
+    );
+
+    return [
+      ...filtered,
+      {
+        type: "sort",
+        column: key,
+        value: direction
+      }
+    ];
+  });
+
   setOpenMenu(null);
 };
 
+
+
 const handleSearch = (key) => {
-  console.log("Search column:", key);
   setSearchColumnKey(key);
   searchInputRef.current?.focus();
   searchInputRef.current?.select();
   setOpenMenu(null);
+
+  setColumnChips(prev => {
+    const filtered = prev.filter(
+      c => !(c.type === "search" && c.column === key)
+    );
+
+    return [
+      ...filtered,
+      {
+        type: "search",
+        column: key,
+        value: ""
+      }
+    ];
+  });
 };
 
 const handleGroup = (key, direction) => {
-  console.log("Group:", key, direction);
+  setGroupBy({ key, direction });
+
+  setColumnChips(prev => {
+    const filtered = prev.filter(
+      c => !(c.type === "group" && c.column === key)
+    );
+
+    return [
+      ...filtered,
+      {
+        type: "group",
+        column: key,
+        value: direction
+      }
+    ];
+  });
+
   setOpenMenu(null);
+};
+
+const removeChip = (chip) => {
+  setColumnChips(prev =>
+    prev.filter(c =>
+      !(c.type === chip.type && c.column === chip.column)
+    )
+  );
+
+  if (chip.type === "search") {
+    setSearchColumnKey("");
+    setSearch("");
+  }
+
+  if (chip.type === "sort") {
+    setSortConfig(prev =>
+      prev.filter(s => s.key !== chip.column)
+    );
+  }
+
+  if (chip.type === "group") {
+    setGroupBy("");
+  }
 };
 
 const hideColumn = (key) => {
@@ -3041,6 +3036,261 @@ const togglePinColumn = (columnName) => {
       : [...prev, columnName]
   );
 };
+
+//  const paginatedRows = filteredRows.slice(
+//         (page - 1) * pageSize,
+//         page * pageSize
+//     );
+
+const sortedAllRows = React.useMemo(() => {
+  return [...filteredRows].sort((a, b) => {
+    for (const sort of sortConfig) {
+      let aValue = a?.[sort.key];
+      let bValue = b?.[sort.key];
+
+      aValue = typeof aValue === "object" ? aValue?.value ?? "" : aValue ?? "";
+      bValue = typeof bValue === "object" ? bValue?.value ?? "" : bValue ?? "";
+
+      const isNumeric = !isNaN(aValue) && !isNaN(bValue);
+
+      let result = 0;
+
+      if (isNumeric) {
+        result = Number(aValue) - Number(bValue);
+      } else {
+        result = String(aValue).localeCompare(String(bValue));
+      }
+
+      if (result !== 0) {
+        return sort.direction === "asc" ? result : -result;
+      }
+    }
+    return 0;
+  });
+}, [filteredRows, sortConfig]);
+
+const processedRows = React.useMemo(() => {
+  let data = [...filteredRows];
+
+  // 1. SORT
+  data = [...data].sort((a, b) => {
+    for (const sort of sortConfig) {
+      let aValue = a?.[sort.key];
+      let bValue = b?.[sort.key];
+
+      aValue = typeof aValue === "object" ? aValue?.value ?? "" : aValue ?? "";
+      bValue = typeof bValue === "object" ? bValue?.value ?? "" : bValue ?? "";
+
+      const isNumeric = !isNaN(aValue) && !isNaN(bValue);
+
+      let result = 0;
+
+      if (isNumeric) {
+        result = Number(aValue) - Number(bValue);
+      } else {
+        result = String(aValue).localeCompare(String(bValue));
+      }
+
+      if (result !== 0) {
+        return sort.direction === "asc" ? result : -result;
+      }
+    }
+    return 0;
+  });
+
+  return data;
+}, [filteredRows, sortConfig]);
+
+const groupedAllRows = React.useMemo(() => {
+  if (!groupBy?.key) {
+    return [
+      {
+        group: "All Records",
+        rows: sortedAllRows
+      }
+    ];
+  }
+
+  const groups = {};
+
+  sortedAllRows.forEach((row) => {
+    const key = row[groupBy.key] || "(Blank)";
+
+    if (!groups[key]) groups[key] = [];
+
+    groups[key].push(row);
+  });
+
+  let entries = Object.entries(groups);
+
+  entries.sort((a, b) => {
+    return groupBy.direction === "desc"
+      ? String(b[0]).localeCompare(String(a[0]))
+      : String(a[0]).localeCompare(String(b[0]));
+  });
+
+  return entries.map(([group, rows]) => ({
+    group,
+    rows
+  }));
+}, [sortedAllRows, groupBy]);
+
+const flatGroupedRows = React.useMemo(() => {
+  const flat = [];
+
+  groupedAllRows.forEach((g) => {
+    g.rows.forEach((row) => {
+      flat.push({
+        ...row,
+        __group: g.group
+      });
+    });
+  });
+
+  return flat;
+}, [groupedAllRows]);
+
+const paginatedRows = React.useMemo(() => {
+  const start = (page - 1) * pageSize;
+  const end = start + pageSize;
+
+  return flatGroupedRows.slice(start, end);
+}, [flatGroupedRows, page, pageSize]);
+
+const groupedByRows = React.useMemo(() => {
+  const groups = {};
+
+  paginatedRows.forEach((row) => {
+    const key = row.__group || "All Records";
+
+    if (!groups[key]) groups[key] = [];
+
+    groups[key].push(row);
+  });
+
+  let entries = Object.entries(groups);
+
+  entries.sort((a, b) => {
+    return groupBy?.direction === "desc"
+      ? String(b[0]).localeCompare(String(a[0]))
+      : String(a[0]).localeCompare(String(b[0]));
+  });
+
+  return entries.map(([group, rows]) => ({
+    group,
+    rows
+  }));
+}, [paginatedRows, groupBy]);
+
+const totalColumns = visibleColumns.length + 2;
+
+const rowIndexMap = React.useMemo(() => {
+  const map = new Map();
+
+  flatGroupedRows.forEach((row, index) => {
+    map.set(row.id, index);
+  });
+
+  return map;
+}, [flatGroupedRows]);
+
+const orderedVisibleColumns = React.useMemo(() => {
+  if (!columnOrder?.length) return visibleColumns;
+
+  const map = new Map(visibleColumns.map(c => [c.column_name, c]));
+
+  return columnOrder
+    .map(name => map.get(name))
+    .filter(Boolean);
+}, [visibleColumns, columnOrder]);
+//console.log("Ordered visible columns:", orderedVisibleColumns.map(c => c.column_name));
+
+
+const printableGroupedRows = React.useMemo(() => {
+  const rows = sortedAllRows; // 🔥 IMPORTANT: NOT flatGroupedRows
+
+  if (!groupBy?.key) {
+    return [
+      {
+        group: "All Records",
+        rows
+      }
+    ];
+  }
+
+  const groups = {};
+
+  rows.forEach((row) => {
+    //console.log("groupby", groupBy);
+    const key = getGroupKey(row, groupBy); // 🔥 IMPORTANT
+    
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(row);
+  });
+
+  let entries = Object.entries(groups);
+
+  // optional group sort
+  entries.sort((a, b) => {
+    return groupBy?.direction === "desc"
+      ? String(b[0]).localeCompare(String(a[0]))
+      : String(a[0]).localeCompare(String(b[0]));
+  });
+
+  return entries.map(([group, rows]) => ({
+    group,
+    rows
+  }));
+}, [sortedAllRows, groupBy]);
+
+
+
+//console.log("Printable grouped rows:", printableGroupedRows);
+
+const dragIndexRef = useRef(null);
+
+const handleDragStart = (colName) => {
+  dragIndexRef.current = colName;
+};
+
+const handleDrop = (dropColName) => {
+  const dragColName = dragIndexRef.current;
+
+  if (!dragColName || dragColName === dropColName) return;
+
+  setColumnOrder((prev) => {
+    const updated = [...prev];
+
+    const dragIndex = updated.indexOf(dragColName);
+    const dropIndex = updated.indexOf(dropColName);
+
+    if (dragIndex === -1 || dropIndex === -1) return prev;
+
+    const [removed] = updated.splice(dragIndex, 1);
+    updated.splice(dropIndex, 0, removed);
+
+    return updated;
+  });
+
+  dragIndexRef.current = null;
+};
+
+useEffect(() => {
+  if (!columnOrder?.length) return;
+
+  const timeout = setTimeout(() => {
+    saveColumnSelection(columnOrder);
+  }, 300); // debounce to avoid spam
+
+  return () => clearTimeout(timeout);
+}, [columnOrder]);
+useEffect(() => {
+  if (!visibleColumns?.length) return;
+
+  setColumnOrder(visibleColumns.map(c => c.column_name));
+  // run only once when columns first arrive
+}, [visibleColumns?.length]);
+
     return (
         <div className="h-full flex flex-col">
              <ValidatePopups
@@ -3074,19 +3324,19 @@ const togglePinColumn = (columnName) => {
   </PermissionButton>
 
   <PermissionButton
-    user={activeUser}
-    permission="print"
-    onClick={() => setShowPrintModal(true)}
-    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
-               hover:bg-gray-100 hover:border-gray-500 transition"
-  >
-    Print
-  </PermissionButton>
+  user={activeUser}
+  permission="print"
+  onClick={handlePrint}
+  className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
+             hover:bg-gray-100 hover:border-gray-500 transition"
+>
+  Print
+</PermissionButton>
 
   <PermissionButton
     user={activeUser}
     permission="export"
-    onClick={() => setShowExcelModal(true)}
+    onClick={handleExcel}
     className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
                hover:bg-green-50 hover:border-green-500 hover:text-green-600 transition"
   >
@@ -3096,7 +3346,7 @@ const togglePinColumn = (columnName) => {
   <PermissionButton
     user={activeUser}
     permission="export"
-    onClick={() => setShowPdfModal(true)}
+    onClick={handlePdf}
     className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
                hover:bg-red-50 hover:border-red-400 hover:text-red-600 transition"
   >
@@ -3104,12 +3354,35 @@ const togglePinColumn = (columnName) => {
   </PermissionButton>
 
   <button
-    onClick={() => setShowTableColumnModal(true)}
+    onClick={() => setShowCustomizeDrawer(true)}
     className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
                hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
   >
     Customize
   </button>
+<CustomizeDrawer
+  open={showCustomizeDrawer}
+  onClose={() => setShowCustomizeDrawer(false)}
+
+  // Columns (ONLY what is actually used)
+  columns={columns}
+  visibleColumns={visibleColumns}
+
+  tempSelectedColumns={tempSelectedColumns}
+  setTempSelectedColumns={setTempSelectedColumns}
+
+  // Header (Printer Custom)
+  selectedCompany={selectedCompany}
+  setSelectedCompany={setSelectedCompany}
+  companyList={company}
+
+  // Sub Header
+  printModuleName={printModuleName}
+  setPrintModuleName={setPrintModuleName}
+
+  // Module
+  module={module}
+/>
   <button
   onClick={() => window.location.reload()}
   className="
@@ -3309,7 +3582,7 @@ const togglePinColumn = (columnName) => {
       cursor-pointer
     "
   >
-    <option value="">📅 Quick Range</option>
+    <option value=""> Quick Range</option>
     <option value="today">Today</option>
     <option value="yesterday">Yesterday</option>
     <option value="tomorrow">Tomorrow</option>
@@ -3319,7 +3592,7 @@ const togglePinColumn = (columnName) => {
     <option value="lastMonth">Last Month</option>
     <option value="thisYear">This Year</option>
     <option value="lastYear">Last Year</option>
-    <option value="custom">Custom Range</option>
+    {/* <option value="custom">Custom Range</option> */}
   </select>
 
   {/* Apply */}
@@ -3338,7 +3611,7 @@ const togglePinColumn = (columnName) => {
       transition
     "
   >
-    Apply
+    Search
   </button>
 
   {/* Clear */}
@@ -3473,64 +3746,7 @@ const togglePinColumn = (columnName) => {
           ))}
         </div>
 
-        {/* ADD BUTTON */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpenIndex(openIndex === i ? null : i);
-          }}
-          className="text-xs text-gray-500 hover:text-gray-700"
-        >
-          + Add
-        </button>
-
-        {/* DROPDOWN */}
-        {openIndex === i && (
-          <div
-            ref={el => (dropdownRefs.current[i] = el)}
-            className="absolute top-8 left-0 bg-white border rounded-lg shadow-lg w-56 max-h-60 overflow-auto z-50"
-            onClick={e => e.stopPropagation()}
-          >
-
-            {options.map((opt, idx) => {
-              const label = normalize(opt);
-
-              const checked = selectedValues.includes(label);
-
-              return (
-                <label
-                  key={idx}
-                  className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => {
-                     setFilters(prev =>
-                        prev.map((item, index) => {
-                          if (index !== i) return item;
-
-                          const current =
-                            (item.values || []).map(normalize);
-
-                          return {
-                            ...item,
-                            values: checked
-                              ? current.filter(v => v !== label)
-                              : [...current, label],
-                          };
-                        })
-                      );
-                    }}
-                  />
-
-                  <span className="text-sm">{label}</span>
-                </label>
-              );
-            })}
-
-          </div>
-        )}
+       
 
         {/* REMOVE FILTER */}
         <button
@@ -3545,6 +3761,89 @@ const togglePinColumn = (columnName) => {
       </div>
     );
   })}
+
+<div className="flex flex-col gap-3 mb-3">
+
+  {/* SEARCH */}
+  {groupedChips.search?.length > 0 && (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-bold text-gray-600 mr-2">
+        SEARCHING:
+      </span>
+
+      {groupedChips.search.map((chip, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded-full text-xs"
+        >
+          <span>{chip.column}</span>
+
+          <button
+            onClick={() => removeChip(chip)}
+            className="text-red-500 hover:text-red-700"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+    </div>
+  )}
+
+  {/* SORT */}
+  {groupedChips.sort?.length > 0 && (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-bold text-gray-600 mr-2">
+        SORTING:
+      </span>
+
+      {groupedChips.sort.map((chip, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1 rounded-full text-xs"
+        >
+          <span>
+            {chip.column} {chip.value === "asc" ? "↑" : "↓"}
+          </span>
+
+          <button
+            onClick={() => removeChip(chip)}
+            className="text-red-500 hover:text-red-700"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+    </div>
+  )}
+
+  {/* GROUP */}
+  {groupedChips.group?.length > 0 && (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-bold text-gray-600 mr-2">
+        GROUPING:
+      </span>
+
+      {groupedChips.group.map((chip, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-2 bg-purple-50 border border-purple-200 text-purple-700 px-3 py-1 rounded-full text-xs"
+        >
+          <span>
+            {chip.column} {chip.value === "asc" ? "↑" : "↓"}
+          </span>
+
+          <button
+            onClick={() => removeChip(chip)}
+            className="text-red-500 hover:text-red-700"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+    </div>
+  )}
+
+</div>
 
 </div>
           
@@ -3563,10 +3862,62 @@ const togglePinColumn = (columnName) => {
                     <table className="min-w-max w-full text-sm border-separate border-spacing-0">
                         <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
                             <tr>
-                                <th className="px-4 py-3 border-b text-left sticky left-0 z-40 bg-gray-100 w-16 min-w-16 border-r border-gray-200">S.No</th> 
-                               {visibleColumns.map((col) => (
+                                <th
+  className="px-4 py-3 border-b text-left sticky left-0 z-40 bg-gray-100 w-16 min-w-16 border-r border-gray-200 cursor-pointer"
+  onClick={(e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+
+    setMenuPosition({
+      top: rect.bottom + window.scrollY + 5,
+      left: rect.left + window.scrollX
+    });
+
+    setHidePopupColumn("__sno__");
+
+    setTempHideColumns(
+      visibleColumns.map((c) => c.column_name)
+    );
+
+    setShowHidePopup(true);
+  }}
+>
+  S.No
+</th>
+{showHidePopup &&
+  hidePopupColumn === "__sno__" && (
+    <div
+      style={{
+        position: "absolute",
+        top: menuPosition.top,
+        left: menuPosition.left,
+        zIndex: 9999
+      }}
+    >
+      <ShowHideColumnsPopup
+        columns={columns}
+        tempHideColumns={tempHideColumns}
+        setTempHideColumns={setTempHideColumns}
+        onCancel={() => {
+          setShowHidePopup(false);
+          setHidePopupColumn(null);
+        }}
+        onSave={async () => {
+          await saveColumnSelection(tempHideColumns);
+          setShowHidePopup(false);
+          setHidePopupColumn(null);
+          setOpenMenu(null);
+        }}
+      />
+    </div>
+  )}
+                               {orderedVisibleColumns.map((col, index) => (
   <th
     key={col.column_id}
+        draggable
+  onDragStart={() => handleDragStart(col.column_name)}
+onDragOver={(e) => e.preventDefault()}
+onDrop={() => handleDrop(col.column_name)}
+   
     ref={(el) => {
       if (el) {
         pinnedHeaderRefs.current[col.column_name] = el;
@@ -3574,10 +3925,10 @@ const togglePinColumn = (columnName) => {
         delete pinnedHeaderRefs.current[col.column_name];
       }
     }}
-    className={`px-4 py-3 border-b text-left relative overflow-visible select-none ${getPinnedHeaderClass(
-      col.column_name
-    )}`}
-    style={getPinnedHeaderStyle(col.column_name)}
+   className={`px-4 py-3 border-b text-left relative overflow-visible select-none cursor-move ${
+  pinnedColumns.includes(col.column_name) ? "sticky z-30 bg-gray-100 border-r border-gray-200" : ""
+}`}
+    style={getPinnedLeft(col.column_name)}
   >
     {/* HEADER */}
     <div
@@ -3649,7 +4000,7 @@ const togglePinColumn = (columnName) => {
 
         <hr />
 
-        <button
+        {/* <button
           onClick={() => {
             setHidePopupColumn(col.column_name);
 
@@ -3662,32 +4013,11 @@ const togglePinColumn = (columnName) => {
           className="w-full text-left px-3 py-2 hover:bg-red-50 text-red-600"
         >
           Show & Hide Columns
-        </button>
+        </button> */}
       </div>,
       document.body
     )}
 
-    {/* SHOW / HIDE POPUP */}
-    {showHidePopup &&
-      hidePopupColumn === col.column_name && (
-        <ShowHideColumnsPopup
-          columns={columns}
-          tempHideColumns={tempHideColumns}
-          setTempHideColumns={setTempHideColumns}
-          anchorPosition={menuPosition}
-          onCancel={() => {
-            setShowHidePopup(false);
-          }}
-          onSave={async () => {
-            await saveColumnSelection(
-              tempHideColumns
-            );
-
-            setShowHidePopup(false);
-            setOpenMenu(null);
-          }}
-        />
-      )}
   </th>
 ))}
 
@@ -3701,7 +4031,7 @@ const togglePinColumn = (columnName) => {
                         <tr className="bg-blue-50">
                           <td className="px-4 py-3 whitespace-nowrap sticky left-0 z-20 bg-blue-50 w-16 min-w-16 border-r border-gray-200"></td>
 
-                          {visibleColumns.map((col) => {
+                          {orderedVisibleColumns.map((col) => {
 
                             const isMaster = !!col.master;
 
@@ -3730,13 +4060,13 @@ const togglePinColumn = (columnName) => {
                                 className={`
                                   px-4 py-2 whitespace-nowrap
                                   ${getAlignClass(col.display_name)}
-                                  ${getPinnedCellClass(col.column_name, "bg-blue-50")}
+                                  ${pinnedColumns.includes(col.column_name) ? "sticky z-20 bg-blue-50 border-r border-gray-200" : ""}
                                   ${col.column_name === "company"
                                     ? "min-w-[450px]"
                                     : ""
                                   }
                                 `}
-                                style={getPinnedCellStyle(col.column_name)}
+                                style={getPinnedLeft(col.column_name)}
                               >
 
                                 <div className="relative">
@@ -4064,32 +4394,48 @@ const togglePinColumn = (columnName) => {
 
                         </tr>
                       )}
-                      {sortedRows.map((row, i) => (
-                       <tr
-  key={row.id ?? i}
-  className="group hover:bg-gray-50 transition-colors cursor-pointer"
-  onDoubleClick={() => {
-                          if (!row.prf_generate || isRowUnposted(row)) {
-      setEditRowId(row.id);
+                    {(groupedByRows || []).map((groupObj) => (
+  <React.Fragment key={groupObj.group || "default"}>
 
-      setEditRow({
-        ...row,
-      });
+    {groupBy?.key && (
+      <tr className="bg-blue-100 sticky top-0 z-30">
+        <td
+          colSpan={totalColumns}
+          className="px-4 py-2 font-semibold text-blue-900 border-y"
+        >
+          {visibleColumns.find(
+            c => c.column_name === groupBy.key
+          )?.display_name || groupBy.key}
+          : {groupObj.group}
+          ({groupObj.rows.length})
+        </td>
+      </tr>
+    )}
 
-      setOriginalRow(row);
+    {groupObj.rows.map((row, i) => (
+      <tr
+        key={row.id ?? i}
+        className="group hover:bg-gray-50 transition-colors cursor-pointer"
+        onDoubleClick={() => {
+          if (!row.prf_generate || isRowUnposted(row)) {
+            setEditRowId(row.id);
+            setEditRow({ ...row });
+            setOriginalRow(row);
+            setShowEditPopup(true);
+          }
+        }}
+      >
 
-      setShowEditPopup(true);
-    }
-  }}
->
-                          
-                          {/* ================= SERIAL NO ================= */}
-                          <td className="px-4 py-3 whitespace-nowrap sticky left-0 z-20 bg-white group-hover:bg-gray-50 w-16 min-w-16 border-r border-gray-200">
-                            {(page - 1) * pageSize + i + 1}
-                          </td>
+        {/* ================= SERIAL NO ================= */}
+        <td className="px-4 py-3 whitespace-nowrap sticky left-0 z-20 bg-white group-hover:bg-gray-50 w-16 min-w-16 border-r border-gray-200">
+
+          {/* ✅ FIXED SERIAL NUMBER */}
+          {(rowIndexMap.get(row.id) ?? 0) + 1}
+
+        </td>
 
                           {/* ================= COLUMNS ================= */}
-                          {visibleColumns.map((col) => {
+                          {orderedVisibleColumns.map((col) => {
 
                             const isMaster = !!col.master;
 
@@ -4207,8 +4553,8 @@ const togglePinColumn = (columnName) => {
                                 key={col.column_id}
                                 className={`px-4 py-3 whitespace-nowrap ${getAlignClass(
                                   col.display_name
-                                )} ${getPinnedCellClass(col.column_name)}`}
-                                style={getPinnedCellStyle(col.column_name)}
+                                )} ${pinnedColumns.includes(col.column_name) ? "sticky z-20 bg-blue-50 border-r border-gray-200" : "" } `}
+                                style={getPinnedLeft(col.column_name)}
                               >
 
                                 {editRowId === row.id ? (
@@ -4891,7 +5237,9 @@ const togglePinColumn = (columnName) => {
 
 </td>
                         </tr>
-                      ))}
+                         ))}
+  </React.Fragment>
+))}
                       {showEditPopup && (
                         <EditRowPopup
                           visibleColumns={visibleColumns}
@@ -4921,7 +5269,7 @@ const togglePinColumn = (columnName) => {
                     {/* ================= MOBILE VIEW ================= */}
 <div className="md:hidden space-y-4">
 
-  {sortedRows.map((row, i) => (
+  {sortedAllRows.map((row, i) => (
 
     <div
       key={row.id ?? i}
@@ -5153,560 +5501,10 @@ const togglePinColumn = (columnName) => {
 </div>
                     </>
                   )}
-                    {showImportModal && (
-                        <Modal title="Import Data" onClose={() => setShowImportModal(false)}>
+                  
 
-                            <div className="flex flex-col gap-4">
-
-                                {/* TOP ACTIONS */}
-                                <div className="flex gap-3">
-
-                                    <button
-                                        onClick={handleExport}
-                                        className="btn btn-outline flex-1"
-                                    >
-                                        ⬇️ Template
-                                    </button>
-
-                                    <label className="btn btn-green flex-1 cursor-pointer">
-                                        📁 Choose File
-                                        <input
-                                            type="file"
-                                            className="hidden"
-                                            onChange={handleFileChange}
-                                        />
-                                    </label>
-
-                                </div>
-
-                                {/* FILE PREVIEW */}
-                                {file && (
-                                    <div className="flex items-center justify-between bg-gray-100 px-3 py-2 rounded-lg">
-
-                                        <span className="text-sm truncate">
-                                            📄 {file.name}
-                                        </span>
-
-                                        <button
-                                            onClick={() => setFile(null)}
-                                            className="text-red-500 hover:text-red-700"
-                                        >
-                                            ✕
-                                        </button>
-
-                                    </div>
-                                )}
-
-                                {/* UPLOAD BUTTON */}
-                                {file && (
-                                    <button
-                                        onClick={handleUpload}
-                                        className="btn btn-blue w-full"
-                                    >
-                                        ⬆️ Upload File
-                                    </button>
-                                )}
-
-                            </div>
-
-                        </Modal>
-                    )}
-                    {showPrintModal && (
-                        <Modal title="Print Options" onClose={() => setShowPrintModal(false)}>
-
-                            <div className="flex gap-3">
-
-                                <button
-                                    onClick={() => handlePrint("default",null,groupBy)}
-                                    className="btn btn-gray flex-1"
-                                >
-                                    Default
-                                </button>
-
-                                <button
-                                    onClick={async () => {
-                                    const savedCols = await fetchCustomizedColumns();
-
-                                    handlePrint("saved", savedCols, groupBy); // ✅ pass directly
-                                    }}
-                                    className="btn btn-blue flex-1"
-                                >
-                                    Saved
-                                </button>
-
-                                <button
-                                    onClick={() => setShowColumnSelector(true)}
-                                    className="btn btn-green flex-1"
-                                >
-                                    Customize
-                                </button>
-                                <button
-                                    onClick={() => setShowPrintOptions(true)}
-                                    className="btn btn-green flex-1"
-                                >
-                                     Header
-                                </button>
-                                 <select
-                                    value={groupBy}
-                                    onChange={(e) => setGroupBy(e.target.value)}
-                                    className="border p-2 w-full rounded"
-                                  >
-                                    <option value="service">Service Types</option>
-                                    <option value="terms">Terms</option>
-                                  </select>
-                               
-
-                            </div>
-
-                        </Modal>
-                    )}
-                    {showExcelModal && (
-                        <Modal title="Excel Export" onClose={() => setShowExcelModal(false)}>
-                            <div className="flex gap-3">
-
-                                <button
-                                    onClick={() => handleExcel("default", null, groupBy)}
-                                    className="btn btn-gray flex-1"
-                                >
-                                    Default
-                                </button>
-
-                                <button
-                                     onClick={async () => {
-                                    const savedCols = await fetchCustomizedColumns();
-
-                                    handleExcel("saved", savedCols, groupBy);  // ✅ pass directly
-                                    }}
-                                    className="btn btn-blue flex-1"
-                                >
-                                    Saved
-                                </button>
-
-                                <button
-                                    onClick={() => setShowColumnSelector(true)}
-                                    className="btn btn-green flex-1"
-                                >
-                                    Customize
-                                </button>
-                                <button
-                                    onClick={() => setShowPrintOptions(true)}
-                                    className="btn btn-green flex-1"
-                                >
-                                     Header
-                                </button>
-                                 <select
-                                    value={groupBy}
-                                    onChange={(e) => setGroupBy(e.target.value)}
-                                    className="border p-2 w-full rounded"
-                                  >
-                                    <option value="service">Service Types</option>
-                                    <option value="terms">Terms</option>
-                                  </select>
-
-                            </div>
-
-                        </Modal>
-                    )}
-
-                    {showPdfModal && (
-                        <Modal title="PDF Export" onClose={() => setShowPdfModal(false)}>
-                            <div className="flex gap-3">
-
-                                <button
-                                    onClick={() => handlePdf("default", null, groupBy)}
-                                    className="btn btn-gray flex-1"
-                                >
-                                    Default
-                                </button>
-
-                                <button
-                                   onClick={async () => {
-                                        const savedCols = await fetchCustomizedColumns();
-                                        handlePdf("saved", savedCols, groupBy); // ✅ pass directly
-                                    }}
-                                    className="btn btn-blue flex-1"
-                                >
-                                    Saved
-                                </button>
-
-                                <button
-                                    onClick={() => setShowColumnSelector(true)}
-                                    className="btn btn-green flex-1"
-                                >
-                                    Customize
-                                </button>
-                                <button
-                                    onClick={() => setShowPrintOptions(true)}
-                                    className="btn btn-green flex-1"
-                                >
-                                     Header
-                                </button>
-                                 <select
-                                    value={groupBy}
-                                    onChange={(e) => setGroupBy(e.target.value)}
-                                    className="border p-2 w-full rounded"
-                                  >
-                                    <option value="service">Service Types</option>
-                                    <option value="terms">Terms</option>
-                                  </select>
-
-                            </div>
-
-                        </Modal>
-                    )}
-                   {showTableColumnModal && (
-  <Modal
-    title="Customize Columns"
-    onClose={() => setShowTableColumnModal(false)}
-  >
-    <div className="flex gap-3">
-
-      {/* DEFAULT */}
-      <button
-        onClick={() => {
-          setTableColumnMode("default");
-          //setSelectedColumns([]); // reset
-        }}
-        className="btn btn-gray flex-1"
-      >
-        Default
-      </button>
-
-      {/* SAVED (DB or localStorage fallback) */}
-      <button
-  onClick={async () => {
-    try {
-
-      const res = await getCustomizedColumns(
-        currentModule?.module_id,
-        activeUserEmail
-      );
-
-      let cols = [];
-
-      if (res?.data?.data?.columns) {
-        cols = res.data.data.columns;
-        setSavedTableColumns(cols);
-      } else {
-        cols = saved;
-        setSavedTableColumns(saved);
-      }
-
-      setTableColumnMode("saved");
-
-      // ✅ print using saved columns
-   //   handlePrint("saved", cols);
-
-    } catch (err) {
-      console.error(err);
-    }
-  }}
-  className="btn btn-blue flex-1"
->
-  Saved
-</button>
-
-      {/* CUSTOM */}
-      <button
-        onClick={() => {
-          setShowColumnSelector(true);
-          setTableColumnMode("custom");
-
-          // optional: preload existing config into selector
-          setSelectedColumns(savedTableColumns || []);
-        }}
-        className="btn btn-green flex-1"
-      >
-        Customize
-      </button>
-
-    </div>
-  </Modal>
-)}
-
-                  {showColumnSelector && (
-  <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50">
-
-    <div className="w-[500px] bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden">
-
-      {/* Header */}
-      <div className="px-6 py-5 bg-gradient-to-r from-slate-50 to-blue-50 border-b">
-
-        <h2 className="text-lg font-semibold text-gray-800">
-          Customize Columns
-        </h2>
-
-        <p className="text-sm text-gray-500 mt-1">
-          Search and select fields to show in your table
-        </p>
-
-        {/* SEARCH */}
-        <div className="mt-4 relative">
-
-          <input
-            type="text"
-            placeholder="Search columns..."
-            value={columnSearch}
-            onChange={(e) => setColumnSearch(e.target.value)}
-            className="w-full px-4 py-2 pl-10 text-sm rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 outline-none transition"
-          />
-
-          <span className="absolute left-3 top-2.5 text-gray-400 text-sm">
-            🔍
-          </span>
-
-        </div>
-
-      </div>
-
-      {/* Quick actions */}
-      <div className="flex justify-between px-6 py-3 text-xs bg-gray-50 border-b">
-
-        <button
-          onClick={() => setTempSelectedColumns(columns.map(c => c.column_name))}
-          className="text-blue-600 hover:underline font-medium"
-        >
-          Select All
-        </button>
-
-        <button
-          onClick={() => setTempSelectedColumns([])}
-          className="text-red-500 hover:underline font-medium"
-        >
-          Clear All
-        </button>
-
-      </div>
-
-      {/* List */}
-     {/* List */}
-<DndContext
-  collisionDetection={closestCenter}
-  onDragEnd={handleDragEnd}
->
-  <SortableContext
-    items={columns.map(c => c.column_name)}
-    strategy={verticalListSortingStrategy}
-  >
-
-    <div className="max-h-72 overflow-auto p-4 space-y-2">
-
-      {columns
-        .filter(col =>
-          col.display_name
-            .toLowerCase()
-            .includes(columnSearch.toLowerCase())
-        )
-        .map(col => {
-
-          const checked =
-            tempSelectedColumns.includes(col.column_name);
-
-          return (
-            <SortableColumnItem
-              key={col.column_name}
-              col={col}
-              checked={checked}
-              toggleTempColumn={toggleTempColumn}
-            />
-          );
-        })}
-
-    </div>
-
-  </SortableContext>
-</DndContext>
-
-      {/* Footer */}
-      <div className="flex justify-end gap-2 px-6 py-4 border-t bg-white">
-
-        <button
-          onClick={() => setShowColumnSelector(false)}
-          className="px-4 py-2 text-sm rounded-xl border hover:bg-gray-100 transition"
-        >
-          Cancel
-        </button>
-
-        <button
-          onClick={saveColumnSelection}
-          className="px-5 py-2 text-sm rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:opacity-90 shadow-md transition"
-        >
-          Apply Changes
-        </button>
-
-      </div>
-
-    </div>
-
-  </div>
-)}
-                   {showPrintOptions && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md p-4">
-
-    <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl border border-gray-100 animate-[fadeIn_.2s_ease]">
-
-      {/* HEADER */}
-      <div className="relative overflow-hidden border-b bg-gradient-to-br from-blue-50 via-indigo-50 to-white px-6 py-5">
-
-        {/* decorative blur */}
-        <div className="absolute -top-10 -right-10 h-28 w-28 rounded-full bg-blue-200/40 blur-3xl"></div>
-
-        <div className="relative z-10">
-
-          <div className="flex items-center gap-3">
-
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg">
-              🖨️
-            </div>
-
-            <div>
-              <h2 className="text-xl font-semibold text-gray-800">
-                Print Settings
-              </h2>
-
-              <p className="text-sm text-gray-500 mt-0.5">
-                Customize your print header & branding
-              </p>
-            </div>
-
-          </div>
-
-        </div>
-
-      </div>
-
-      {/* BODY */}
-      <div className="space-y-5 p-6">
-
-        {/* COMPANY */}
-        <div>
-
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            Company / Trade Name
-          </label>
-
-          <div className="relative">
-
-            <select
-              value={selectedCompany}
-              onChange={(e) => setSelectedCompany(e.target.value)}
-              className="
-                w-full appearance-none rounded-2xl border border-gray-200
-                bg-gray-50 px-4 py-3 text-sm text-gray-700
-                outline-none transition-all
-                focus:border-blue-400
-                focus:bg-white
-                focus:ring-4 focus:ring-blue-100
-              "
-            >
-              <option value="">
-                Default (Module Name)
-              </option>
-
-              {companyList.map((c, i) => (
-                <option key={i} value={c}>
-                  {c}
-                </option>
-              ))}
-
-            </select>
-
-            {/* dropdown icon */}
-            <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
-              ▼
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* MODULE NAME */}
-        <div>
-
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            Custom Module Name
-          </label>
-
-          <div className="relative">
-
-            <input
-              type="text"
-              placeholder="Enter custom module title..."
-              value={printModuleName}
-              onChange={(e) => setPrintModuleName(e.target.value)}
-              className="
-                w-full rounded-2xl border border-gray-200
-                bg-gray-50 px-4 py-3 text-sm
-                outline-none transition-all
-                focus:border-blue-400
-                focus:bg-white
-                focus:ring-4 focus:ring-blue-100
-              "
-            />
-
-            <div className="absolute right-4 top-3 text-gray-300">
-              ✏️
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* PREVIEW */}
-        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4">
-
-          <p className="text-xs uppercase tracking-wide text-gray-400 mb-2">
-            Preview
-          </p>
-
-          <div className="rounded-xl bg-white border p-4 shadow-sm">
-
-            <h3 className="text-lg font-semibold text-gray-800">
-              {selectedCompany || "Your Company"}
-            </h3>
-
-            <p className="text-sm text-gray-500 mt-1">
-              {printModuleName || module?.display_name || "Module Name"}
-            </p>
-
-          </div>
-
-        </div>
-
-      </div>
-
-      {/* FOOTER */}
-      <div className="flex items-center justify-end gap-3 border-t bg-gray-50 px-6 py-4">
-
-        <button
-          onClick={() => setShowPrintOptions(false)}
-          className="
-            rounded-xl border border-gray-200
-            bg-white px-4 py-2.5 text-sm font-medium text-gray-600
-            transition hover:bg-gray-100
-          "
-        >
-          Cancel
-        </button>
-
-        <button
-          onClick={savePrintOptions}
-          className="
-            rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600
-            px-5 py-2.5 text-sm font-medium text-white
-            shadow-lg shadow-blue-200
-            transition hover:scale-[1.02] hover:shadow-xl
-          "
-        >
-          Save Settings
-        </button>
-
-      </div>
-
-    </div>
-
-  </div>
-)}
+                 
+                 
 {showGenerateModal && (
 
   <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center px-4 py-6">

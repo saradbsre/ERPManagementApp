@@ -692,20 +692,6 @@ const currentDate = new Date();
 </div>
 
 
-
-
-        <div className="mb-3">
-
-
-
-  {/* TITLE */}
-
-
-</div>
-
-        {/* ================= TOP INFO TABLE ================= */}
-{/* ================= REQUEST DETAILS ================= */}
-
 <table className="w-full border border-black border-collapse mb-5 text-[10px]">
 
   {/* HEADER */}
@@ -837,28 +823,7 @@ const currentDate = new Date();
 </table>
 
 
-{/* ================= DESCRIPTION ================= */}
 
-{/* <table className="w-full border border-black border-collapse mb-5 text-[10px]">
-
-  <tbody>
-
-    <tr>
-
-      <td className="border border-gray-800 p-2 bg-gray-200 font-bold w-[18%]">
-        DESCRIPTION
-      </td>
-
-      <td className="border border-gray-800 p-2 bg-gray-100 font-semibold">
-        {header.term} Subscription fees
-        ( expiry on {expiryDate} )
-      </td>
-
-    </tr>
-
-  </tbody>
-
-</table> */}
 
 
 {/* ================= DETAILS TABLE ================= */}

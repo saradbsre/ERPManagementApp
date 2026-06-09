@@ -2,33 +2,24 @@ import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
 export const exportToExcel = async (
-  rows,
+  groups,
   columns,
   moduleName,
-  groupBy = "service"
+  groupBy,
+  originalColumns
 ) => {
 
- // console.log("Exporting to Excel with groupBy:", groupBy);
-
-  // =========================
-  // HELPERS
-  // =========================
-
-  const safeLower = (v) => (v || "").toLowerCase();
+  const safeLower = (v) => (v || "").toString().toLowerCase();
 
   const formatDate = (value) => {
     if (!value) return "-";
-
     const d = new Date(value);
-
     if (isNaN(d.getTime())) return value;
-
     return d.toLocaleDateString("en-GB");
   };
 
   const maskCard = (value) => {
     const str = String(value || "");
-
     return str.length > 4
       ? `**** **** **** ${str.slice(-4)}`
       : str;
@@ -37,419 +28,222 @@ export const exportToExcel = async (
   const isTotalColumn = (col) =>
     safeLower(col).includes("total");
 
-  const getGroupKey = (row, groupBy) => {
-  if (!groupBy) return "ALL";
-
-  if (groupBy === "service") {
-    return (
-      row["Product Types"] ||
-      row["product_types"]?.value ||
-      row["product_types"] ||
-      "UNKNOWN"
-    );
-  }
-
-  if (groupBy === "terms") {
-    return (
-      row["Term"] ||
-      row["term"] ||
-      "UNKNOWN"
-    );
-  }
-
-  return row[groupBy] || "UNKNOWN";
-};
-
-  // =========================
-  // GROUP DATA
-  // =========================
-
-const grouped = rows.reduce((acc, row) => {
-
-  const key = getGroupKey(row, groupBy);
-
-  if (!acc[key]) acc[key] = [];
-
-  acc[key].push(row);
-
-  return acc;
-
-}, {});
-
-  // =========================
-  // WORKBOOK
-  // =========================
+  const borderStyle = () => ({
+    top: { style: "thin", color: { argb: "D9D9D9" } },
+    left: { style: "thin", color: { argb: "D9D9D9" } },
+    bottom: { style: "thin", color: { argb: "D9D9D9" } },
+    right: { style: "thin", color: { argb: "D9D9D9" } }
+  });
 
   const workbook = new ExcelJS.Workbook();
-
   const worksheet = workbook.addWorksheet("Report");
 
-  worksheet.views = [
-    {
-      state: "frozen",
-      ySplit: 1
-    }
-  ];
-
-  // =========================
-  // STYLES
-  // =========================
+  worksheet.views = [{ state: "frozen", ySplit: 1 }];
 
   const headerStyle = {
-    font: {
-      bold: true,
-      color: { argb: "FFFFFFFF" },
-      size: 11
-    },
-    fill: {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "305496" }
-    },
-    alignment: {
-      horizontal: "center",
-      vertical: "middle"
-    },
+    font: { bold: true, color: { argb: "FFFFFFFF" }, size: 11 },
+    fill: { type: "pattern", pattern: "solid", fgColor: { argb: "305496" } },
+    alignment: { horizontal: "center", vertical: "middle" },
     border: borderStyle()
   };
 
   const totalStyle = {
-    font: {
-      bold: true
-    },
-    fill: {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "F2F2F2" }
-    },
-    alignment: {
-      horizontal: "right"
-    },
+    font: { bold: true },
+    fill: { type: "pattern", pattern: "solid", fgColor: { argb: "F2F2F2" } },
+    alignment: { horizontal: "right" },
     border: borderStyle()
   };
 
   const grandStyle = {
-    font: {
-      bold: true,
-      size: 12
-    },
-    fill: {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFD966" }
-    },
-    alignment: {
-      horizontal: "right"
-    },
+    font: { bold: true, size: 12 },
+    fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD966" } },
+    alignment: { horizontal: "right" },
     border: borderStyle()
   };
 
-  // =========================
-  // COMPANY TITLE
-  // =========================
-
-  const company =
-    localStorage.getItem("print_company") || "";
+  const company = localStorage.getItem("print_company") || "";
 
   let currentRow = 1;
 
+  // =========================
+  // COMPANY
+  // =========================
   if (company) {
-
-    worksheet.mergeCells(
-      currentRow,
-      1,
-      currentRow,
-      columns.length + 1
-    );
-
-    const companyCell =
-      worksheet.getCell(currentRow, 1);
-
-    companyCell.value = company;
-
-    companyCell.font = {
-      bold: true,
-      size: 20
-    };
-
-    companyCell.alignment = {
-      horizontal: "center"
-    };
-
+    worksheet.mergeCells(currentRow, 1, currentRow, columns.length + 1);
+    const cell = worksheet.getCell(currentRow, 1);
+    cell.value = company;
+    cell.font = { bold: true, size: 20 };
+    cell.alignment = { horizontal: "center" };
     currentRow += 2;
   }
 
   // =========================
-  // REPORT TITLE
+  // TITLE
   // =========================
-
   if (moduleName) {
-
-    worksheet.mergeCells(
-      currentRow,
-      1,
-      currentRow,
-      columns.length + 1
-    );
-
-    const titleCell =
-      worksheet.getCell(currentRow, 1);
-
-    titleCell.value = moduleName;
-
-    titleCell.font = {
-      bold: true,
-      size: 16,
-      color: {
-        argb: "1F4E79"
-      }
-    };
-
-    titleCell.alignment = {
-      horizontal: "center"
-    };
-
+    worksheet.mergeCells(currentRow, 1, currentRow, columns.length + 1);
+    const cell = worksheet.getCell(currentRow, 1);
+    cell.value = moduleName;
+    cell.font = { bold: true, size: 16, color: { argb: "1F4E79" } };
+    cell.alignment = { horizontal: "center" };
     currentRow += 2;
   }
 
   // =========================
-  // GRAND TOTALS
+  // MAP ORIGINAL COLUMNS (IMPORTANT FIX)
   // =========================
+  const columnMap = {};
+  (originalColumns || []).forEach(col => {
+    columnMap[col.display_name] = col;
+  });
+
+  // FILTER ONLY SELECTED COLUMNS (THIS IS YOUR KEY FIX)
+  const exportColumns = (columns || [])
+    .map(name => columnMap[name])
+    .filter(Boolean);
 
   const grandTotals = {};
 
-  columns.forEach((col) => {
-
-    if (isTotalColumn(col)) {
-      grandTotals[col] = 0;
-    }
-
-  });
-
   // =========================
-  // GROUPS
+  // GROUP LOOP
   // =========================
+  groups.forEach((group) => {
 
-  Object.entries(grouped).forEach(
-    ([serviceType, groupRows]) => {
+    const rows = group.rows || [];
 
-      // =========================
-      // GROUP TITLE
-      // =========================
+    // GROUP HEADER
+    worksheet.mergeCells(currentRow, 1, currentRow, exportColumns.length + 1);
 
-      worksheet.mergeCells(
-        currentRow,
-        1,
-        currentRow,
-        columns.length + 1
-      );
+    const groupCell = worksheet.getCell(currentRow, 1);
+    groupCell.value = group.group;
+    groupCell.font = { bold: true, size: 14 };
+    groupCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "D9E1F2" }
+    };
+    groupCell.alignment = { horizontal: "center" };
 
-      const groupCell =
-        worksheet.getCell(currentRow, 1);
+    currentRow += 2;
 
-      groupCell.value =
-        `${serviceType}`;
+    // =========================
+    // HEADER ROW
+    // =========================
+    const headerValues = [
+      "SNo",
+      ...exportColumns.map(c => c.display_name)
+    ];
 
-      groupCell.font = {
-        bold: true,
-        size: 14
-      };
+    const headerRow = worksheet.addRow(headerValues);
 
-      groupCell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: {
-          argb: "D9E1F2"
-        }
-      };
+    headerRow.eachCell(cell => {
+      cell.style = headerStyle;
+    });
 
-      groupCell.alignment = {
-        horizontal: "center"
-      };
+    currentRow++;
 
-      currentRow += 2;
+    const groupTotals = {};
 
-      // =========================
-      // HEADER
-      // =========================
+    exportColumns.forEach(col => {
+      if (isTotalColumn(col.column_name)) {
+        groupTotals[col.column_name] = 0;
+        grandTotals[col.column_name] =
+          grandTotals[col.column_name] || 0;
+      }
+    });
 
-      const headerRow = worksheet.getRow(currentRow);
+    // =========================
+    // ROWS
+    // =========================
+    rows.forEach((row, index) => {
 
-      const headerValues = [
-        "SNo",
-        ...columns
-      ];
+      const rowValues = [
+        index + 1,
+        ...exportColumns.map(col => {
 
-      headerValues.forEach((val, idx) => {
+          const key = col.column_name;
+          let value = row?.[key];
 
-        const cell =
-          headerRow.getCell(idx + 1);
+          // object
+          if (value && typeof value === "object") {
+            value = value?.value ?? value?.label ?? "";
+          }
 
-        cell.value = val;
-
-        cell.style = headerStyle;
-      });
-
-      headerRow.height = 22;
-
-      currentRow++;
-
-      // =========================
-      // GROUP TOTALS
-      // =========================
-
-      const groupTotals = {};
-
-      columns.forEach((col) => {
-
-        if (isTotalColumn(col)) {
-          groupTotals[col] = 0;
-        }
-
-      });
-
-      // =========================
-      // DATA ROWS
-      // =========================
-
-      groupRows.forEach((row, index) => {
-
-        const excelRow =
-          worksheet.getRow(currentRow);
-
-        // SNO
-        excelRow.getCell(1).value =
-          index + 1;
-
-        excelRow.getCell(1).alignment = {
-          horizontal: "center"
-        };
-
-        excelRow.getCell(1).border =
-          borderStyle();
-
-        columns.forEach((col, colIndex) => {
-
-          const cell =
-            excelRow.getCell(colIndex + 2);
-
-          let value =
-            row[col] ??
-            row[safeLower(col)] ??
-            "";
-
-          // DATE
-          if (
-            safeLower(col).includes("date")
-          ) {
+          // date
+          if (col.data_type === "date") {
             value = formatDate(value);
           }
 
-          // CREDIT CARD
+          // credit card
           if (
-            safeLower(col).includes("card") ||
-            safeLower(col).includes("credit")
+            safeLower(key).includes("card") ||
+            safeLower(key).includes("credit")
           ) {
             value = maskCard(value);
           }
 
-          // TOTALS
-          if (isTotalColumn(col)) {
+          return value ?? "";
+        })
+      ];
 
-            const num = Number(
-              String(value || 0).replace(
-                /,/g,
-                ""
-              )
-            );
+      const excelRow = worksheet.addRow(rowValues);
 
-            const clean =
-              isNaN(num) ? 0 : num;
-
-            groupTotals[col] += clean;
-
-            grandTotals[col] += clean;
-
-            cell.value = clean;
-
-            cell.numFmt = "#,##0.00";
-
-            cell.alignment = {
-              horizontal: "right"
-            };
-
-          } else {
-
-            cell.value = value;
-
-            cell.alignment = {
-              horizontal: "center"
-            };
-          }
-
-          cell.border = borderStyle();
-
-        });
-
-        currentRow++;
+      excelRow.eachCell(cell => {
+        cell.border = borderStyle();
+        cell.alignment = { horizontal: "center" };
       });
 
-      // =========================
-      // GROUP TOTAL ROW
-      // =========================
+      // totals
+      exportColumns.forEach(col => {
+        if (isTotalColumn(col.column_name)) {
+          const val = Number(row?.[col.column_name] || 0);
 
-      const totalRow =
-        worksheet.getRow(currentRow);
+          groupTotals[col.column_name] =
+            (groupTotals[col.column_name] || 0) + val;
 
-      totalRow.getCell(1).value =
-        "TOTAL";
-
-      totalRow.getCell(1).style =
-        totalStyle;
-
-      columns.forEach((col, idx) => {
-
-        const cell =
-          totalRow.getCell(idx + 2);
-
-        if (isTotalColumn(col)) {
-
-          cell.value =
-            groupTotals[col];
-
-          cell.numFmt = "#,##0.00";
+          grandTotals[col.column_name] =
+            (grandTotals[col.column_name] || 0) + val;
         }
-
-        cell.style = totalStyle;
       });
 
-      currentRow += 2;
-    }
-  );
+      currentRow++;
+    });
+
+    // =========================
+    // GROUP TOTAL
+    // =========================
+    const totalRow = worksheet.addRow([]);
+
+    totalRow.getCell(1).value = "TOTAL";
+    totalRow.getCell(1).style = totalStyle;
+
+    exportColumns.forEach((col, idx) => {
+      const cell = totalRow.getCell(idx + 2);
+
+      if (isTotalColumn(col.column_name)) {
+        cell.value = groupTotals[col.column_name] || 0;
+        cell.numFmt = "#,##0.00";
+      }
+
+      cell.style = totalStyle;
+    });
+
+    currentRow += 2;
+  });
 
   // =========================
-  // GRAND TOTAL ROW
+  // GRAND TOTAL
   // =========================
+  const grandRow = worksheet.addRow([]);
 
-  const grandRow =
-    worksheet.getRow(currentRow);
+  grandRow.getCell(1).value = "GRAND TOTAL";
+  grandRow.getCell(1).style = grandStyle;
 
-  grandRow.getCell(1).value =
-    "GRAND TOTAL";
+  exportColumns.forEach((col, idx) => {
+    const cell = grandRow.getCell(idx + 2);
 
-  grandRow.getCell(1).style =
-    grandStyle;
-
-  columns.forEach((col, idx) => {
-
-    const cell =
-      grandRow.getCell(idx + 2);
-
-    if (isTotalColumn(col)) {
-
-      cell.value =
-        grandTotals[col];
-
+    if (isTotalColumn(col.column_name)) {
+      cell.value = grandTotals[col.column_name] || 0;
       cell.numFmt = "#,##0.00";
     }
 
@@ -457,61 +251,12 @@ const grouped = rows.reduce((acc, row) => {
   });
 
   // =========================
-  // AUTO WIDTH
-  // =========================
-
-  worksheet.columns.forEach((column) => {
-  let maxLength = 10;
-  column.eachCell({ includeEmpty: true }, (cell) => {
-    let cellValue = cell.value;
-    if (cellValue?.richText) {
-      cellValue = cellValue.richText.map((t) => t.text).join("");
-    }
-    const text = cellValue ? String(cellValue) : "";
-    // For multi-line cells, consider the longest line
-    const lines = text.split("\n");
-    lines.forEach(line => {
-      maxLength = Math.max(maxLength, line.length);
-    });
-  });
-  column.width = Math.min(maxLength + 1, 15);
-});
-
-  // =========================
   // EXPORT
   // =========================
-
-  const buffer =
-    await workbook.xlsx.writeBuffer();
+  const buffer = await workbook.xlsx.writeBuffer();
 
   saveAs(
     new Blob([buffer]),
-    `${moduleName}.xlsx`
+    `${moduleName || "report"}.xlsx`
   );
 };
-
-// =========================
-// BORDER
-// =========================
-
-function borderStyle() {
-
-  return {
-    top: {
-      style: "thin",
-      color: { argb: "D9D9D9" }
-    },
-    left: {
-      style: "thin",
-      color: { argb: "D9D9D9" }
-    },
-    bottom: {
-      style: "thin",
-      color: { argb: "D9D9D9" }
-    },
-    right: {
-      style: "thin",
-      color: { argb: "D9D9D9" }
-    }
-  };
-}
