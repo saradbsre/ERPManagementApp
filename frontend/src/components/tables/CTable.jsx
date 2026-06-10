@@ -28,6 +28,7 @@ import ShowHideColumnsPopup from "./ShowHideColumnsPopup";
 import { createPortal } from "react-dom";
 import EditRowPopup from "./EditRowPopup";
 import CustomizeDrawer from "./CustomizeDrawer";
+import { EyeIcon } from "@heroicons/react/24/outline";
 
 import {
   arrayMove,
@@ -152,6 +153,7 @@ export default function DynamicTablePage() {
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email;
     const activeUserName = activeUser?.name;
+    const isUserHavePrfAccess = activeUser?.prf_access;
     const userRole = activeUser?.role;
     const [vatPercent, setVatPercent] = useState(0);
     const [providerPlansMap, setProviderPlansMap] = useState({});
@@ -159,9 +161,9 @@ export default function DynamicTablePage() {
     const [autoFilledFields, setAutoFilledFields] = useState({});
     const [planManuallyChanged, setPlanManuallyChanged] = useState(false);
     const [groupBy, setGroupBy] = useState({
-  key: null,
-  direction: "asc"
-});
+      key: null,
+      direction: "asc"
+    });
     const [activeDateFilter, setActiveDateFilter] = useState(null);
     const [showSaveFilter, setShowSaveFilter] = useState(false);
     const [saveFilterName, setSaveFilterName] = useState("");
@@ -2874,7 +2876,7 @@ ${groupedRows.map(group => `
 
     const handleGenerateSelected = () => {
   // Get the selected rows' data
- const selectedRows = sortedRows.filter(
+ const selectedRows = sortedAllRows.filter(
   (row) => selectedRowIds.includes(row.id) && !isPrfBlockedProductType(row.product_types)
 );
   if (selectedRows.length === 0) return;
@@ -3863,7 +3865,7 @@ useEffect(() => {
                         <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
                             <tr>
                                 <th
-  className="px-4 py-3 border-b text-left sticky left-0 z-40 bg-gray-100 w-16 min-w-16 border-r border-gray-200 cursor-pointer"
+  className="group relative px-4 py-3 border-b text-left sticky left-0 z-40 bg-gray-100 w-16 min-w-16 border-r border-gray-200 cursor-pointer"
   onClick={(e) => {
     const rect = e.currentTarget.getBoundingClientRect();
 
@@ -3881,7 +3883,15 @@ useEffect(() => {
     setShowHidePopup(true);
   }}
 >
-  S.No
+  {/* TEXT (hide on hover) */}
+  <span className="group-hover:opacity-0 transition">
+    S.No
+  </span>
+
+  {/* ICON (show only on hover) */}
+ <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition text-gray-500">
+  <EyeIcon className="w-6 h-6" />
+</span>
 </th>
 {showHidePopup &&
   hidePopupColumn === "__sno__" && (
@@ -4467,6 +4477,7 @@ onDrop={() => handleDrop(col.column_name)}
 
                               const val = row[col.column_name];
                               const disablePrfCheckbox = isPrfBlockedProductType(row.product_types);
+                              const isCheckboxDisabled = disablePrfCheckbox || !isUserHavePrfAccess;
                               //console.log("Row ID:", row.id, "Product Types:", row.product_types, "Disable PRF Checkbox:", disablePrfCheckbox);
                               //console.log("disablePrfCheckbox for row", row.id, "with product types", row.product_types, ":", disablePrfCheckbox);
                               if (val && String(val).trim() !== "") {
@@ -4493,57 +4504,66 @@ onDrop={() => handleDrop(col.column_name)}
 
                                 return (
                                   <td className="px-4 py-3 whitespace-nowrap text-center" key={col.column_id}>
-                                                      <label className="relative flex items-center justify-center cursor-pointer">
-                             <input
-  type="checkbox"
-  checked={!disablePrfCheckbox && selectedRowIds.includes(row.id)}
-  disabled={disablePrfCheckbox}
-  onChange={(e) => {
-    if (disablePrfCheckbox) return;
-    setSelectedRowIds((prev) =>
-      e.target.checked
-        ? [...prev, row.id]
-        : prev.filter((id) => id !== row.id)
-    );
-  }}
-  className="
-    peer
-    appearance-none
-    h-5 w-5
-    rounded-md
-    border-2 border-gray-300
-    bg-white
-    checked:bg-green-500
-    checked:border-green-500
-    transition-all duration-200
-    cursor-pointer
-    disabled:cursor-not-allowed
-    disabled:opacity-40
-  "
-/>
+                                                     <label
+  className={`relative flex items-center justify-center ${
+    isCheckboxDisabled
+      ? "cursor-not-allowed"
+      : "cursor-pointer"
+  }`}
+>
+  <input
+    type="checkbox"
+    checked={
+      !isCheckboxDisabled &&
+      selectedRowIds.includes(row.id)
+    }
+    disabled={isCheckboxDisabled}
+    onChange={(e) => {
+      if (isCheckboxDisabled) return;
 
-                              <svg
-                                className="
-                                  absolute
-                                  w-3 h-3
-                                  text-white
-                                  opacity-0
-                                  peer-checked:opacity-100
-                                  pointer-events-none
-                                "
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth={3}
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M5 13l4 4L19 7"
-                                />
-                              </svg>
-                            </label>
+      setSelectedRowIds((prev) =>
+        e.target.checked
+          ? [...prev, row.id]
+          : prev.filter((id) => id !== row.id)
+      );
+    }}
+    className="
+      peer
+      appearance-none
+      h-5 w-5
+      rounded-md
+      border-2 border-gray-300
+      bg-white
+      checked:bg-green-500
+      checked:border-green-500
+      transition-all duration-200
+      disabled:cursor-not-allowed
+      disabled:opacity-40
+    "
+  />
+
+  <svg
+    className="
+      absolute
+      w-3 h-3
+      text-white
+      opacity-0
+      peer-checked:opacity-100
+      pointer-events-none
+    "
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth={3}
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M5 13l4 4L19 7"
+    />
+  </svg>
+</label>
                                                       </td>
                                 );
                               }
@@ -5133,6 +5153,7 @@ onDrop={() => handleDrop(col.column_name)}
 
           <button
             onClick={() => handlePost(encodeURIComponent(row.prf_generate))}
+            disabled={!isUserHavePrfAccess}
              className="px-3 py-1 bg-green-400 hover:bg-green-500 text-white rounded-md text-sm font-medium"
           >
             Post
@@ -5141,8 +5162,15 @@ onDrop={() => handleDrop(col.column_name)}
       ) : (
         <button
           onClick={() => handleUnpost(encodeURIComponent(row.prf_generate))}
-          className="px-3 py-1 bg-red-400 hover:bg-red-500 text-white rounded-md text-sm font-medium"
-        >
+          disabled={!isUserHavePrfAccess}
+          className={`px-3 py-1 text-white rounded-md text-sm font-medium transition-colors
+    ${
+      !isUserHavePrfAccess
+        ? "bg-gray-300 cursor-not-allowed opacity-50"
+        : "bg-red-400 hover:bg-red-500"
+    }`}
+>
+        
           Unpost
         </button>
       )}
@@ -5382,6 +5410,7 @@ onDrop={() => handleDrop(col.column_name)}
 
                 <button
                   onClick={() => handlePost(encodeURIComponent(row.prf_generate))}
+                  disabled={!isUserHavePrfAccess}
                   className="
                     w-full
                     bg-emerald-600
@@ -5402,15 +5431,14 @@ onDrop={() => handleDrop(col.column_name)}
                       encodeURIComponent(row.prf_generate)
                     )
                   }
-                  className="
-                    w-full
-                    bg-amber-600
-                    text-white
-                    py-2.5
-                    rounded-xl
-                    font-medium
-                  "
-                >
+                  disabled={!isUserHavePrfAccess}
+                  className={`px-3 py-1 text-white rounded-md text-sm font-medium transition-colors
+                      ${
+                        !isUserHavePrfAccess
+                          ? "bg-gray-300 cursor-not-allowed opacity-50"
+                          : "bg-red-400 hover:bg-red-500"
+                      }`}
+                  >
                   Unpost
                 </button>
 

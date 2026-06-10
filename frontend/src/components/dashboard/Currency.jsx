@@ -47,17 +47,25 @@ export default function CurrencyWidget() {
   // -----------------------------
   // RATE TEXT
   // -----------------------------
-  const exchangeLabel = useMemo(() => {
-    const fromC = currencies.find(c => c.currency_code === from);
-    const toC = currencies.find(c => c.currency_code === to);
+ const exchangeLabel = useMemo(() => {
+  const fromC = currencies.find(
+    c => c.currency_code === from
+  );
 
-    if (!fromC || !toC) return "";
+  const toC = currencies.find(
+    c => c.currency_code === to
+  );
 
-    const rate =
-      (1 / fromC.exchange_rate) * toC.exchange_rate;
+  if (!fromC || !toC) return "";
 
-    return `1 ${from} = ${rate.toFixed(3)} ${to}`;
-  }, [from, to, currencies]);
+  const rate =
+    (1 / fromC.exchange_rate) * toC.exchange_rate;
+
+  const fromCode = fromC.currency;   // USD / AED
+  const toCode = toC.currency;
+
+  return `1 ${fromCode} = ${rate.toFixed(2)} ${toCode}`;
+}, [from, to, currencies]);
 
   // -----------------------------
   // SWAP WITH ANIMATION

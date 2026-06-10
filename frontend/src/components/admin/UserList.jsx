@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { fetchUsers, fetchRoles, toggleUserStatus, updateUserRole, updateUserPermissions } from "../../api/api";
+import { fetchUsers, fetchRoles, toggleUserStatus, updateUserRole, updateUserPermissions, toggleUserPrfAccess } from "../../api/api";
 import ValidatePopups from "../Validatepopups";
 
 export default function UserList() {
@@ -63,6 +63,24 @@ const usersWithPermissions = res.data.map((u) => ({
 
   const handleToggleStatus = async (user) => {
   await toggleUserStatus(user.id, !user.is_active);
+  // Optionally, refresh users:
+  const res = await fetchUsers();
+  const usersWithPermissions = res.data.map((u) => ({
+    ...u,
+    permissions: {
+      access: u.access,
+      add: u.add,
+      delete: u.delete,
+      export: u.export,
+      modify: u.modify,
+      print: u.print,
+    },
+  }));
+  setUsers(usersWithPermissions);
+};
+
+  const handleTogglePrfAccess = async (user) => {
+  await toggleUserPrfAccess(user.id, !user.prf_access);
   // Optionally, refresh users:
   const res = await fetchUsers();
   const usersWithPermissions = res.data.map((u) => ({
@@ -513,10 +531,47 @@ const handlePermissionSave = async () => {
           </div>
 
           <div style={controlItem}>
-            <span>Module Access</span>
-            <button style={btnSecondary} disabled={!isEditing}>
-              Configure
-            </button>
+            <span>PRF Access</span>
+           <label className="switch">
+              <input
+  type="checkbox"
+  checked={selectedUser?.prf_access || false}
+  onChange={async () => {
+  const newStatus = !selectedUser.prf_access;
+
+  setSelectedUser((prev) => ({
+    ...prev,
+    prf_access: newStatus
+  }));
+
+  try {
+    await toggleUserPrfAccess(
+      selectedUser.id,
+      newStatus,
+      selectedUser.email,
+      activeUserEmail
+    );
+
+    await refreshUsers(selectedUser.id); // ✅ CLEAN
+
+    setPopupMessage(`User ${newStatus ? "activated" : "deactivated"}`);
+    setPopupType("success");
+
+  } catch (err) {
+    // rollback
+    setSelectedUser((prev) => ({
+      ...prev,
+      prf_access: !newStatus
+    }));
+
+    setPopupMessage("Failed to update status");
+    setPopupType("error");
+  }
+}}
+  disabled={!isEditing}
+/>
+              <span className="slider"></span>
+            </label>
           </div>
         </div>
       </div>

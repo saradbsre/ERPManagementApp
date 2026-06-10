@@ -59,6 +59,14 @@ export const toggleUserStatus = (id, status, email, activeUserEmail) => {
 
 
 
+export const toggleUserPrfAccess = (id, status, email, activeUserEmail) => {
+  const endpoint = status
+    ? `/users/${id}/prf-access/activate`
+    : `/users/${id}/prf-access/deactivate`;
+
+  return API.post(endpoint, { email, activeUserEmail });
+};
+
 export const updateUserRole = (id, data) => {
   return API.post(`/users/${id}/role`, data);
 };

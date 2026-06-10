@@ -14,6 +14,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@fontsource/libre-baskerville": "^5.2.10",
+    "@heroicons/react": "^2.2.0",
     "@tailwindcss/vite": "^4.2.2",
     "axios": "^1.15.1",
     "exceljs": "^4.4.0",
