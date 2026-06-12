@@ -281,7 +281,7 @@ export default function DynamicTablePage() {
         setVendors(result);
         //console.log("Vendors:", result);
       });
-        getMasterData("services", activeUserEmail).then(res => {
+        getMasterData("product_types", activeUserEmail).then(res => {
         const result = Array.isArray(res?.data) ? res.data : [];
         setServiceTypes(result);
       //  console.log("Service Types:", result);
