@@ -338,7 +338,7 @@ const selectedCurrency =
           .trim()
           .toUpperCase();
 
-        const currencyCode = (c.currency_code || "")
+        const currencyCode = (c.curr_code || "")
           .toString()
           .trim()
           .toUpperCase();
