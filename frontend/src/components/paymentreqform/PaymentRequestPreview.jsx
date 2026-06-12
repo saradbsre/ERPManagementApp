@@ -66,7 +66,8 @@ const currencyNames = {
   const [plans, setPlans] = useState([]);
   const [products, setProducts] = useState([]);
   const [productTypes, setProductTypes] = useState([]);
-  const [transactionType, setTransactionType] = useState("");
+  const [transactionType, setTransactionType] = useState([]);
+  
   const barcodeRef = useRef(null);
   const activeUser = JSON.parse(localStorage.getItem("user"));
   const activeUserEmail = activeUser?.email;
@@ -373,12 +374,14 @@ const selectedTransactionType = Array.isArray(transactionType) && header.transac
     (tt) => (tt.transaction_code || "").toString().trim().toUpperCase() === header.transaction_type.toString().trim().toUpperCase()
 ) : null;
 
-//console.log("Selected Transaction Type:", selectedTransactionType); 
+const selectedProductType = Array.isArray(productTypes) && header.product_types ? productTypes.find(
+    (pt) => (pt.service_code || "").toString().trim().toUpperCase() === header.product_types.toString().trim().toUpperCase()
+) : null;
+console.log("header.product_types value:", header);
+console.log(" Product Type:", productTypes);
+console.log("Selected Product Type:", selectedProductType); 
 
-// console.log("Selected currency:", selectedCurrency);
-// console.log("Selected term:", selectedTerm);
-// console.log("Selected cost center:", selectedCostCenter);
-// console.log("Selected department:", selectedDepartment);
+
 
 const getProductName = (productCode) => {
   const product = products?.find(
@@ -629,11 +632,16 @@ const currentDate = new Date();
       REQUEST SUMMARY
     </h2>
     <h1 className="font-bold text-[13px]">
-      {selectedTerm?.value || header.term} Subscription Fees
+      {selectedTerm?.value || header.term} {selectedProductType?.service_name || header.product_types} Fees
     </h1>
    <p className="text-[12px] text-gray-700">
-  {selectedTransactionType?.transaction_code === "TT003" &&
-    `This payment request is for a new subscription.`}
+   {selectedTransactionType?.transaction_code === "TT003" ? (
+    header.product_types === "S52"
+      ? "This payment request is for a new purchase."
+      : "This payment request is for a new subscription."
+  ) : (
+    ""
+  )}
 
   {selectedTransactionType?.transaction_code === "TT001" &&
     `This payment request is for the renewal of a subscription.`}
