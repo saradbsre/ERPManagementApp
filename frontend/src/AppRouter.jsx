@@ -10,7 +10,8 @@ import DynamicTablePage from "./components/tables/CTable";
 import MasterTablePage from "./components/masters/MasterTable";
 import Approvals from "./components/admin/Approvals";
 import ForgotPassword from "./pages/authpage/ForgotPassword";
-import ReportPage from "./components/reports/ReportTable";
+import ViewPage from "./components/views/ViewTable";
+import ReportTable from "./components/reports/ReportTable";
 import PaymentReqForm from "./pages/PaymentReqForm";
 import Profile from "./pages/Profile";
 import { useUser } from "./components/UserContext";
@@ -227,9 +228,10 @@ useEffect(() => {
             <Route path="/workspace/:id" element={<DynamicTablePage />} />
             <Route path="/masters/:masterName" element={<MasterTablePage />} />
             <Route path="/admin/approvals" element={<Approvals />} />
-            <Route path="/reports/:id" element={<ReportPage />} />
+            <Route path="/views/:id" element={<ViewPage />} />
             <Route path="/payment-req-form" element={<PaymentReqForm />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/reports/:id" element={<ReportTable />} />
           </Route>
         </Route>
       </Routes>

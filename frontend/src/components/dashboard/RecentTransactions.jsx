@@ -65,7 +65,7 @@ export default function RecentTransactions() {
   useEffect(() => {
     const loadServiceProviders = async () => {
       try {
-        const res = await getMasterData("service_providers", activeUserEmail);
+        const res = await getMasterData("products", activeUserEmail);
         const rows = Array.isArray(res?.data) ? res.data : [];
 
         const map = {};

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { act } from "react";
 
 const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api/itasset",
@@ -423,5 +424,22 @@ export const incrementPRFExportCount = (prfNum, activeUserEmail) => {
   return API.post(`/prf-export/${prfNum}`, {
     success: true,
     activeUserEmail
+  });
+};
+
+export const getReportMenu = ( ) => {
+  return API.get("/reports/menu");
+}
+
+export const getReportData = (
+  reportId,
+  activeUserEmail,
+  payload = {}
+) => {
+  return API.get(`/reports/${reportId}`, {
+    params: {
+      activeUserEmail,
+      ...payload
+    }
   });
 };

@@ -227,7 +227,7 @@ if (configOrder) {
     }, [columns]);
 
     useEffect(() => {
-    getMasterData("service_providers", activeUserEmail).then(res => {
+    getMasterData("products", activeUserEmail).then(res => {
       const result = Array.isArray(res.data) ? res.data : [];
       //console.log("Raw Service Providers:", result);
       setServiceProviders(result);
@@ -1265,7 +1265,7 @@ if (col.column_name === "products") {
         .trim()
         .toLowerCase();
 
-      // If vendor_name is missing in service_providers, resolve from vendors master
+      // If vendor_name is missing in products, resolve from vendors master
       const vendorNameFromMaster =
         vendors.find(
           (v) =>
@@ -1534,7 +1534,7 @@ const handleNewRowChange = async (key, value, masterName) => {
   });
 
   // use normalized below too
-  if (key === "service_providers") {
+  if (key === "products") {
 
     const providerValue = normalized;
 

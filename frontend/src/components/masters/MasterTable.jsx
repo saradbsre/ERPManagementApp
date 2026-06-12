@@ -313,7 +313,7 @@ useEffect(() => {
 useEffect(() => {
   const loadServices = async () => {
     try {
-      const res = await getMasterData("services", activeUserEmail);
+      const res = await getMasterData("product_types", activeUserEmail);
 
       setServicesList(res?.data ||  []);
       console.log("Loaded services:", res.data|| []);
@@ -579,58 +579,72 @@ const getLabel = (key, value) => {
 
 
                    {/* ================= CONTROL BAR (LEFT ALIGNED) ================= */}
-                   <div className="bg-white p-3 rounded-xl shadow mb-4 flex flex-wrap items-center gap-3">
-               
-                     {/* SEARCH */}
-                     <input
-                       type="text"
-                       placeholder="Search records..."
-                       className="border px-3 py-2 rounded-lg w-64"
-                       value={search}
-                       onChange={(e) => setSearch(e.target.value)}
-                     />
-                   
-               
-              
-               {/* {console.log("masterTypes", columns.reduce((acc, col) => {
-                   if (col.master) {
-                     acc[col.master] = col.data_type;
-                   }
-                   return acc;
-                 }, {}))} */}
-               
-                     {/* PAGINATION (LEFT SIDE LIKE YOU WANTED) */}
-                     <div className="flex items-center gap-2 text-sm ml-4">
-               
-                       <button
-                         disabled={page === 1}
-                         onClick={() => setPage(p => p - 1)}
-                         className="px-3 py-1 border rounded disabled:opacity-40"
-                       >
-                         Prev
-                       </button>
-               
-                       <span className="text-gray-600">
-                         {page} / {totalPages || 1}
-                       </span>
-               
-                       <button
-                         disabled={page === totalPages}
-                         onClick={() => setPage(p => p + 1)}
-                         className="px-3 py-1 border rounded disabled:opacity-40"
-                       >
-                         Next
-                       </button>
-               
-                     </div>
-               
-                     {/* RECORD COUNT */}
-                     <span className="text-sm text-gray-500 ml-auto">
-                         Total : {filteredRows.length} 
-                     </span>
-                     
-               
-                   </div>
+                  <div className="bg-white p-3 rounded-xl shadow mb-4 flex flex-wrap items-center gap-3">
+
+  {/* SEARCH */}
+  <input
+    type="text"
+    placeholder="Search records..."
+    className="border px-3 py-2 rounded-lg w-64"
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+  />
+
+  {/* RIGHT SIDE */}
+  <div className="ml-auto flex items-center gap-3">
+
+   
+
+    {/* PAGINATION */}
+    <div className="flex items-end gap-2 text-sm">
+      <button
+        disabled={page === 1}
+        onClick={() => setPage(1)}
+        className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+        title="First Page"
+      >
+        ⏮
+      </button>
+
+      <button
+        disabled={page === 1}
+        onClick={() => setPage((p) => Math.max(p - 1, 1))}
+        className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+        title="Previous"
+      >
+        ◀
+      </button>
+
+      <div className="px-3 py-1 rounded-md bg-gray-50 border text-gray-700 font-medium">
+        {page} / {totalPages || 1}
+      </div>
+
+      <button
+        disabled={page === totalPages}
+        onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+        className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+        title="Next"
+      >
+        ▶
+      </button>
+
+      <button
+        disabled={page === totalPages}
+        onClick={() => setPage(totalPages)}
+        className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+        title="Last Page"
+      >
+        ⏭
+      </button>
+    </div>
+     {/* RECORD COUNT */}
+    <span className="text-sm text-gray-500">
+      Total : {filteredRows.length}
+    </span>
+
+  </div>
+
+</div>
                
             
 
@@ -670,7 +684,7 @@ const getLabel = (key, value) => {
                                             </div>
                                         </th>
                                     ))}
-                                    {masterName === "service_providers" && (
+                                    {masterName === "products" && (
   <th className="px-4 py-3 text-center">Plans</th>
 )}
                                     <th className="px-4 py-3 text-right">Actions</th>
@@ -695,7 +709,7 @@ const getLabel = (key, value) => {
         col.key.toLowerCase() === "is_inventory";
 
       const isServiceMaster =
-        col.key.toLowerCase() === "services";
+        col.key.toLowerCase() === "product_types";
 
       const isVendor =
         col.key.toLowerCase() === "vendor";
@@ -898,7 +912,7 @@ const getLabel = (key, value) => {
     })}
 
     {/* ================= PLANS BUTTON ================= */}
-    {masterName === "service_providers" && (
+    {masterName === "products" && (
 
       <td className="px-4 py-3 text-center">
 
@@ -968,7 +982,7 @@ const getLabel = (key, value) => {
           col.key.toLowerCase() === "is_inventory";
 
         const isService =
-          col.key.toLowerCase() === "services";
+          col.key.toLowerCase() === "product_types";
 
         const isVendor =
           col.key.toLowerCase() === "vendor";
@@ -1213,7 +1227,7 @@ const getLabel = (key, value) => {
       
 
       {/* ================= SERVICE ACTION COLUMN ================= */}
-      {masterName === "service_providers" && (
+      {masterName === "products" && (
 
         <td className="px-4 py-3 text-center">
 

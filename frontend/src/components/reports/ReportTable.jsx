@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef, act } from "react";
+import React,{ useEffect, useState, useRef, useLayoutEffect, act, use, useMemo } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import { fetchSections, getModuleData, exportColumnNames, importTable, exportPdf,upsertSavedFilter, getFilteredReports, getMasterValues, getReportCustomizedColumns, upsertReportCustomizedColumns  } from "../../api/api";
+import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow, getPreviewPRF, unpostPRFTransaction, postPRFTransaction, getReportData   } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -13,44 +13,60 @@ import PermissionButton from "../PermissionButton";
 import { formatDateTime } from "../../utils/formatDateTime";
 import { formatDate } from "../../utils/formatDate";
 import { Currency } from "lucide-react";
+import DateTimeRangeFilter from "../DateRangeFilter";
 import DateOnlyFilter from "../DateOnlyFilter";
-import PrintableTable from "../PrintableTable";
 import Loader from "../Loader";
+import ConfirmModal from "../ConfirmationPopups";
+import PrintableTable from "../PrintableTable";
+import ValidatePopups from "../Validatepopups";
+import PaymentRequestPreview from "../paymentreqform/PaymentRequestPreview"
+import { DndContext, closestCenter } from "@dnd-kit/core";
+import mainTableConfig from "../../utils/mainTableConfig";
+import { getDateRange } from "../../utils/dateRanges";
+import TableFiltersDrawer from "../filters/TableFiltersDrawer";
+import ShowHideColumnsPopup from "../tables/ShowHideColumnsPopup";
+import { createPortal } from "react-dom";
+import EditRowPopup from "../tables/EditRowPopup";
+import CustomizeDrawer from "../tables/CustomizeDrawer";
+import { EyeIcon } from "@heroicons/react/24/outline";
+import {
+  arrayMove,
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable
+} from "@dnd-kit/sortable";
+
+import { CSS } from "@dnd-kit/utilities";
+import { REPORT_VIEWS } from "../../utils/reportStructure";
 
 
-const Modal = ({ title, children, onClose }) => (
-    <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
-        <div className="bg-white p-5 rounded w-[500px] shadow">
-
-            <h2 className="font-semibold mb-3">{title}</h2>
-
-            {children}
-
-            <div className="text-right mt-4">
-                <button onClick={onClose} className="btn btn-gray">Close</button>
-            </div>
-
-        </div>
-    </div>
-);
 
 
-export default function ReportPage() {
+
+
+
+export default function ReportTable() {
     const { id } = useParams();
+    console.log("ReportTable ID:", id);
     const location = useLocation();
-    const report = location.state?.report;
-   // console.log("Report from state:", report);
+    console.log("ReportTable Location State:", location.state);
+    const [isCreating, setIsCreating] = useState(false);
+    const [newRow, setNewRow] = useState({});
     const [editRowId, setEditRowId] = useState(null);
     const [editRow, setEditRow] = useState({});
-    const [module, setModule] = useState(location.state?.module || null);
+    const [originalRow, setOriginalRow] = useState({});
+    const [report, setReport] = useState(location.state?.report || null);
     const [columns, setColumns] = useState([]);
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [showImportExport, setShowImportExport] = useState(false);
     const [search, setSearch] = useState("");
+    const [searchColumnKey, setSearchColumnKey] = useState(null);
     const [page, setPage] = useState(1);
     const [file, setFile] = useState(null);
     const printRef = useRef();
     const pageSize = 10;
+    const [columnSearch, setColumnSearch] = useState("");
     const [showColumnSelector, setShowColumnSelector] = useState(false);
     const [selectedColumns, setSelectedColumns] = useState([]);
     const [showImportModal, setShowImportModal] = useState(false);
@@ -68,15 +84,23 @@ export default function ReportPage() {
     const [printLogo, setPrintLogo] = useState(null);
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email;
+    const activeUserName = activeUser?.name;
+    const isUserHavePrfAccess = activeUser?.prf_access;
+    const userRole = activeUser?.role;
+    const [vatPercent, setVatPercent] = useState(0);
+    const [providerPlansMap, setProviderPlansMap] = useState({});
+    const [providerPlans, setProviderPlans] = useState([]);
     const [autoFilledFields, setAutoFilledFields] = useState({});
-    const [groupBy, setGroupBy] = useState("service");
+    const [planManuallyChanged, setPlanManuallyChanged] = useState(false);
+    const [groupBy, setGroupBy] = useState({
+      key: null,
+      direction: "asc"
+    });
     const [activeDateFilter, setActiveDateFilter] = useState(null);
     const [showSaveFilter, setShowSaveFilter] = useState(false);
     const [saveFilterName, setSaveFilterName] = useState("");
-    const [showTableColumnModal, setShowTableColumnModal] = useState(false);
-    const [tableColumnMode, setTableColumnMode] = useState("default");
-    const filter_name = report?.filter_name || "Custom Filter";
-    const [isInitialized, setIsInitialized] = useState(false);
+    const currentModule =  report?.report_id;
+    const [savedTableColumns, setSavedTableColumns] = useState([]);
     const [printModuleName, setPrintModuleName] = useState("");
     const [showPlanProviderPopup, setShowPlanProviderPopup] = useState(false);
     const [pendingColumn, setPendingColumn] = useState(null);
@@ -85,49 +109,89 @@ export default function ReportPage() {
     const isInitialLoading = loading || columns.length === 0;
     const [loadingMaster, setLoadingMaster] = useState(null);
     const [tempSelectedColumns, setTempSelectedColumns] = useState([]);
-    const [columnSearch, setColumnSearch] = useState(""); 
-    const [sortConfig, setSortConfig] = useState({
-      key: null,
-      direction: "asc",
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [confirmData, setConfirmData] = useState({});
+    const [popupMessage, setPopupMessage] = useState("");
+    const [popupType, setPopupType] = useState("");
+    const [vendors, setVendors] = useState([]);
+    const [company, setCompany] = useState([]);
+    const [serviceProviders, setServiceProviders] = useState([]);
+    const [creditCards, setCreditCards] = useState([]);
+    const [serviceTypes, setServiceTypes] = useState([]);
+    const [showGenerateModal, setShowGenerateModal] = useState(false);
+    const [selectedRow, setSelectedRow] = useState(null);
+    const [modalItems, setModalItems] = useState([]);
+    const [prfNumber, setPrfNumber] = useState("");
+    const [showPreview, setShowPreview] = useState(false);
+    const [previewData, setPreviewData] = useState(null);
+    const [previewFromGenerateModal, setPreviewFromGenerateModal] = useState(false);
+    const [workflow, setWorkflow] = useState({});
+    const [availableProducts, setAvailableProducts] = useState([]);
+    const [availableServices, setAvailableServices] = useState([]);
+    const [pinnedColumns, setPinnedColumns] = useState([]);
+    const [visibleColumnsState, setVisibleColumnsState] = useState([]);
+    const [showEditPopup, setShowEditPopup] = useState(false);
+    const [showCustomizeDrawer, setShowCustomizeDrawer] = useState(false);
+    const [columnChips, setColumnChips] = useState([]);
+    const [sortConfig, setSortConfig] = useState([]);
+    const [groupByColumn, setGroupByColumn] = useState(null);
+  
+    const [selectedRowIds, setSelectedRowIds] = useState([]);
+    const [showActions, setShowActions] = useState(false);
+    const [showMobileFilters, setShowMobileFilters] = useState(false);
+    const tableContainerRef = useRef(null);
+    const searchInputRef = useRef(null);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+    const [isAdvertising, setIsAdvertising] = useState(false);
+    const [showFilters, setShowFilters] = useState(false);
+    const [openMenu, setOpenMenu] = useState(null);
+    const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+    const [showHidePopup, setShowHidePopup] = useState(false);
+    const [hidePopupColumn, setHidePopupColumn] = useState(null);
+    const [tempHideColumns, setTempHideColumns] = useState([]);
+    useEffect(() => {
+      const handleResize = () => {
+        setIsMobile(window.innerWidth < 768);
+      };
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }, []);
+   
+    
+  
+    useEffect(() => {
+    getMasterData("products", activeUserEmail).then(res => {
+      const result = Array.isArray(res.data) ? res.data : [];
+      //console.log("Raw Service Providers:", result);
+      setServiceProviders(result);
+      //console.log("Service Providers:", result);
     });
-const masterMap = {};
+     getMasterData("vendors", activeUserEmail).then(res => {
+        const result = Array.isArray(res?.data) ? res.data : [];
+        setVendors(result);
+        //console.log("Vendors:", result);
+      });
+        getMasterData("product_types", activeUserEmail).then(res => {
+        const result = Array.isArray(res?.data) ? res.data : [];
+        setServiceTypes(result);
+      //  console.log("Service Types:", result);
+      });
+        getMasterData("credit_card", activeUserEmail).then(res => {
+        const result = Array.isArray(res?.data) ? res.data : [];
+        setCreditCards(result);
+      //  console.log("Credit Cards:", result);
+      });
+    getMasterData("company", activeUserEmail).then(res => {
+  const result = Array.isArray(res?.data) ? res.data : [];
 
-columns.forEach((c) => {
-  if (c.master) {
-    masterMap[c.master] = {
-      master: c.master,
-      display_name: c.display_name || c.label || c.column_name
-    };
-  }
+  const tradeNames = result.map(item => item.trade_name);
+
+  setCompany(tradeNames);
+
+ // console.log("Company trade names:", tradeNames);
 });
-
-const masterList = Object.values(masterMap);
-
-
-    const handleSort = (columnName) => {
-  let direction = "asc";
-
-  if (
-    sortConfig.key === columnName &&
-    sortConfig.direction === "asc"
-  ) {
-    direction = "desc";
-  }
-
-  setSortConfig({
-    key: columnName,
-    direction,
-  });
-};
-   useEffect(() => {
-  if (!columns.length) return;
-
-  setSelectedColumns(prev => {
-    if (prev && prev.length > 0) return prev;
-
-    return columns.map(c => c.column_name);
-  });
-}, [columns]);
+    }, []);
 
 const getCurrentMonth = () => {
   const now = new Date();
@@ -149,50 +213,64 @@ const getCurrentMonth = () => {
   };
 };
 
+const handleDragEnd = (event) => {
+  const { active, over } = event;
+
+  if (!over || active.id === over.id) return;
+
+  const oldIndex = columns.findIndex(
+    (c) => c.column_name === active.id
+  );
+
+  const newIndex = columns.findIndex(
+    (c) => c.column_name === over.id
+  );
+
+  const reordered = arrayMove(columns, oldIndex, newIndex);
+
+  // ❌ DO NOT re-sort again
+  setColumns(reordered);
+
+  // keep selection stable
+  setTempSelectedColumns((prev) =>
+    reordered
+      .map((c) => c.column_name)
+      .filter((name) => prev.includes(name))
+  );
+};
+
 const [dateFilters, setDateFilters] = useState(getCurrentMonth());
-const [pendingDateFilters, setPendingDateFilters] = useState(dateFilters);
-const isFilterActive = search || filters?.length > 0 || Object.keys(dateFilters || {}).length > 0;
 
-const openColumnSelector = () => {
-  const defaultCols = columns.map(c => c.column_name);
+const isFilterActive = search || filters?.length > 0 
 
-  setTempSelectedColumns(
-    selectedColumns?.length ? selectedColumns : defaultCols
-  );
 
-  setShowColumnSelector(true);
+
+
+
+
+const onInputChange = (e) => {
+  const { name, value } = e.target;
+
+  setDateFilters((prev) => ({
+    ...prev,
+    [name]: value,
+  }));
 };
 
-const toggleTempColumn = (colName) => {
-  setTempSelectedColumns(prev =>
-    prev.includes(colName)
-      ? prev.filter(c => c !== colName)
-      : [...prev, colName]
-  );
+
+const getCurrentMonthRange = () => {
+  const now = new Date();
+
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+  return {
+    start: start.toISOString(),
+    end: end.toISOString(),
+  };
 };
 
-const saveColumnSelection = async () => {
-  try {
 
-    // 1️⃣ Save to DB (use TEMP state)
-    await upsertReportCustomizedColumns(
-      report.id,
-      activeUserEmail,
-      tempSelectedColumns
-    );
-
-    // 2️⃣ Commit TEMP → LIVE
-    setSelectedColumns(tempSelectedColumns);
-    setSavedTableColumns(tempSelectedColumns);
-
-    // 3️⃣ UI updates
-    setShowColumnSelector(false);
-    setTableColumnMode("custom");
-
-  } catch (err) {
-    console.error("Failed to save customized columns:", err);
-  }
-};
 
 const applyDateFilter = async () => {
   try {
@@ -210,9 +288,9 @@ const applyDateFilter = async () => {
     };
 
     // console.log("Applying date filter:", payload);
-    console.log("module_id for date filter:", report?.module_id);
-    const res = await getModuleData(report?.module_id, activeUserEmail, payload);
-    
+
+    const res = await getModuleData(id, activeUserEmail, payload, userRole);
+
     setRows(res.data || []);
 
   } catch (err) {
@@ -223,6 +301,8 @@ const applyDateFilter = async () => {
   }
 };
 
+
+
 const buildDatePayload = (df) => {
   return {
     date: {
@@ -232,396 +312,6 @@ const buildDatePayload = (df) => {
   };
 };
 
-// LOAD MODULE & DATA
-const loadModule = async () => {
-  try {
-    const sectionRes = await fetchSections();
-
-    //console.log("RAW RESPONSE:", sectionRes);
-
-    const modules =
-      sectionRes?.data?.data ||
-      sectionRes?.data ||
-      sectionRes ||
-      [];
-
-    const mod = modules.find(
-  m => String(m.module_id) === String(report.module_id)
-);
-
-    // console.log("ID:", id);
-    // console.log("Modules:", modules);
-    // console.log("Matched module:", mod);
-
-    if (!mod) return;
-
-    setModule(mod);
-
-    const cols = Array.isArray(mod.columns)
-      ? mod.columns.filter(c => c.is_active !== false)
-      : [];
-
-    setColumns(cols);
-
-  } catch (err) {
-    console.error("loadModule error:", err);
-  }
-};
-
-  const loadReportData = async () => {
-  try {
-    if (!report) return;
-    setLoading(true)
-      //console.log("modle_id for report data load:", report.module_id);
-    const res = await getFilteredReports({
-      module_id: report.module_id,
-      filters: filters || [],
-      search: search || "",
-      dateFilters: dateFilters || {}
-    });
-    setLoading(false)
-    setRows(res.data || []);
-  } catch (err) {
-    console.error("loadReportData error:", err);
-  }
-};
-// SYNC AUTH ACROSS TABS USEFFECT
-useEffect(() => {
-  if (!report?.filters) return;
-
-  const parsed = JSON.parse(report.filters);
-
-  setFilters(parsed.filters || []);
-  setSearch(parsed.search || "");
-  setDateFilters(parsed.dateFilters || {});
-
-  setIsInitialized(true);
-}, [report]);
-
-useEffect(() => {
-  if (!isInitialized) return;
-
-  loadReportData();
-}, [filters, search, dateFilters]);
-
-
-   useEffect(() => {
-        loadModule();
-    }, [id]);
-   // console.log("id:", id);
-
-    useEffect(() => {
-  const active = isFilterActive;
-  
-  // console.log("isFilterActive:", isFilterActive);
-  // console.log("saveFilterName:", saveFilterName);
-
-  setShowSaveFilter(active);
-}, [search, filters, dateFilters]);
-
-    //    useEffect(() => {
-    //   if (!columns.length) return;
-    
-    //   const uniqueMasters = new Set();
-    
-    //   columns.forEach(c => {
-    //     if (c.master) uniqueMasters.add(c.master);
-    //     if (c.master1) uniqueMasters.add(c.master1);
-    //   });
-    
-    //   uniqueMasters.forEach(async (master) => {
-    //     try {
-    //       const res = await getMasterValues(master);
-    
-    //       setMasterDataMap(prev => ({
-    //         ...prev,
-    //         [master]: res.data.data || []
-    //       }));
-    //     } catch (err) {
-    //       console.error("Master fetch failed:", master, err);
-    //     }
-    //   });
-    
-    // }, [columns]);
-
-    const fetchMasterDataForColumn = async (master) => {
-  if (!master) return;
-  if (masterDataMap[master]?.length) return; // already loaded
-
-  setLoadingMaster(master); // start loading
-
-  try {
-    const res = await getMasterValues(master);
-    setMasterDataMap(prev => ({
-      ...prev,
-      [master]: res.data.data || []
-    }));
-   
-  } catch (err) {
-    console.error("Master fetch failed:", master, err);
-  } finally {
-    setLoadingMaster(null); // stop loading
-  }
-};
-useEffect(() => {
-  if (!report?.filters) return;
-
-  try {
-    const parsed = JSON.parse(report.filters);
-
-    setFilters(parsed.filters || []);
-    setSearch(parsed.search || "");
-    setDateFilters(parsed.dateFilters || {});
-
-    // Trigger master data fetch for all pre-selected filters
-    (parsed.filters || []).forEach(f => {
-      if (f.master) {
-        fetchMasterDataForColumn(f.master);
-      }
-    });
-
-  } catch (err) {
-    console.error("Invalid report filters JSON:", err);
-  }
-}, [report]);
-    useEffect(() => {
-  if (report?.filter_name) {
-    setSaveFilterName(report.filter_name);
-  }
-}, [report]);
-
-const fetchCustomizedColumns = async () => {
-  try {
-    const res = await getReportCustomizedColumns(
-      report.id,
-      activeUserEmail
-    );
-
-    return res?.data?.data?.columns || [];
-
-  } catch (err) {
-    console.error("Failed to load customized columns:", err);
-    return [];
-  }
-};
-
-
-
-useEffect(() => {
-  if (!report?.filters) return;
-
-  try {
-    const parsed = JSON.parse(report.filters);
-
-    setFilters(parsed.filters || []);
-    setSearch(parsed.search || "");
-    setDateFilters(parsed.dateFilters || {});
-  } catch (err) {
-    console.error("Invalid report filters JSON:", err);
-  }
-}, [report]);
- 
-// FORMATTING HELPERS
-    const formatCard = (value, columnName) => {
-    if (!value) return "-";
-
-    const name = (columnName || "").toLowerCase();
-
-    const isCard =
-        name.includes("card") ||
-        name.includes("credit_card") ||
-        name.includes("card_number") ||
-        name.includes("cardno") ||
-        name.includes("card_no");
-
-    if (!isCard) return value;
-
-    const digits = value.toString().replace(/\D/g, ""); // remove spaces/dashes
-
-    if (digits.length < 4) return "****";
-
-    const last4 = digits.slice(-4);
-
-    return `**** **** **** ${last4}`;
-    };
-
-    const normalize = (val) => {
-    if (typeof val === "object") return val?.value ?? "";
-    return val ?? "";
-    };
-
-
-
-    // CRUD HANDLERS (for inline editing - optional)
-
-     const handleSaveFilter = async () => {
-  if (!saveFilterName.trim()) {
-    alert("Filter name is required");
-    return;
-  }
-
-  const payload = {
-    id: report?.id, // include ID for updates, omit for new filters
-    filterName: saveFilterName.trim(),
-    userId: activeUser?.email,     // ✅ string only
-    module_id: module?.module_id,    // ✅ IMPORTANT
-    filterData: {
-      search,
-      filters,
-      dateFilters
-    }
-  };
-
- // console.log("Saving filter:", payload);
-
-  await upsertSavedFilter(payload);
-
-  setSaveFilterName("");
-  setShowSaveFilter(false);
-  loadSavedFilters();
-};
-    // default | saved | custom
-    const companyList = [
-        ...new Set(rows.map(r =>
-            r.trade_name || r.company_name || r.company || ""
-        ).filter(Boolean))
-    ];
-   // console.log("Company List:", companyList);
-    const [savedTableColumns, setSavedTableColumns] = useState(
-        JSON.parse(localStorage.getItem(`table_columns_${id}`) || "[]")
-    );
-
-    const savePrintOptions = () => {
-        localStorage.setItem("print_logo", printLogo || "");
-        localStorage.setItem("print_company", selectedCompany || "");
-
-        setShowPrintOptions(false);
-    };
-   
-const getDisplayValue = (masterName, selectedVal) => {
-  const list = masterDataMap?.[masterName] || [];
-
-  const match = list.find(item =>
-    normalize(item.key ?? item.code ?? item.vendor_code ?? item.value) === normalize(selectedVal)
-  );
-
-  return match?.value ?? match?.name ?? match?.vendor_name ?? selectedVal;
-};
-     
-   
-    
-
-const getVisibleColumns = () => {
-  let cols = [...columns];
-
-  // ✅ distinct currencies
-  const distinctCurrencies = [
-    ...new Set(
-      rows
-        .map(r => (r.currency || "").toUpperCase())
-        .filter(Boolean)
-    )
-  ];
-
-  // ✅ remove currency column
-  cols = cols.filter(
-    c => c.column_name.toLowerCase() !== "currency"
-  );
-
-  const dynamicCols = [];
-
-  cols.forEach(col => {
-    const name = col.column_name.toLowerCase();
-
-    // ✅ amount/cost/price columns except total
-    const isCurrencyColumn =
-      (
-        name.includes("amount") ||
-        name.includes("cost") ||
-        name.includes("price")
-      ) &&
-      !name.includes("total");
-
-    if (isCurrencyColumn) {
-
-      distinctCurrencies.forEach(cur => {
-        dynamicCols.push({
-          ...col,
-          column_id: `${col.column_name}_${cur}`,
-          column_name: `${col.column_name}_${cur.toLowerCase()}`,
-          display_name: `${col.display_name} (${cur})`,
-          data_type: "decimal"
-        });
-      });
-
-    } else {
-      dynamicCols.push(col);
-    }
-  });
-
-  // ✅ move total columns to end
-  const normalCols = dynamicCols.filter(
-    c => !c.column_name.toLowerCase().includes("total")
-  );
-
-  const totalCols = dynamicCols.filter(
-    c => c.column_name.toLowerCase().includes("total")
-  );
-
-  cols = [...normalCols, ...totalCols];
-
-  // ✅ currency filter logic
-  const currencyFilter = filters.find(
-    f => f.master === "currency"
-  );
-
-  if (currencyFilter && currencyFilter.values.length > 0) {
-
-    const selectedCurrencies =
-      currencyFilter.values.map(v => v.toLowerCase());
-
-    cols = cols.filter(col => {
-
-      const name = col.column_name.toLowerCase();
-
-      // keep non currency columns
-      if (
-        !name.includes("_aed") &&
-        !name.includes("_usd") &&
-        !name.includes("_eur")
-      ) {
-        return true;
-      }
-
-      return selectedCurrencies.some(cur =>
-        name.endsWith(`_${cur}`)
-      );
-    });
-  }
-
-  // ✅ saved/custom modes
-  if (tableColumnMode === "saved") {
-    cols = cols.filter(c =>
-      savedTableColumns.includes(c.column_name)
-    );
-  }
-
-  if (tableColumnMode === "custom") {
-    cols = cols.filter(c =>
-      selectedColumns.includes(c.column_name)
-    );
-  }
-
-  return cols;
-};
-    const visibleColumns = getVisibleColumns();
-
-
-
-    
-const dateColumns = visibleColumns.filter(col =>
-  col.data_type?.toLowerCase().includes("date")
-);
 
 const getExcelColumns = (mode, savedCols = [], groupBy = "service") => {
 
@@ -668,62 +358,306 @@ const getExcelColumns = (mode, savedCols = [], groupBy = "service") => {
   return finalCols;
 };
 
+const getValue = (row, col) => {
+  let value = "";
 
-      const handleExcel = async (mode, savedCols = null, groupBy) => {
-  const cols = getExcelColumns(mode, savedCols);
-  //console.log("Excel export columns:", cols);
-  const company = localStorage.getItem("print_company") || "";
+  // dynamic currency
+  if (col.isDynamicCurrency) {
+    value =
+      row.currency === col.currency
+        ? row.amount
+        : "";
+  } else {
+    const raw = row?.[col.column_name];
+    value =
+      typeof raw === "object"
+        ? raw?.value ?? ""
+        : raw ?? "";
+  }
+
+  // credit card mask
+  if (col.master === "credit_card") {
+    const str = String(value || "");
+    value = str
+      ? `**** **** **** ${str.slice(-4)}`
+      : "";
+  }
+
+  // date format
+  if (col.data_type?.toLowerCase().includes("date")) {
+    value = value
+      ? new Date(value).toLocaleDateString()
+      : "";
+  }
+
+  return value;
+};
+
+const handleExcel = async () => {
+  const cols = orderedVisibleColumns;
+
   const moduleName =
     printModuleName ||
     localStorage.getItem("print_module_name") ||
     module?.display_name;
 
-  const formattedRows = finalRows.map((row, index) => {
-    const newRow = {
-      SNo: index + 1,
-      __groupKey: getGroupKey(row, groupBy) // ✅ ADD THIS
-    };
-    //console.log("Formatting row for Excel with groupBy:", groupBy, "Row:", row);
+  const groups = printableGroupedRows; // ✅ already grouped correctly
 
-    cols.forEach(col => {
-      let value = "";
+  const rows = [];
+  let serialNo = 1;
 
-      if (col.isDynamicCurrency) {
-        value =
-          row.currency === col.currency
-            ? row.amount
-            : "";
-      } else {
-        const raw = row[col.column_name];
-        value =
-          typeof raw === "object"
-            ? raw?.value ?? ""
-            : raw ?? "";
-      }
+  groups.forEach(group => {
+    group.rows.forEach(row => {
+      const newRow = {
+        SNo: serialNo++,
+        Group: group.group // keep group name only for data rows
+      };
 
-      if (col.master === "credit_card") {
-        const str = String(value || "");
-        value = str ? `**** **** **** ${str.slice(-4)}` : "";
-      }
+      cols.forEach(col => {
+        newRow[col.display_name] = getValue(row, col);
+      });
 
-      if (col.data_type?.toLowerCase().includes("date")) {
-        value = value ? new Date(value).toLocaleDateString() : "";
-      }
-
-      newRow[col.display_name] = value;
+      rows.push(newRow);
     });
-
-    return newRow;
   });
-   
+
   exportToExcel(
-    formattedRows,
+    printableGroupedRows,
     cols.map(c => c.display_name),
     moduleName,
-    groupBy // ✅ PASS IT
+    groupBy,
+    columns
   );
-  
+
+  //console.log("Excel exported rows:", printableGroupedRows);
 };
+    
+
+const transformColumns = (mod, dataRows = []) => {
+
+  let cols = mod?.columns || [];
+
+
+
+  // ================= 1. EXTRACT CURRENCIES (FIXED) =================
+  const currencies = new Set();
+
+  dataRows.forEach(row => {
+    if (row.currency) {
+      currencies.add(row.currency.trim().toUpperCase());
+    }
+  });
+
+  const currencyList = Array.from(currencies);
+
+  // console.log("🔥 Final Currency List:", currencyList);
+
+  // ================= 2. CLEAN COLUMNS FIRST =================
+  cols = cols.filter(col => {
+    const name = col.column_name?.toLowerCase();
+
+    // ❌ remove ONLY fc columns (DO NOT remove currency logic here)
+    return !(
+      name.includes("fc_") ||
+      name.startsWith("fc_") ||
+      name.includes("fcamount") ||
+     // name.includes("fc_amount") ||
+        name.includes("currency") 
+    );
+  });
+
+  // ================= 3. BUILD COLUMNS =================
+  const finalCols = [];
+
+  cols.forEach(col => {
+
+    const name = col.column_name.toLowerCase();
+
+    // ================= AMOUNT DETECTION (FIXED) =================
+    const isAmount =
+      (
+        col.data_type?.toLowerCase() === "decimal" ||
+        col.data_type?.toLowerCase() === "float" ||
+        col.data_type?.toLowerCase() === "numeric" ||
+        name.includes("amount")
+      ) &&
+      !name.includes("total");
+
+    // ================= EXPAND AMOUNT =================
+    if (isAmount && currencyList.length > 0) {
+
+      currencyList.forEach(cur => {
+        finalCols.push({
+          ...col,
+          column_name: `${col.column_name}_${cur.toLowerCase()}`,
+          display_name: `${col.display_name} (${cur})`,
+        });
+      });
+
+      return;
+    }
+
+    // ================= NORMAL COLUMN =================
+    finalCols.push(col);
+  });
+
+  // ================= 4. SET STATE =================
+  const result = finalCols.filter(c => c.is_active !== false);
+
+  setColumns(orderColumnsByConfig(result));
+
+  // console.log("🔥 Final Transformed Columns:", result);
+};
+
+  
+const loadReport = async (
+  reportId,
+  overrideDateFilters = dateFilters
+) => {
+  try {
+    setLoading(true);
+
+    const payload = {
+      filters: JSON.stringify(filters || []),
+      dateFilters: JSON.stringify({
+        date: {
+          startDate: overrideDateFilters.startDate,
+          endDate: overrideDateFilters.endDate,
+        },
+      }),
+    };
+
+    const dataRes = await getReportData(
+      reportId,
+      activeUserEmail,
+      payload
+    );
+
+    setRows(dataRes.data || []);
+
+    setColumns(
+      REPORT_VIEWS[reportId] || []
+    );
+    console.log("columns from structure:", REPORT_VIEWS[reportId] || []);
+    console.log("data from API:", dataRes.data || []);
+    console.log("columns set in state:", columns);
+  } catch (err) {
+    console.error("Load Report Error:", err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+
+useEffect(() => {
+  loadReport(id, dateFilters);
+}, [ filters, search]);
+
+    const loadCurrencies = async () => {
+        try {
+            const res = await currencises();
+            setCurrencies(res.data || []);
+        } catch (err) {
+            console.error("Failed to load currencies:", err);
+        }
+    };
+
+   useEffect(() => {
+       // loadModule();
+        loadCurrencies();
+
+    }, [id]);
+ 
+
+
+
+
+const fetchMasterDataForColumn = async (master) => {
+  if (!master) return;
+  if (masterDataMap[master]?.length) return; // already loaded
+
+  setLoadingMaster(master); // start loading
+
+  try {
+    const res = await getMasterValues(master);
+    setMasterDataMap(prev => ({
+      ...prev,
+      [master]: res.data.data || []
+    }));
+  } catch (err) {
+    console.error("Master fetch failed:", master, err);
+  } finally {
+    setLoadingMaster(null); // stop loading
+  }
+};
+
+
+
+
+const getExchangeRate = (currencyCode) => {
+  const list = currencies || [];
+
+  const searchValue = (currencyCode || "")
+    .toString()
+    .trim()
+    .toUpperCase();
+
+  const currency = list.find(c => {
+    const code = (c.currency_code || "")
+      .toString()
+      .trim()
+      .toUpperCase();
+
+    const name = (c.currency || "")
+      .toString()
+      .trim()
+      .toUpperCase();
+
+    return code === searchValue || name === searchValue;
+  });
+
+  if (searchValue === "AED") return 1;
+
+  if (currency?.exchange_rate) {
+    return 1 / Number(currency.exchange_rate);
+  }
+
+  return 1;
+};
+const calculateCost = (amount, currencyCode, term) => {
+  if (!amount || !currencyCode) return null;
+  const rate = getExchangeRate(currencyCode);
+  if (!rate || isNaN(rate)) return null;
+  return Number(amount) * Number(rate);
+};
+
+const groupedChips = columnChips.reduce((acc, chip) => {
+  if (!acc[chip.type]) acc[chip.type] = [];
+  acc[chip.type].push(chip);
+  return acc;
+}, {});
+
+    const toMasterKey = (columnName, rawVal) => {
+if (rawVal === null || rawVal === undefined || rawVal === "") return rawVal;
+
+const col = columns.find(c => c.column_name === columnName);
+if (!col?.master) return rawVal;
+
+const options = getMasterOptions(col, "");
+const input = String(rawVal).trim().toLowerCase();
+
+const hit = options.find(o => {
+const key = String(o?.key ?? o?.id ?? o?.value ?? "").trim().toLowerCase();
+const val = String(o?.value ?? o ?? "").trim().toLowerCase();
+return input === key || input === val;
+});
+
+return hit ? (hit.key ?? hit.id ?? hit.value) : rawVal;
+};
+
+
+
 
     const handleExport = async () => {
         try {
@@ -748,71 +682,96 @@ const getExcelColumns = (mode, savedCols = [], groupBy = "service") => {
         }
     };
 
-    const handleFileChange = (e) => {
-        const selectedFile = e.target.files[0];
-        setFile(selectedFile);
-    };
+  
+     
+const handleClear = async () => {
+  const defaults = getCurrentMonth();
 
-    const handleUpload = async () => {
-        if (!file) return;
+  // ================= RESET SEARCH =================
+  setSearch("");
+  setSearchColumnKey(null);
 
-        try {
-            await importTable(id, file, activeUserEmail); // your API function
-            alert("Imported successfully ✅");
-            setFile(null);
-            loadData(); // refresh table after import
-        } catch (err) {
-            console.error(err);
-            alert("Import failed ❌");
-        }
-    };
+  // ================= RESET FILTERS =================
+  setFilters([]);
 
-    const handleClear = async () => {
-      const defaults = getCurrentMonth();
-    
-      setDateFilters(defaults);
-    
-      const payload = {
-        search,
-        filters: JSON.stringify(filters || []),
-        dateFilters: JSON.stringify(buildDatePayload(defaults)),
-      };
-    
-      try {
-        setLoading(true);
-    
-        const res = await getModuleData(
-          id,
-          activeUserEmail,
-          payload
-        );
-    
-        setRows(res.data || []);
-      } catch (err) {
-        console.error(err);
-        setRows([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // ================= RESET DATE =================
+  setDateFilters(defaults);
+  setActiveDateFilter("");
 
+  // ================= RESET SORT + GROUP =================
+  setSortConfig([]);
+  setSortKey(null);
+  setSortOrder(null);
+  setGroupBy("");
+
+  // ================= RESET CHIPS =================
+  setColumnChips([]);
+
+  // 🔥 IMPORTANT: RESET DERIVED CHIPS
+  setGroupedChips({
+    search: [],
+    sort: [],
+    group: []
+  });
+
+  // ================= RESET UI =================
+  setOpenIndex(null);
+
+  // ================= API =================
+  const payload = {
+    search: "",
+    filters: JSON.stringify([]),
+    dateFilters: JSON.stringify(buildDatePayload(defaults)),
+    sort: JSON.stringify([]),
+    groupBy: ""
+  };
+
+  try {
+    setLoading(true);
+
+    const res = await getModuleData(
+      id,
+      activeUserEmail,
+      payload,
+      userRole
+    );
+
+    setRows(res.data || []);
+  } catch (err) {
+    console.error(err);
+    setRows([]);
+  } finally {
+    setLoading(false);
+  }
+};
     useEffect(() => {
         const close = () => setOpenIndex(null);
         window.addEventListener("click", close);
         return () => window.removeEventListener("click", close);
     }, []);
 
-    const handlePrint = (mode, savedCols = []) => {
-  const cols = getColumnsToUse(mode, savedCols);
+    useEffect(() => {
+      const closeMenu = () => setOpenMenu(null);
+      window.addEventListener("click", closeMenu);
+      return () => window.removeEventListener("click", closeMenu);
+    }, []);
 
-  openPrintWindow({
-    content: generateTableHTML(cols),
-    userName: activeUser?.email || "User",
-  });
+    const handlePrint = () => {
+  const cols = orderedVisibleColumns;
 
+openPrintWindow({
+  content: generateTableHTML(
+    orderedVisibleColumns,
+    printableGroupedRows
+  ),
+  userName: activeUser?.name || "User",
+});
+
+  setColumns(cols); // optional UI sync
   setShowPrintModal(false);
 };
 
+   
 
 
     useEffect(() => {
@@ -832,9 +791,9 @@ const getExcelColumns = (mode, savedCols = [], groupBy = "service") => {
         );
     };
 
-   
 
-       const getColumnsToUse = (mode, savedCols = []) => {
+   const getColumnsToUse = (mode, savedCols = []) => {
+   // console.log("Getting columns for mode:", savedCols);
   if (mode === "saved") {
     return columns.filter(c =>
       savedCols.includes(c.column_name)
@@ -842,173 +801,167 @@ const getExcelColumns = (mode, savedCols = [], groupBy = "service") => {
   }
 
   if (mode === "default") return columns;
-
+ 
   return columns;
 };
     // ================= SEARCH FILTER =================
-    const finalRows = rows;
-   
-   const normalizedRows = rows.map(row => {
+    const filtered = applyFilters(rows, filters, columns);
 
-  const currency =
-    (row.currency || "").toLowerCase();
+   const normalizeString = (str) =>
+  String(str).toLowerCase().replace(/\s+/g, "");
 
-  const updatedRow = {
-    ...row
-  };
+const getSearchableColumns = () => {
+  if (!searchColumnKey) return visibleColumns;
 
-  columns.forEach(col => {
+  const selectedCol = visibleColumns.find(
+    (col) => col.column_name === searchColumnKey
+  );
 
-    const name = col.column_name.toLowerCase();
+  return selectedCol ? [selectedCol] : visibleColumns;
+};
 
-    const isCurrencyColumn =
-      (
-        name.includes("amount") ||
-        name.includes("cost") ||
-        name.includes("price")
-      ) &&
-      !name.includes("total");
+const rowMatchesSearch = (row) => {
+  const searchNorm = normalizeString(search);
+  if (!searchNorm) return true;
 
-    if (isCurrencyColumn) {
-
-      updatedRow[
-  `${col.column_name}_${currency}`
-] = row[col.column_name] ?? "";
-    }
+  return getSearchableColumns().some((col) => {
+    const val = row[col.column_name];
+    const cellNorm = normalizeString(
+      typeof val === "object" ? val?.value ?? "" : val ?? ""
+    );
+    return cellNorm.includes(searchNorm);
   });
+};
 
-  return updatedRow;
+const finalRows = filtered.filter((row) => rowMatchesSearch(row));
+
+    const normalizedRows = finalRows.map(row => {
+  const currency = (row.currency || "").toLowerCase();
+
+  return {
+    ...row,
+    [`amount_${currency}`]: row.amount
+  };
 });
 
-    // console.log("ROWS:", rows.length);
-    // console.log("FILTERED:", filtered.length);
-    // console.log("FINAL:", finalRows.length);
 
     // ================= PAGINATION =================
     const totalPages = Math.ceil(normalizedRows.length / pageSize);
-    const sortedRows = [...normalizedRows].sort((a, b) => {
-  if (!sortConfig.key) return 0;
 
-  let aValue = a[sortConfig.key];
-  let bValue = b[sortConfig.key];
+  
 
-  // normalize object values
-  aValue =
-    typeof aValue === "object"
-      ? aValue?.value ?? ""
-      : aValue ?? "";
+  const handlePdf = async (
+  mode,
+  customCols = null,
+  groupBy = "service",
+  pdfColumns = orderedVisibleColumns,
+  pdfRows = printableGroupedRows
+) => {
 
-  bValue =
-    typeof bValue === "object"
-      ? bValue?.value ?? ""
-      : bValue ?? "";
+  let cols;
 
-  // numeric sort
-  if (!isNaN(aValue) && !isNaN(bValue)) {
-    return sortConfig.direction === "asc"
-      ? Number(aValue) - Number(bValue)
-      : Number(bValue) - Number(aValue);
+  if (customCols && Array.isArray(customCols)) {
+    cols = pdfColumns.filter(col =>
+      customCols.includes(col.column_name)
+    );
+  } else {
+    cols = pdfColumns;
   }
 
-  // string sort
-  return sortConfig.direction === "asc"
-    ? String(aValue).localeCompare(String(bValue))
-    : String(bValue).localeCompare(String(aValue));
-});
-    const paginatedRows = sortedRows.slice(
-        (page - 1) * pageSize,
-        page * pageSize
+  const company =
+    selectedCompany || localStorage.getItem("print_company") || "";
+
+  const moduleTitle =
+    printModuleName || module?.display_name;
+
+  try {
+    const res = await exportPdf({
+      rows: pdfRows,        // ✅ PRINT DATA USED HERE
+      columns: cols,        // ✅ PRINT COLUMNS USED HERE
+      userName: activeUser?.name || "User",
+
+      moduleName: moduleTitle,
+      companyName: company,
+      groupBy
+    });
+
+    const url = window.URL.createObjectURL(new Blob([res.data]));
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${moduleTitle || "report"}.pdf`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+
+    setShowPdfModal(false);
+
+  } catch (err) {
+    console.error("PDF export failed:", err);
+  }
+};
+
+const filteredRows = rows.filter((row, rowIndex) => {
+
+
+
+  // =========================
+  // 1. FILTER CHIPS
+  // =========================
+
+  const passesFilters = filters.every((filter) => {
+
+    const selectedValues =
+      (filter.values || []).map(normalize);
+
+    if (selectedValues.length === 0) return true;
+
+    // ✅ MASTER → COLUMN_NAME
+const fieldKey =
+  columns.find(
+    (c) =>
+      c.master === filter.master ||
+      c.master1 === filter.master
+  )?.column_name || filter.master;
+
+    const rawValue = row?.[fieldKey];
+
+    const rowValue = normalize(
+      typeof rawValue === "object"
+        ? rawValue?.value
+        : rawValue
     );
 
-       const handlePdf = async (mode, customCols = null, groupBy= "service" ) => {
-        let cols;
-
-        if (customCols && Array.isArray(customCols)) {
-            cols = columns.filter(col =>
-                customCols.includes(col.column_name)
-            );
-        } else {
-            cols = getColumnsToUse(mode);
-        }
-
-        // ✅ GET PRINT SETTINGS
-        const company = selectedCompany || localStorage.getItem("print_company") || "";
-        const moduleTitle = printModuleName || module?.display_name;
-
-        try {
-            const res = await exportPdf({
-                rows: normalizedRows,
-                columns: cols,
-                userName: activeUser?.email || "User",
-
-                // ✅ SEND BOTH TO BACKEND
-                moduleName: moduleTitle,
-                companyName: company,
-                groupBy
-            });
-
-            const url = window.URL.createObjectURL(new Blob([res.data]));
-
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = `${moduleTitle || "report"}.pdf`;
-
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-
-            window.URL.revokeObjectURL(url);
-
-            setShowPdfModal(false);
-        } catch (err) {
-            console.error("PDF export failed:", err);
-        }
-    };
 
 
-    const numericColumns = visibleColumns.filter(col =>
-  col.column_name.toLowerCase().includes("total")
-);
+    return selectedValues.includes(rowValue);
+  });
 
-//console.log("Numeric columns for totals:", numericColumns.map(c => c.column_name));
 
-const totals = {};
 
-numericColumns.forEach(col => {
-  totals[col.column_name] = paginatedRows.reduce((sum, row) => {
-    const raw = row?.[col.column_name];
-    const val = typeof raw === "object" ? raw?.value : raw;
+  if (!passesFilters) {
 
-    const num = Number(String(val || 0).replace(/,/g, ""));
-    return sum + (isNaN(num) ? 0 : num);
-  }, 0);
+
+
+    return false;
+  }
+
+  // =========================
+  // 2. SEARCH FILTER
+  // =========================
+
+  return rowMatchesSearch(row);
 });
-     
-useEffect(() => {
-  setPendingDateFilters(dateFilters);
-}, [dateFilters]);
 
-const handleApplyDateFilter = () => {
-  setDateFilters(pendingDateFilters);
-  // Optionally, call applyDateFilter() here if you want to fetch immediately
-};
 
-const onInputChange = (e) => {
-  const { name, value } = e.target;
+// ======================================================
+// SORT FILTERED ROWS
+// ======================================================
 
-  setDateFilters((prev) => ({
-    ...prev,
-    [name]: value,
-  }));
-};
 
-const onPendingInputChange = (e) => {
-  const { name, value } = e.target;
-  setPendingDateFilters(prev => ({
-    ...prev,
-    [name]: value,
-  }));
-};
 
 const toNumber = (val) => {
   if (val === null || val === undefined || val === "") return 0;
@@ -1031,7 +984,7 @@ const isNumericColumn = (col) => {
    //console.log("Checking columns from raw data:", name);
   return (
     name.includes("amount") ||
-    name.includes("cost") ||
+    // name.includes("cost") ||
     name.includes("price") ||
     name.includes("total")
   );
@@ -1059,77 +1012,62 @@ const sortColumns = (cols) => {
   return [...normal, ...total];
 };
 
-const getGroupKey = (row, groupBy = "service") => {
-
-  const normalize = (v) =>
-    String(v || "")
-      .replace(/^service\s*types?:?\s*/i, "") // removes "Service Types:"
-      .trim();
-
-  if (groupBy === "terms") {
-    return normalize(
-      row.term?.value ||
-      row.term ||
-      "UNKNOWN"
-    );
+const getGroupKey = (row, groupBy) => {
+  if (!groupBy?.key) {
+    return "All Records";
   }
 
-  // DEFAULT → SERVICE TYPES
-  return normalize(
-    row.service_types?.value ||
-    row.service_types ||
-    "UNKNOWN"
-  );
+  const value = row[groupBy.key];
+
+  const finalValue =
+    typeof value === "object"
+      ? value?.value
+      : value;
+
+  return String(finalValue || "(Blank)").trim();
 };
-
-const groupedRows = finalRows.reduce((acc, row) => {
-
-  const key = getGroupKey(row, groupBy); // 👈 dynamic
-
-  if (!acc[key]) acc[key] = [];
-
-  acc[key].push(row);
-
-  return acc;
-
-}, {});
 
 const grandTotals = {};
 
-const generateTableHTML = (cols = columns) => {
+//console.log("Current groupBy:", groupBy);
+//console.log("Current printableGroupedRows:", printableGroupedRows);
 
-  const company = localStorage.getItem("print_company");
+const generateTableHTML = (cols, groupedData) => {
+  //console.log("groupedData for HTML generation:", groupedData);
+
+  // ✅ KEEP ORDER FROM UI (DO NOT regroup)
+  const rows = groupedData.flatMap(g => g.rows);
+
+const groupedRows = Array.isArray(groupedData)
+  ? groupedData
+  : Object.entries(groupedData || {}).map(([group, rows]) => ({
+      group,
+      rows
+    }));
+
+  //console.log("rows for HTML generation:", rows);
+
+  const company = localStorage.getItem("print-company");
 
   // =====================================================
   // DISTINCT CURRENCIES
   // =====================================================
   const currencies = [
     ...new Set(
-      finalRows
+      rows
         .map(r => r.currency)
         .filter(Boolean)
     )
   ];
 
   // =====================================================
-  // REMOVE:
-  // 1. amount column
-  // 2. currency column
+  // REMOVE amount + currency columns
   // =====================================================
-const normalCols = cols.filter(c => {
+  const normalCols = cols.filter(c => {
+    const name = c.column_name.toLowerCase();
+    return name !== "amount" && name !== "currency";
+  });
 
-  const name = c.column_name.toLowerCase();
-
-  // REMOVE ONLY PURE amount COLUMN
-  // KEEP total_amount_aed
-  return (
-    name !== "amount" &&
-    name !== "currency"
-  );
-
-});
-
-  
   const currencyCols = currencies.map(cur => ({
     column_name: `amount_${cur.toLowerCase()}`,
     display_name: `AMOUNT (${cur.toUpperCase()})`,
@@ -1145,454 +1083,895 @@ const normalCols = cols.filter(c => {
     ...currencyCols
   ]);
 
-  const firstTotalIndex = sortedCols.findIndex(col =>
-  isTotalColumn(col)
-);
+  const firstTotalIndex = sortedCols.findIndex(isTotalColumn);
 
   // =====================================================
-  // TOTALS
+  // GRAND TOTALS
   // =====================================================
-  const totals = {};
+  const grandTotals = {};
 
   sortedCols.forEach(col => {
+    if (isTotalColumn(col)) {
+      grandTotals[col.column_name] = rows.reduce((sum, row) => {
+        return sum + toNumber(row[col.column_name]);
+      }, 0);
+    }
+  });
 
-  // ONLY TOTAL COLUMNS
-  if (isTotalColumn(col)) {
-
-    totals[col.column_name] = finalRows.reduce((sum, row) => {
-      return sum + toNumber(row[col.column_name]);
-    }, 0);
-
-  }
-
-});
-
-
+  // =====================================================
+  // HELPERS
+  // =====================================================
   const isDateColumn = (col) => {
-  const data_type = (col.data_type || "").toLowerCase();
-  return data_type.includes("date");
-};
+    const data_type = (col.data_type || "").toLowerCase();
+    return data_type.includes("date");
+  };
+
   // =====================================================
   // HTML
   // =====================================================
-return `
-  <div style="text-align:center; margin-bottom:20px;">
+  return `
+    <div style="text-align:center; margin-bottom:20px;">
 
-    ${
-      company
-        ? `<h1 style="font-size:24px; margin-bottom:5px;">${company}</h1>`
-        : ``
-    }
-
-    <h2>${printModuleName?.trim() || module?.display_name}</h2>
-
-  </div>
-
-  ${Object.entries(groupedRows).map(([serviceType, rows]) => {
-
-    // ================= GROUP TOTALS =================
-    const groupTotals = {};
-
-    sortedCols.forEach(col => {
-      if (isTotalColumn(col)) {
-        groupTotals[col.column_name] = rows.reduce((sum, row) => {
-          return sum + toNumber(row[col.column_name]);
-        }, 0);
-
-        // add to grand total
-        grandTotals[col.column_name] =
-          (grandTotals[col.column_name] || 0) +
-          groupTotals[col.column_name];
+      ${
+        company
+          ? `<h1 style="font-size:24px; margin-bottom:5px;">${company}</h1>`
+          : ``
       }
-    });
 
-    const firstTotalIndex = sortedCols.findIndex(isTotalColumn);
+      <h2>${printModuleName?.trim() || module?.display_name}</h2>
 
-    return `
-      <div style="margin-bottom:40px; text: 5px;">
+    </div>
 
-        <!-- GROUP TITLE -->
-        <h3 style="margin:10px 0; text-align:center;">
-          ${serviceType}
-        </h3>
+    <table border="1" cellspacing="0" cellpadding="5"
+      style="width:100%; border-collapse:collapse;">
 
-        <table border="1" cellspacing="0" cellpadding="5"
-          style="width:100%; border-collapse:collapse;">
+      <!-- HEADER -->
+      <thead>
+        <tr>
+          <th>S.No</th>
+          ${sortedCols.map(col => `
+            <th>${col.display_name}</th>
+          `).join("")}
+        </tr>
+      </thead>
 
-          <!-- HEADER -->
-          <thead>
-            <tr>
-              <th style="text-align:center">S.No</th>
-              ${sortedCols.map(col => `
-                <th>${col.display_name}</th>
-              `).join("")}
-            </tr>
-          </thead>
+      <!-- BODY -->
+     <tbody>
 
-          <!-- BODY -->
-          <tbody>
+${groupedRows.map(group => `
 
-            ${rows.map((row, index) => `
-              <tr>
-                <td style="text-align:center">${index + 1}</td>
+  ${groupBy?.key ? `
+    <tr>
+      <td
+        colspan="${sortedCols.length + 1}"
+        style="
+          font-weight:bold;
+          background:#f5f5f5;
+          text-align:left;
+          padding:8px;
+        "
+      >
+        ${group.group}
+      </td>
+    </tr>
+  ` : ""}
 
-                ${sortedCols.map(col => {
+  ${group.rows.map((row, index) => `
+    <tr>
 
-                  let value = "";
-
-                  if (col.isDynamicCurrency) {
-                    value =
-                      row.currency === col.currency
-                        ? row.amount
-                        : "";
-                  } else {
-                    const raw = row[col.column_name];
-                    value =
-                      typeof raw === "object"
-                        ? raw?.value ?? ""
-                        : raw ?? "";
-                  }
-
-                  if (col.master === "credit_card") {
-                    const str = String(value);
-                    const last4 = str.slice(-4);
-                    return `
-                      <td style="text-align:center">
-                        **** **** **** ${last4}
-                      </td>
-                    `;
-                  }
-
-                  if (isDateColumn(col)) {
-                    value = value
-                      ? formatDate(value)
-                      : "";
-                  }
-
-                  if (isNumericColumn(col) || col.isDynamicCurrency) {
-                    return `
-                      <td style="text-align:right">
-                        ${value === "" ? "" : toNumber(value) === 0 ? "-" : formatNumber(value)}
-                      </td>
-                    `;
-                  }
-
-                  return `
-                    <td style="text-align:center">
-                      ${value || "-"}
-                    </td>
-                  `;
-
-                }).join("")}
-              </tr>
-            `).join("")}
-
-            <!-- ================= GROUP TOTAL ROW ================= -->
-            <tr style="font-weight:bold; background:#f5f5f5;">
-
-              <td></td>
-
-              <!-- 🔥 TOTAL LABEL BEFORE FIRST TOTAL COLUMN -->
-              <td colspan="${firstTotalIndex > 0 ? firstTotalIndex : 1}" style="text-align:right;">
-                TOTAL
-              </td>
-
-              <!-- TOTAL VALUES -->
-              ${sortedCols.slice(firstTotalIndex).map(col => {
-
-                if (!isTotalColumn(col)) {
-                  return `<td></td>`;
-                }
-
-                return `
-                  <td style="text-align:right;">
-                    ${formatNumber(groupTotals[col.column_name] || 0)}
-                  </td>
-                `;
-              }).join("")}
-
-            </tr>
-
-          </tbody>
-
-        </table>
-
-      </div>
-    `;
-  }).join("")}
-
- <!-- ================= GRAND TOTAL (INLINE STYLE) ================= -->
-
-<table border="1" cellspacing="0" cellpadding="5"
-  style="width:100%; margin-top:30px; border-collapse:collapse;">
-
-  <tbody>
-
-    <tr style="font-weight:bold; background:#ddd;">
-
-      <td></td>
-
-      <!-- LABEL BEFORE FIRST TOTAL COLUMN -->
-      <td colspan="${firstTotalIndex > 0 ? firstTotalIndex : 1}" style="text-align:right;">
-        GRAND TOTAL
+      <td style="text-align:center">
+        ${index + 1}
       </td>
 
-      ${sortedCols.slice(firstTotalIndex).map(col => {
+      ${sortedCols.map(col => {
 
-        if (!isTotalColumn(col)) {
-          return `<td></td>`;
+        let value = "";
+
+        if (col.isDynamicCurrency) {
+          value =
+            row.currency === col.currency
+              ? row.amount
+              : "";
+        } else {
+          const raw = row[col.column_name];
+
+          value =
+            typeof raw === "object"
+              ? raw?.value ?? ""
+              : raw ?? "";
+        }
+
+        if (col.master === "credit_card") {
+          const str = String(value);
+          const last4 = str.slice(-4);
+
+          return `
+            <td style="text-align:center">
+              **** **** **** ${last4}
+            </td>
+          `;
+        }
+
+        if (isDateColumn(col)) {
+          value = value
+            ? formatDate(value)
+            : "";
+        }
+
+        if (
+          isNumericColumn(col) ||
+          col.isDynamicCurrency
+        ) {
+          return `
+            <td style="text-align:right">
+              ${
+                value === ""
+                  ? ""
+                  : toNumber(value) === 0
+                    ? "-"
+                    : formatNumber(value)
+              }
+            </td>
+          `;
         }
 
         return `
-          <td style="text-align:right;">
-            ${formatNumber(grandTotals[col.column_name] || 0)}
+          <td style="text-align:center">
+            ${value || "-"}
           </td>
         `;
+
       }).join("")}
 
     </tr>
+  `).join("")}
 
-  </tbody>
+`).join("")}
 
-</table>
-`;
+</tbody>
+
+    </table>
+
+    <!-- ================= GRAND TOTAL ================= -->
+    <table border="1" cellspacing="0" cellpadding="5"
+      style="width:100%; margin-top:30px; border-collapse:collapse;">
+
+      <tbody>
+        <tr style="font-weight:bold; background:#ddd;">
+
+          <td></td>
+
+          <td colspan="${firstTotalIndex > 0 ? firstTotalIndex : 1}" style="text-align:right;">
+            GRAND TOTAL
+          </td>
+
+          ${sortedCols.slice(firstTotalIndex).map(col => {
+
+            if (!isTotalColumn(col)) {
+              return `<td></td>`;
+            }
+
+            return `
+              <td style="text-align:right;">
+                ${grandTotals[col.column_name] === 0
+                  ? "-"
+                  : formatNumber(grandTotals[col.column_name] || 0)}
+              </td>
+            `;
+          }).join("")}
+
+        </tr>
+      </tbody>
+
+    </table>
+  `;
 };
+
+
+
+
+
+const handleQuickDateChange = (value) => {
+  setActiveDateFilter(value);
+
+  const range = getDateRange(value);
+
+  if (range) {
+    setDateFilters(range);
+  }
+};
+
+const handleSort = (key, direction) => {
+  setSortConfig(prev => {
+    const safe = Array.isArray(prev) ? prev : [];
+
+    return [
+      ...safe.filter(s => s.key !== key),
+      { key, direction }
+    ];
+  });
+
+  setColumnChips(prev => {
+    const filtered = prev.filter(
+      c => !(c.type === "sort" && c.column === key)
+    );
+
+    return [
+      ...filtered,
+      {
+        type: "sort",
+        column: key,
+        value: direction
+      }
+    ];
+  });
+
+  setOpenMenu(null);
+};
+
+
+
+const handleSearch = (key) => {
+  setSearchColumnKey(key);
+  searchInputRef.current?.focus();
+  searchInputRef.current?.select();
+  setOpenMenu(null);
+
+  setColumnChips(prev => {
+    const filtered = prev.filter(
+      c => !(c.type === "search" && c.column === key)
+    );
+
+    return [
+      ...filtered,
+      {
+        type: "search",
+        column: key,
+        value: ""
+      }
+    ];
+  });
+};
+
+const handleGroup = (key, direction) => {
+  setGroupBy({ key, direction });
+
+  setColumnChips(prev => {
+    const filtered = prev.filter(
+      c => !(c.type === "group" && c.column === key)
+    );
+
+    return [
+      ...filtered,
+      {
+        type: "group",
+        column: key,
+        value: direction
+      }
+    ];
+  });
+
+  setOpenMenu(null);
+};
+
+const removeChip = (chip) => {
+  setColumnChips(prev =>
+    prev.filter(c =>
+      !(c.type === chip.type && c.column === chip.column)
+    )
+  );
+
+  if (chip.type === "search") {
+    setSearchColumnKey("");
+    setSearch("");
+  }
+
+  if (chip.type === "sort") {
+    setSortConfig(prev =>
+      prev.filter(s => s.key !== chip.column)
+    );
+  }
+
+  if (chip.type === "group") {
+    setGroupBy("");
+  }
+};
+
+const toggleChipDirection = (chip) => {
+  const newDirection = chip.value === "asc" ? "desc" : "asc";
+
+  if (chip.type === "sort") {
+    handleSort(chip.column, newDirection);
+  }
+
+  if (chip.type === "group") {
+    handleGroup(chip.column, newDirection);
+  }
+};
+
+const hideColumn = (key) => {
+  setVisibleColumns(prev =>
+    prev.filter(col => col.column_name !== key)
+  );
+  setOpenMenu(null);
+};
+
+const togglePinColumn = (columnName) => {
+  setPinnedColumns((prev) =>
+    prev.includes(columnName)
+      ? prev.filter((c) => c !== columnName)
+      : [...prev, columnName]
+  );
+};
+
+//  const paginatedRows = filteredRows.slice(
+//         (page - 1) * pageSize,
+//         page * pageSize
+//     );
+
+const sortedAllRows = React.useMemo(() => {
+  return [...filteredRows].sort((a, b) => {
+    for (const sort of sortConfig) {
+      let aValue = a?.[sort.key];
+      let bValue = b?.[sort.key];
+
+      aValue = typeof aValue === "object" ? aValue?.value ?? "" : aValue ?? "";
+      bValue = typeof bValue === "object" ? bValue?.value ?? "" : bValue ?? "";
+
+      const isNumeric = !isNaN(aValue) && !isNaN(bValue);
+
+      let result = 0;
+
+      if (isNumeric) {
+        result = Number(aValue) - Number(bValue);
+      } else {
+        result = String(aValue).localeCompare(String(bValue));
+      }
+
+      if (result !== 0) {
+        return sort.direction === "asc" ? result : -result;
+      }
+    }
+    return 0;
+  });
+}, [filteredRows, sortConfig]);
+
+const processedRows = React.useMemo(() => {
+  let data = [...filteredRows];
+
+  // 1. SORT
+  data = [...data].sort((a, b) => {
+    for (const sort of sortConfig) {
+      let aValue = a?.[sort.key];
+      let bValue = b?.[sort.key];
+
+      aValue = typeof aValue === "object" ? aValue?.value ?? "" : aValue ?? "";
+      bValue = typeof bValue === "object" ? bValue?.value ?? "" : bValue ?? "";
+
+      const isNumeric = !isNaN(aValue) && !isNaN(bValue);
+
+      let result = 0;
+
+      if (isNumeric) {
+        result = Number(aValue) - Number(bValue);
+      } else {
+        result = String(aValue).localeCompare(String(bValue));
+      }
+
+      if (result !== 0) {
+        return sort.direction === "asc" ? result : -result;
+      }
+    }
+    return 0;
+  });
+
+  return data;
+}, [filteredRows, sortConfig]);
+
+const groupedAllRows = React.useMemo(() => {
+  if (!groupBy?.key) {
+    return [
+      {
+        group: "All Records",
+        rows: sortedAllRows
+      }
+    ];
+  }
+
+  const groups = {};
+
+  sortedAllRows.forEach((row) => {
+    const key = row[groupBy.key] || "(Blank)";
+
+    if (!groups[key]) groups[key] = [];
+
+    groups[key].push(row);
+  });
+
+  let entries = Object.entries(groups);
+
+  entries.sort((a, b) => {
+    return groupBy.direction === "desc"
+      ? String(b[0]).localeCompare(String(a[0]))
+      : String(a[0]).localeCompare(String(b[0]));
+  });
+
+  return entries.map(([group, rows]) => ({
+    group,
+    rows
+  }));
+}, [sortedAllRows, groupBy]);
+
+const flatGroupedRows = React.useMemo(() => {
+  const flat = [];
+
+  groupedAllRows.forEach((g) => {
+    g.rows.forEach((row) => {
+      flat.push({
+        ...row,
+        __group: g.group
+      });
+    });
+  });
+
+  return flat;
+}, [groupedAllRows]);
+
+const paginatedRows = React.useMemo(() => {
+  const start = (page - 1) * pageSize;
+  const end = start + pageSize;
+
+  return flatGroupedRows.slice(start, end);
+}, [flatGroupedRows, page, pageSize]);
+
+const groupedByRows = React.useMemo(() => {
+  const groups = {};
+
+  paginatedRows.forEach((row) => {
+    const key = row.__group || "All Records";
+
+    if (!groups[key]) groups[key] = [];
+
+    groups[key].push(row);
+  });
+
+  let entries = Object.entries(groups);
+
+  entries.sort((a, b) => {
+    return groupBy?.direction === "desc"
+      ? String(b[0]).localeCompare(String(a[0]))
+      : String(a[0]).localeCompare(String(b[0]));
+  });
+
+  return entries.map(([group, rows]) => ({
+    group,
+    rows
+  }));
+}, [paginatedRows, groupBy]);
+
+
+const rowIndexMap = React.useMemo(() => {
+  const map = new Map();
+
+  flatGroupedRows.forEach((row, index) => {
+    map.set(row.id, index);
+  });
+
+  return map;
+}, [flatGroupedRows]);
+
+
+
+
+const printableGroupedRows = React.useMemo(() => {
+  const rows = sortedAllRows; // 🔥 IMPORTANT: NOT flatGroupedRows
+
+  if (!groupBy?.key) {
+    return [
+      {
+        group: "All Records",
+        rows
+      }
+    ];
+  }
+
+  const groups = {};
+
+  rows.forEach((row) => {
+    //console.log("groupby", groupBy);
+    const key = getGroupKey(row, groupBy); // 🔥 IMPORTANT
+    
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(row);
+  });
+
+  let entries = Object.entries(groups);
+
+  // optional group sort
+  entries.sort((a, b) => {
+    return groupBy?.direction === "desc"
+      ? String(b[0]).localeCompare(String(a[0]))
+      : String(a[0]).localeCompare(String(b[0]));
+  });
+
+  return entries.map(([group, rows]) => ({
+    group,
+    rows
+  }));
+}, [sortedAllRows, groupBy]);
+
 
 
     return (
         <div className="h-full flex flex-col">
-
+            
             {/* ================= HEADER ================= */}
             <div className="flex justify-between items-center mb-4">
 
-                <h1 className="text-xl font-semibold text-gray-800">
-                    {module?.display_name} - {report?.filter_name || "Loading..."}
+                <h1 className="text-xl font-semibold text-gray-800 truncate">
+                    {report?.description || "Loading..."}
                 </h1>
 
-                <div className="flex items-center gap-2">
+               {/* ================= ACTIONS ================= */}
 
-
+{/* DESKTOP VIEW (UNCHANGED ROW) */}
+<div className="hidden md:flex items-center gap-2">
   
 
 
-  {/* PRINT */}
   <PermissionButton
-    user={activeUser}
-    permission="print"
-    onClick={() => setShowPrintModal(true)}
-    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
-               hover:bg-gray-100 hover:border-gray-500 transition"
-  >
-    Print
-  </PermissionButton>
+  user={activeUser}
+  permission="print"
+  onClick={handlePrint}
+  className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
+             hover:bg-gray-100 hover:border-gray-500 transition"
+>
+  Print
+</PermissionButton>
 
-  {/* EXCEL */}
   <PermissionButton
     user={activeUser}
     permission="export"
-    onClick={() => setShowExcelModal(true)}
+    onClick={handleExcel}
     className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
                hover:bg-green-50 hover:border-green-500 hover:text-green-600 transition"
   >
     Excel
   </PermissionButton>
 
-  {/* PDF */}
   <PermissionButton
     user={activeUser}
     permission="export"
-    onClick={() => setShowPdfModal(true)}
+    onClick={handlePdf}
     className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
                hover:bg-red-50 hover:border-red-400 hover:text-red-600 transition"
   >
     PDF
   </PermissionButton>
-     <button
-                    onClick={() => setShowTableColumnModal(true)}
-                      className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
-               hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
-                >
-                    Customize
-                </button>
 
+  <button
+    onClick={() => setShowCustomizeDrawer(true)}
+    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
+               hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
+  >
+    Customize
+  </button>
+<CustomizeDrawer
+  open={showCustomizeDrawer}
+  onClose={() => setShowCustomizeDrawer(false)}
+
+  // Columns (ONLY what is actually used)
+  columns={columns}
+ // visibleColumns={visibleColumns}
+
+  tempSelectedColumns={tempSelectedColumns}
+  setTempSelectedColumns={setTempSelectedColumns}
+
+  // Header (Printer Custom)
+  selectedCompany={selectedCompany}
+  setSelectedCompany={setSelectedCompany}
+  companyList={company}
+
+  // Sub Header
+  printModuleName={printModuleName}
+  setPrintModuleName={setPrintModuleName}
+
+/>
+  <button
+  onClick={() => window.location.reload()}
+  className="
+    px-3 py-1.5 text-sm rounded-md
+    border border-gray-300
+    bg-white
+    hover:bg-blue-50
+    hover:border-blue-400
+    hover:text-blue-600
+    transition
+    flex items-center gap-2
+  "
+>
+ 
+  Refresh
+</button>
+   <button 
+   onClick={() => setShowFilters(true)}
+   className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
+               hover:bg-orange-50 hover:border-orange-400 hover:text-orange-600 transition">
+        Filters
+   </button>
+ 
+ <TableFiltersDrawer
+  open={showFilters}
+  onClose={() => setShowFilters(false)}
+  //masterList={masterList}
+  filters={filters}
+  setFilters={setFilters}
+  currencies={currencies}
+  masterDataMap={masterDataMap}
+  setMasterDataMap={setMasterDataMap}
+  saveFilterName={saveFilterName}
+  setSaveFilterName={setSaveFilterName}
+ // handleSaveFilter={handleSaveFilter}
+/>
+
+</div>
+<div className="flex md:hidden">
+  <button
+    onClick={() => setShowActions(!showActions)}
+    className="px-4 py-2 text-sm rounded-md bg-gray-900 text-white w-full"
+  >
+    Actions ▾
+  </button>
+
+  {showActions && (
+    <div className="absolute right-3 mt-12 w-52 bg-white border rounded-lg shadow-lg z-50 overflow-hidden">
+
+      <button onClick={handleCreate} className="w-full text-left px-4 py-2 text-sm hover:bg-green-50">
+        + New
+      </button>
+
+      <button onClick={() => setShowPrintModal(true)} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100">
+        Print
+      </button>
+
+      <button onClick={() => setShowExcelModal(true)} className="w-full text-left px-4 py-2 text-sm hover:bg-green-50">
+        Excel
+      </button>
+
+      <button onClick={() => setShowPdfModal(true)} className="w-full text-left px-4 py-2 text-sm hover:bg-red-50">
+        PDF
+      </button>
+
+      <button onClick={() => setShowTableColumnModal(true)} className="w-full text-left px-4 py-2 text-sm hover:bg-blue-50">
+        Customize
+      </button>
+
+      <button  className="w-full text-left px-4 py-2 text-sm hover:bg-orange-50">
+        Filters
+      </button>
+
+      <button
+        disabled={selectedRowIds.length === 0}
+        onClick={handleGenerateSelected}
+        className="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 disabled:opacity-40"
+      >
+        Generate
+      </button>
+      
+
+    </div>
+  )}
 </div>
 
             </div>
 
             {/* ================= CONTROL BAR (LEFT ALIGNED) ================= */}
-            <div className="bg-white p-3 rounded-xl shadow mb-4 flex flex-wrap items-center gap-3">
-
-                {/* SEARCH */}
-                <input
-                    type="text"
-                    placeholder="Search records..."
-                    className="border px-3 py-2 rounded-lg w-64"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                />
+           <div className="bg-white p-3 rounded-xl shadow mb-4">
 
 
-                {/* FILTER BUTTON */}
-                                 <TableFilters
-                                  masterList={masterList}
-                                  filters={filters}
-                                  setFilters={setFilters}
-                                  currencies={currencies}
-                                  masterDataMap={masterDataMap}
-                                  setMasterDataMap={setMasterDataMap}
-                                />
-                {isFilterActive && (
-  <div className="flex items-center gap-2 ml-2 bg-gray-50 px-3 py-2 rounded-lg border">
 
-    {/* INPUT */}
+  {/* ================= DESKTOP ================= */}
+  <div className="hidden md:flex flex-wrap items-center gap-3">
+
     <input
+      ref={searchInputRef}
       type="text"
-      placeholder="Enter filter name (required)"
-      value={saveFilterName}
-      onChange={(e) => setSaveFilterName(e.target.value)}
-      className="border px-2 py-1 rounded text-sm w-52"
+      placeholder={
+        searchColumnKey
+          ? `Search in ${
+              visibleColumns.find((c) => c.column_name === searchColumnKey)
+                ?.display_name || searchColumnKey
+            }...`
+          : "Search records..."
+      }
+      className="border px-3 py-2 rounded-lg w-60"
+      value={search}
+      onChange={(e) => {
+        const value = e.target.value;
+        setSearch(value);
+        if (value === "") {
+          setSearchColumnKey(null);
+        }
+      }}
     />
 
-    {/* SAVE BUTTON */}
-    <button
-      onClick={handleSaveFilter}
-      disabled={!saveFilterName.trim()}
-      className={`px-3 py-1 rounded text-sm text-white ${
-        saveFilterName.trim()
-          ? "bg-blue-500 hover:bg-blue-600"
-          : "bg-gray-300 cursor-not-allowed"
-      }`}
-    >
-      Save As
-    </button>
+    
 
-  </div>
-)}
-                 {/* ✅ DATE FILTER BUTTONS */}
-<div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+<div className="flex flex-wrap items-center gap-3">
+
+  {/* Start Date */}
   <input
     type="date"
     name="startDate"
-    value={pendingDateFilters.startDate}
-    onChange={onPendingInputChange}
-    style={{
-      padding: "8px 12px",
-      borderRadius: 6,
-      border: "1px solid #ccc",
-      fontSize: 14,
-      minWidth: 150,
-      maxWidth: 180,
-      background: "#f8fafc",
-      textAlign: "center",
-    }}
+    value={dateFilters.startDate}
+    onChange={onInputChange}
+    className="
+      h-9 w-[130px]
+      rounded-xl
+      border border-gray-200
+      bg-white
+      px-4
+      text-sm
+      shadow-sm
+      hover:border-gray-300
+      focus:outline-none
+      focus:ring-2
+      focus:ring-blue-500
+    "
   />
 
-  <span style={{ fontSize: 14, color: "#666" }}>to</span>
+  {/* <span className="text-gray-400 font-medium">→</span> */}
 
+  {/* End Date */}
   <input
     type="date"
     name="endDate"
-    value={pendingDateFilters.endDate}
-    onChange={onPendingInputChange}
-    style={{
-      padding: "8px 12px",
-      borderRadius: 6,
-      border: "1px solid #ccc",
-      fontSize: 14,
-      minWidth: 150,
-      maxWidth: 180,
-      background: "#f8fafc",
-      textAlign: "center",
-    }}
+    value={dateFilters.endDate}
+    onChange={onInputChange}
+    className="
+      h-9 w-[130px]
+      rounded-xl
+      border border-gray-200
+      bg-white
+      px-4
+      text-sm
+      shadow-sm
+      hover:border-gray-300
+      focus:outline-none
+      focus:ring-2
+      focus:ring-blue-500
+    "
   />
-</div>
-<button
-  onClick={handleApplyDateFilter}
-  className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
->
-  Apply
-</button>
-<button
+
+  {/* Quick Date Dropdown */}
+  <select
+    value={activeDateFilter || ""}
+    onChange={(e) => handleQuickDateChange(e.target.value)}
+    className="
+      h-9
+      min-w-[140px]
+      rounded-xl
+      border border-gray-200
+      bg-white
+      px-4
+      text-sm
+      shadow-sm
+      hover:border-gray-300
+      focus:outline-none
+      focus:ring-2
+      focus:ring-blue-500
+      cursor-pointer
+    "
+  >
+    <option value=""> Quick Range</option>
+    <option value="today">Today</option>
+    <option value="yesterday">Yesterday</option>
+    <option value="tomorrow">Tomorrow</option>
+    <option value="thisWeek">This Week</option>
+    <option value="lastWeek">Last Week</option>
+    <option value="thisMonth">This Month</option>
+    <option value="lastMonth">Last Month</option>
+    <option value="thisYear">This Year</option>
+    <option value="lastYear">Last Year</option>
+    {/* <option value="custom">Custom Range</option> */}
+  </select>
+
+  {/* Apply */}
+  <button
+    onClick={applyDateFilter}
+    className="
+      h-9
+      px-5
+      rounded-xl
+      bg-blue-600
+      text-white
+      text-sm
+      font-medium
+      shadow-sm
+      hover:bg-blue-700
+      transition
+    "
+  >
+    Search
+  </button>
+
+  {/* Clear */}
+  <button
     onClick={handleClear}
-  className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-100"
->
-  Clear
-</button>
-             <button
-  onClick={() =>
-    setActiveDateFilter(
-      activeDateFilter === "custom" ? null : "custom"
-    )
-  }
-  className={`px-3 py-2 border rounded-lg text-sm hover:bg-gray-100 ${
-    activeDateFilter === "custom" ? "bg-gray-100" : ""
-  }`}
->
-  Custom Range
-</button>
-               
+    className="
+      h-9
+      px-5
+      rounded-xl
+      border border-gray-200
+      bg-white
+      text-sm
+      font-medium
+      shadow-sm
+      hover:bg-gray-50
+      transition
+    "
+  >
+    Clear
+  </button>
 
-                {/* PAGINATION (LEFT SIDE LIKE YOU WANTED) */}
-                <div className="flex items-center gap-2 text-sm ml-4">
+</div>
 
-                    <button
-                        disabled={page === 1}
-                        onClick={() => setPage(p => p - 1)}
-                        className="px-3 py-1 border rounded disabled:opacity-40"
-                    >
-                        Prev
-                    </button>
+  {/* Right side: Pagination + Total */}
+<div className="ml-auto flex items-center gap-4">
+  <div className="flex items-end gap-2 text-sm">
+    <button
+      disabled={page === 1}
+      onClick={() => setPage(1)}
+      className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+      title="First Page"
+    >
+      ⏮
+    </button>
 
-                    <span className="text-gray-600">
-                        {page} / {totalPages || 1}
-                    </span>
+    <button
+      disabled={page === 1}
+      onClick={() => setPage((p) => Math.max(p - 1, 1))}
+      className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+      title="Previous"
+    >
+      ◀
+    </button>
 
-                    <button
-                        disabled={page === totalPages}
-                        onClick={() => setPage(p => p + 1)}
-                        className="px-3 py-1 border rounded disabled:opacity-40"
-                    >
-                        Next
-                    </button>
+    <div className="px-3 py-1 rounded-md bg-gray-50 border text-gray-700 font-medium">
+      {page} / {totalPages || 1}
+    </div>
 
-                </div>
+    <button
+      disabled={page === totalPages}
+      onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+      className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+      title="Next"
+    >
+      ▶
+    </button>
 
-                {/* RECORD COUNT */}
-                <span className="text-sm text-gray-500 ml-auto">
-                    Total: {finalRows.length}
-                </span>
-
-
-            </div>
-            {activeDateFilter && (
-  <div className="mb-4">
-<DateOnlyFilter
-  onApply={(range) => {
-    if (!range?.start || !range?.end) return;
-
-    const updatedFilters = {
-      startDate: range.start,
-      endDate: range.end,
-    };
-
-    setDateFilters(updatedFilters);
-    setActiveDateFilter(null);
-
-    // ✅ pass latest filters directly
-    loadModule(updatedFilters);
-    getFilteredReports({
-      dateFilters: updatedFilters,
-      module_id: report?.module_id,
-      filters: filters || [],
-      search: search || "",
-    });
-  }}
-/>
+    <button
+      disabled={page === totalPages}
+      onClick={() => setPage(totalPages)}
+      className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+      title="Last Page"
+    >
+      ⏭
+    </button>
   </div>
-)}
+
+  <span className="text-sm text-gray-500">
+    Total: {finalRows.length}
+  </span>
+</div>
+  </div>
+
+</div>
+          
+
 
             {/* ACTIVE FILTER CHIPS */}
-            {/* ACTIVE FILTERS (2nd ROW UI) */}
+            <div className="flex items-start justify-between flex-wrap gap-3">
             <div className="flex flex-wrap gap-2 mt-0 mb-4">
 
   {filters.map((f, i) => {
@@ -1619,102 +1998,36 @@ return `
 
         {/* SELECTED VALUES */}
         <div className="flex gap-1 flex-wrap">
-        
-         {selectedValues.map((val, idx) => (
-  <span
-    key={idx}
-    className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
-  >
-    {getDisplayValue(masterName, val)}
-    <button
-      onClick={() => {
-        setFilters(prev =>
-          prev.map((item, index) => {
-            if (index !== i) return item;
+          {selectedValues.map((val, idx) => (
+            <span
+              key={idx}
+              className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
+            >
+              {val}
+              <button
+                onClick={() => {
+               setFilters(prev =>
+                  prev.map((item, index) => {
+                    if (index !== i) return item;
 
-            return {
-              ...item,
-              values: (item.values || [])
-                .map(normalize)
-                .filter(v => v !== val),
-            };
-          })
-        );
-      }}
-      className="text-blue-500 hover:text-red-500"
-    >
-      ✕
-    </button>
-  </span>
-))}
+                    return {
+                      ...item,
+                      values: (item.values || [])
+                        .map(normalize)
+                        .filter(v => v !== val),
+                    };
+                  })
+                );
+                }}
+                className="text-blue-500 hover:text-red-500"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
         </div>
 
-        {/* ADD BUTTON */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpenIndex(openIndex === i ? null : i);
-          }}
-          className="text-xs text-gray-500 hover:text-gray-700"
-        >
-          + Add
-        </button>
-
-        {/* DROPDOWN */}
-        {openIndex === i && (
-          <div
-            ref={el => (dropdownRefs.current[i] = el)}
-            className="absolute top-8 left-0 bg-white border rounded-lg shadow-lg w-56 max-h-60 overflow-auto z-50"
-            onClick={e => e.stopPropagation()}
-          >
-
-           {options.map((opt, idx) => {
-  const optionKey = normalize(
-    typeof opt === "object"
-      ? opt.key ?? opt.code ?? opt.vendor_code ?? opt.value
-      : opt
-  );
-
-  const optionLabel =
-    typeof opt === "object"
-      ? opt.value ?? opt.name ?? opt.vendor_name ?? optionKey
-      : opt;
-
-  const checked = selectedValues.includes(optionKey);
-
-  return (
-    <label
-      key={idx}
-      className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer"
-    >
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={() => {
-          setFilters(prev =>
-            prev.map((item, index) => {
-              if (index !== i) return item;
-
-              const current = (item.values || []).map(normalize);
-
-              return {
-                ...item,
-                values: checked
-                  ? current.filter(v => v !== optionKey)
-                  : [...current, optionKey],
-              };
-            })
-          );
-        }}
-      />
-
-      <span className="text-sm">{optionLabel}</span>
-    </label>
-  );
-})}
-
-          </div>
-        )}
+       
 
         {/* REMOVE FILTER */}
         <button
@@ -1730,690 +2043,114 @@ return `
     );
   })}
 
+<div className="flex flex-col gap-3 mb-3">
+
+  {/* SEARCH */}
+  {groupedChips.search?.length > 0 && (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-bold text-gray-600 mr-2">
+        SEARCHING:
+      </span>
+
+      {groupedChips.search.map((chip, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded-full text-xs"
+        >
+          <span>{chip.column}</span>
+
+          <button
+            onClick={() => removeChip(chip)}
+            className="text-red-500 hover:text-red-700"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+    </div>
+  )}
+
+  {/* SORT */}
+  {groupedChips.sort?.length > 0 && (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-bold text-gray-600 mr-2">
+        SORTING:
+      </span>
+
+      {groupedChips.sort.map((chip, i) => (
+        <div
+  key={i}
+  onClick={() => toggleChipDirection(chip)}
+  className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1 rounded-full text-xs cursor-pointer hover:bg-blue-100"
+>
+  <span>
+    {chip.column} {chip.value === "asc" ? "↑" : "↓"}
+  </span>
+
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      removeChip(chip);
+    }}
+    className="text-red-500 hover:text-red-700"
+  >
+    ✕
+  </button>
+</div>
+      ))}
+    </div>
+  )}
+
+  {/* GROUP */}
+  {groupedChips.group?.length > 0 && (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-bold text-gray-600 mr-2">
+        GROUPING:
+      </span>
+
+      {groupedChips.group.map((chip, i) => (
+       <div
+  key={i}
+  onClick={() => toggleChipDirection(chip)}
+  className="flex items-center gap-2 bg-purple-50 border border-purple-200 text-purple-700 px-3 py-1 rounded-full text-xs cursor-pointer hover:bg-purple-100"
+>
+  <span>
+    {chip.column} {chip.value === "asc" ? "↑" : "↓"}
+  </span>
+
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      removeChip(chip);
+    }}
+    className="text-red-500 hover:text-red-700"
+  >
+    ✕
+  </button>
+</div>
+      ))}
+    </div>
+  )}
+
 </div>
 
-
-            {/* ================= TABLE WRAPPER ================= */}
-            <div className="bg-white rounded-xl shadow flex-1 flex flex-col overflow-hidden">
-                <div className="flex-1 w-full overflow-auto">
-                  {loading ? (
-                    <div className="flex items-center justify-center h-64">
-                      <Loader type="orbit" />
-                    </div>
-                  ) : (
-                    <table className="min-w-max w-full text-sm">
-                        <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
-                            <tr>
-                                <th className="px-4 py-3 border-b text-left">S.No</th>
-                                {visibleColumns.map(col => (
-                                   <th
-  key={col.column_id}
-  onClick={() => handleSort(col.column_name)}
-  className={`${getAlignClass(
-    col.display_name
-  )} px-4 py-3 whitespace-nowrap border-b cursor-pointer select-none hover:bg-gray-200`}
->
-  <div className="flex items-center gap-1">
-    <span>{col.display_name}</span>
-
-    {sortConfig.key === col.column_name ? (
-      sortConfig.direction === "asc" ? (
-        <span>▲</span>
-      ) : (
-        <span>▼</span>
-      )
-    ) : (
-      <span className="text-gray-400">↕</span>
-    )}
-  </div>
-</th>
-                                ))}
-
-                                {/* <th className="px-4 py-3 border-b text-right">Actions</th> */}
-                            </tr>
-                        </thead>
-
-                        {/* TABLE BODY */}
-                    <tbody className="divide-y">
-{paginatedRows.map((row, i) => (
-  <tr key={row.id ?? i} className="hover:bg-gray-50">
-
-    <td className="px-4 py-3 whitespace-nowrap">
-      {(page - 1) * pageSize + i + 1}
-    </td>
-
-    {visibleColumns.map((col) => {
-      const isMaster = !!col.master;
-      const editKey = `edit-${row.id}-${col.column_name}`;
-      const isDate = col.data_type?.toLowerCase().includes("date");
-      const isAmount = col.data_type?.toLowerCase().includes("decimal") 
-      // console.log("rendering row:", row, "with column:", col);
-      // ✅ normalize row value (CRITICAL FIX)
-      const rawValue = row?.[col.column_name];
-      const value =
-        typeof rawValue === "object"
-          ? rawValue?.value ?? "-"
-          : rawValue ?? "-";
-
-      return (
-        <td
-          key={col.column_id}
-          className={`px-4 py-3 whitespace-nowrap ${getAlignClass(col.display_name)}`}
-        >
-
-          {/* ================= EDIT MODE ================= */}
-          {editRowId === row.id ? (
-            <div className="relative">
-
-              <input
-                type={isDate ? "date" : "text"}
-                className="border px-2 py-1 rounded w-full"
-                value={
-                  col.column_name === "total_amount_aed"
-                    ? editRow.total_amount_aed || ""
-                    : isDate
-                    ? formatForInput(editRow[col.column_name])
-                    : (
-                        typeof editRow[col.column_name] === "object"
-                          ? editRow[col.column_name]?.value ?? ""
-                          : editRow[col.column_name] ?? ""
-                      )
-                }
-                disabled={col.column_name === "total_amount_aed"} // ✅ readonly
-                onChange={(e) => {
-                  let val = e.target.value;
-
-                  if (isNumericColumn(col.column_name)) {
-                    val = handleNumericInput(val);
-                  }
-
-                  setEditRow({
-                    ...editRow,
-                    [col.column_name]: val,
-                  });
-
-                  setActiveDropdown(editKey);
-                }}
-                onFocus={() => setActiveDropdown(editKey)}
-                onBlur={() =>
-                  setTimeout(() => setActiveDropdown(null), 150)
-                }
-              />
-
-           
-
-            </div>
-          ) : (
-          (() => {
-
-  const safeNumber = (val) => {
-    const num = Number(val);
-    return isNaN(num) ? null : num;
-  };
-
-  // ================= DATE =================
-  if (isDate) return formatDate(value);
-
-  // ================= TOTAL =================
-  if (col.column_name === "total_amount_aed") {
-    const num = safeNumber(value);
-    return num !== null ? num.toFixed(2) : "-";
-  }
-
-  // ================= DECIMAL =================
-  if (col.data_type?.toLowerCase().includes("decimal")) {
-  const num = safeNumber(value);
-  return num !== null && num !== 0
-    ? num.toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      })
-    : "-";
-  }
-
-  if (col.column_name.toLowerCase().includes("amount")) {
-    const num = safeNumber(value);
-    return num !== null && num !== 0 ? num.toLocaleString() : "-";
-  }
-
-  // ================= CREDIT CARD =================
-  if (col.master === "credit_card") {
-    const raw = String(value ?? "");
-    if (!raw) return "-";
-
-    const last4 = raw.slice(-4);
-    return `**** **** **** ${last4}`;
-  }
-
-  // ================= OBJECT HANDLING =================
-  if (typeof value === "object" && value !== null) {
-    return value.value ?? "-";
-  }
-
-  return value ?? "-";
-
-})()
-          )}
-
-        </td>
-      );
-    })}
-
-  
-
-  </tr>
-  
-))}
-<tr className="bg-gray-100 font-semibold">
-
-  {/* S.No column */}
-  <td className="px-4 py-3 whitespace-nowrap text-right">
-    TOTAL
-  </td>
-
-  {visibleColumns.map((col, idx) => {
-    const key = col.column_name.toLowerCase();
-
-    // const isNumeric =
-    //   key.includes("amount") ||
-    //   col.data_type?.toLowerCase().includes("decimal") ||
-    //   key.includes("total");
-
-    const isNumeric = key.includes("total");
-
-    if (!isNumeric) {
-      return <td key={idx}></td>;
-    }
-
-    const total = totals[col.column_name] || 0;
-
-    return (
-      <td
-        key={idx}
-        className={`px-4 py-3 whitespace-nowrap text-right`}
-      >
-        {total === 0
-        ? "-"
-        : total.toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-          })}
-      </td>
-    );
-  })}
-
-</tr>
-</tbody>
-
-                    </table>
-                  )}
-                    {showImportModal && (
-                        <Modal title="Import Data" onClose={() => setShowImportModal(false)}>
-
-                            <div className="flex flex-col gap-4">
-
-                                {/* TOP ACTIONS */}
-                                <div className="flex gap-3">
-
-                                    <button
-                                        onClick={handleExport}
-                                        className="btn btn-outline flex-1"
-                                    >
-                                        ⬇️ Template
-                                    </button>
-
-                                    <label className="btn btn-green flex-1 cursor-pointer">
-                                        📁 Choose File
-                                        <input
-                                            type="file"
-                                            className="hidden"
-                                            onChange={handleFileChange}
-                                        />
-                                    </label>
-
-                                </div>
-
-                                {/* FILE PREVIEW */}
-                                {file && (
-                                    <div className="flex items-center justify-between bg-gray-100 px-3 py-2 rounded-lg">
-
-                                        <span className="text-sm truncate">
-                                            📄 {file.name}
-                                        </span>
-
-                                        <button
-                                            onClick={() => setFile(null)}
-                                            className="text-red-500 hover:text-red-700"
-                                        >
-                                            ✕
-                                        </button>
-
-                                    </div>
-                                )}
-
-                                {/* UPLOAD BUTTON */}
-                                {file && (
-                                    <button
-                                        onClick={handleUpload}
-                                        className="btn btn-blue w-full"
-                                    >
-                                        ⬆️ Upload File
-                                    </button>
-                                )}
-
-                            </div>
-
-                        </Modal>
-                    )}
-                     {showPrintModal && (
-                        <Modal title="Print Options" onClose={() => setShowPrintModal(false)}>
-
-                            <div className="flex gap-3">
-
-                                <button
-                                    onClick={() => handlePrint("default",null,groupBy)}
-                                    className="btn btn-gray flex-1"
-                                >
-                                    Default
-                                </button>
-
-                                <button
-                                    onClick={async () => {
-                                    const savedCols = await fetchCustomizedColumns();
-
-                                    handlePrint("saved", savedCols, groupBy); // ✅ pass directly
-                                    }}
-                                    className="btn btn-blue flex-1"
-                                >
-                                    Saved
-                                </button>
-
-                                <button
-                                    onClick={() => setShowColumnSelector(true)}
-                                    className="btn btn-green flex-1"
-                                >
-                                    Customize
-                                </button>
-                                <button
-                                    onClick={() => setShowPrintOptions(true)}
-                                    className="btn btn-green flex-1"
-                                >
-                                     Header
-                                </button>
-                                 <select
-                                    value={groupBy}
-                                    onChange={(e) => setGroupBy(e.target.value)}
-                                    className="border p-2 w-full rounded"
-                                  >
-                                    <option value="service">Service Types</option>
-                                    <option value="terms">Terms</option>
-                                  </select>
-                               
-
-                            </div>
-
-                        </Modal>
-                    )}
-                   {showExcelModal && (
-                        <Modal title="Excel Export" onClose={() => setShowExcelModal(false)}>
-                            <div className="flex gap-3">
-
-                                <button
-                                    onClick={() => handleExcel("default", null, groupBy)}
-                                    className="btn btn-gray flex-1"
-                                >
-                                    Default
-                                </button>
-
-                                <button
-                                     onClick={async () => {
-                                    const savedCols = await fetchCustomizedColumns();
-
-                                    handleExcel("saved", savedCols, groupBy);  // ✅ pass directly
-                                    }}
-                                    className="btn btn-blue flex-1"
-                                >
-                                    Saved
-                                </button>
-
-                                <button
-                                    onClick={() => setShowColumnSelector(true)}
-                                    className="btn btn-green flex-1"
-                                >
-                                    Customize
-                                </button>
-                                <button
-                                    onClick={() => setShowPrintOptions(true)}
-                                    className="btn btn-green flex-1"
-                                >
-                                     Header
-                                </button>
-                                 <select
-                                    value={groupBy}
-                                    onChange={(e) => setGroupBy(e.target.value)}
-                                    className="border p-2 w-full rounded"
-                                  >
-                                    <option value="service">Service Types</option>
-                                    <option value="terms">Terms</option>
-                                  </select>
-
-                            </div>
-
-                        </Modal>
-                    )}
-
-                    {showPdfModal && (
-                        <Modal title="PDF Export" onClose={() => setShowPdfModal(false)}>
-                            <div className="flex gap-3">
-
-                                <button
-                                    onClick={() => handlePdf("default", null, groupBy)}
-                                    className="btn btn-gray flex-1"
-                                >
-                                    Default
-                                </button>
-
-                                <button
-                                   onClick={async () => {
-                                        const savedCols = await fetchCustomizedColumns();
-                                        handlePdf("saved", savedCols, groupBy); // ✅ pass directly
-                                    }}
-                                    className="btn btn-blue flex-1"
-                                >
-                                    Saved
-                                </button>
-
-                                <button
-                                    onClick={() => setShowColumnSelector(true)}
-                                    className="btn btn-green flex-1"
-                                >
-                                    Customize
-                                </button>
-                                <button
-                                    onClick={() => setShowPrintOptions(true)}
-                                    className="btn btn-green flex-1"
-                                >
-                                     Header
-                                </button>
-                                 <select
-                                    value={groupBy}
-                                    onChange={(e) => setGroupBy(e.target.value)}
-                                    className="border p-2 w-full rounded"
-                                  >
-                                    <option value="service">Service Types</option>
-                                    <option value="terms">Terms</option>
-                                  </select>
-
-                            </div>
-
-                        </Modal>
-                    )}
-                     {showTableColumnModal && (
-                      <Modal
-                        title="Customize Columns"
-                        onClose={() => setShowTableColumnModal(false)}
-                      >
-                        <div className="flex gap-3">
-                    
-                          {/* DEFAULT */}
-                          <button
-                            onClick={() => {
-                              setTableColumnMode("default");
-                              setSelectedColumns([]); // reset
-                            }}
-                            className="btn btn-gray flex-1"
-                          >
-                            Default
-                          </button>
-                    
-                          {/* SAVED (DB or localStorage fallback) */}
-                          <button
-                            onClick={async () => {
-                              try {
-                                // preferred: API saved columns
-                                const res = await getReportCustomizedColumns(report.id,
-                          activeUserEmail);
-                    
-                                if (res?.data?.data?.columns) {
-                                  setSavedTableColumns(res.data.data.columns);
-                                } else {
-                                  setSavedTableColumns(saved);
-                                }
-                    
-                                setTableColumnMode("saved");
-                              } catch (err) {
-                                console.error(err);
-                              }
-                            }}
-                            className="btn btn-blue flex-1"
-                          >
-                            Saved
-                          </button>
-                    
-                          {/* CUSTOM */}
-                          <button
-                            onClick={() => {
-                              setShowColumnSelector(true);
-                              setTableColumnMode("custom");
-                    
-                              // optional: preload existing config into selector
-                              setSelectedColumns(savedTableColumns || []);
-                            }}
-                            className="btn btn-green flex-1"
-                          >
-                            Customize
-                          </button>
-                    
-                        </div>
-                      </Modal>
-                    )}
-
-                     {showColumnSelector && (
-  <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50">
-
-    <div className="w-[500px] bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden">
-
-      {/* Header */}
-      <div className="px-6 py-5 bg-gradient-to-r from-slate-50 to-blue-50 border-b">
-
-        <h2 className="text-lg font-semibold text-gray-800">
-          Customize Columns
-        </h2>
-
-        <p className="text-sm text-gray-500 mt-1">
-          Search and select fields to show in your table
-        </p>
-
-        {/* SEARCH */}
-        <div className="mt-4 relative">
-
-          <input
-            type="text"
-            placeholder="Search columns..."
-            value={columnSearch}
-            onChange={(e) => setColumnSearch(e.target.value)}
-            className="w-full px-4 py-2 pl-10 text-sm rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 outline-none transition"
-          />
-
-          <span className="absolute left-3 top-2.5 text-gray-400 text-sm">
-            🔍
-          </span>
-
-        </div>
-
-      </div>
-
-      {/* Quick actions */}
-      <div className="flex justify-between px-6 py-3 text-xs bg-gray-50 border-b">
-
-        <button
-          onClick={() => setTempSelectedColumns(columns.map(c => c.column_name))}
-          className="text-blue-600 hover:underline font-medium"
-        >
-          Select All
-        </button>
-
-        <button
-          onClick={() => setTempSelectedColumns([])}
-          className="text-red-500 hover:underline font-medium"
-        >
-          Clear All
-        </button>
-
-      </div>
-
-      {/* List */}
-      <div className="max-h-72 overflow-auto p-4 space-y-2">
-
-        {columns
-          .filter(col =>
-            col.display_name
-              .toLowerCase()
-              .includes(columnSearch.toLowerCase())
-          )
-          .map(col => {
-
-            const checked = tempSelectedColumns.includes(col.column_name);
-
-            return (
-              <div
-                key={col.column_id}
-                onClick={() => toggleTempColumn(col.column_name)}
-                className={`
-                  flex items-center justify-between px-4 py-3 rounded-2xl border cursor-pointer transition
-                  ${checked
-                    ? "bg-blue-50 border-blue-300 shadow-sm"
-                    : "hover:bg-gray-50 border-gray-100"
-                  }
-                `}
-              >
-
-                <div className="flex items-center gap-3">
-
-                  {/* custom checkbox */}
-                  <div className={`
-                    w-5 h-5 flex items-center justify-center rounded-md border transition
-                    ${checked
-                      ? "bg-blue-600 border-blue-600 text-white"
-                      : "border-gray-300"
-                    }
-                  `}>
-                    {checked && "✓"}
-                  </div>
-
-                  <span className="text-sm text-gray-700">
-                    {col.display_name}
-                  </span>
-
-                </div>
-
-              </div>
-            );
-          })}
-
-      </div>
-
-      {/* Footer */}
-      <div className="flex justify-end gap-2 px-6 py-4 border-t bg-white">
-
-        <button
-          onClick={() => setShowColumnSelector(false)}
-          className="px-4 py-2 text-sm rounded-xl border hover:bg-gray-100 transition"
-        >
-          Cancel
-        </button>
-
-        <button
-          onClick={saveColumnSelection}
-          className="px-5 py-2 text-sm rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:opacity-90 shadow-md transition"
-        >
-          Apply Changes
-        </button>
-
-      </div>
-
+</div>
+          
     </div>
 
-  </div>
-)}
-                    {showPrintOptions && (
-                        <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
-
-                            <div className="bg-white p-5 rounded-xl shadow-lg w-[420px]">
-
-                                <h3 className="mb-4 text-lg font-semibold">
-                                    Add Logo or Header to Print
-                                </h3>
-
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">
-                                        Select Company (Trade Name)
-                                    </label>
-
-                                    <select
-                                        className="w-full border p-2 rounded"
-                                        value={selectedCompany}
-                                        onChange={(e) => setSelectedCompany(e.target.value)}
-                                    >
-                                        <option value="">Default (Module Name)</option>
-
-                                        {companyList.map((c, i) => (
-                                            <option key={i} value={c}>
-                                                {c}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <div className="mt-3">
-                                    <label className="block text-sm font-medium mb-1">
-                                        Module Name
-                                    </label>
-
-                                    <input
-                                        type="text"
-                                        className="w-full border p-2 rounded"
-                                        placeholder="Enter module name (optional)"
-                                        value={printModuleName}
-                                        onChange={(e) => setPrintModuleName(e.target.value)}
-                                    />
-                                    </div>
-                                </div>
-
-                                <div className="flex justify-end gap-2 mt-4">
-
-                                    <button
-                                        onClick={() => setShowPrintOptions(false)}
-                                        className="btn btn-outline"
-                                    >
-                                        Cancel
-                                    </button>
-
-                                    <button
-                                        onClick={savePrintOptions}
-                                        className="btn btn-blue"
-                                    >
-                                        💾 Save
-                                    </button>
-
-                                </div>
-
-                            </div>
-
-                        </div>
-                    )}
-                  
-
-                </div>
-            </div>
-
-<div ref={printRef} className="hidden print:block">
+           
+         <div ref={printRef} className="hidden print:block">
+          
   <PrintableTable
     columns={columns}
     finalRows={finalRows}
     printModuleName={printModuleName}
-    module={module}
+   // module={module}
     groupBy={groupBy}
   />
 </div>
+
+
 
         </div>
 

@@ -5,6 +5,7 @@ import {
   fetchSections,
   fetchMasters,
   getReportsName,
+  getReportMenu
 } from "../api/api";
 
 import {
@@ -27,6 +28,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
   const [sections, setSections] = useState([]);
   const [masters, setMasters] = useState([]);
   const [reports, setReports] = useState([]);
+  const [views, setViews] = useState([]);
   const [openMain, setOpenMain] = useState(null);
 
   const User = JSON.parse(localStorage.getItem("user"));
@@ -39,6 +41,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
     loadSections();
     loadMasters();
     loadReportFilters();
+    loadReportMenu();
   }, []);
 
   const loadSections = async () => {
@@ -65,8 +68,18 @@ export default function Sidebar({ collapsed, setCollapsed }) {
 
       const res = await getReportsName(activeUserEmail);
 
-      setReports(res.data || []);
+      setViews(res.data || []);
     } catch (err) {
+      console.error(err);
+    }
+  };
+
+   const loadReportMenu = async () => {
+    try {
+      const res = await getReportMenu();
+      setReports(res.data || []);
+    }
+      catch (err) {
       console.error(err);
     }
   };
@@ -117,16 +130,26 @@ export default function Sidebar({ collapsed, setCollapsed }) {
         path: `/workspace/${sec.module_id}`,
       })),
     },
-
-    {
+     {
       name: "Reports",
       icon: <FileBarChart2 size={18} />,
       children: reports.map((report) => ({
-        key: `${report.id}_${report.filter_name}`,
-        id: report.id,
-        name: report.filter_name,
+        key: `${report.report_id}`,
+        id: report.report_id,
+        name: report.description,
         report,
-        path: `/reports/${report.id}`,
+        path: `/reports/${report.report_id}`,
+      })),
+    },
+    {
+      name: "Views",
+      icon: <FileBarChart2 size={18} />,
+      children: views.map((view) => ({
+        key: `${view.id}_${view.filter_name}`,
+        id: view.id,
+        name: view.filter_name,
+        view,
+        path: `/views/${view.id}`,
       })),
     },
   ].filter(Boolean);

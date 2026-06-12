@@ -270,7 +270,7 @@ export default function DynamicTablePage() {
     }, [columns]);
 
     useEffect(() => {
-    getMasterData("service_providers", activeUserEmail).then(res => {
+    getMasterData("products", activeUserEmail).then(res => {
       const result = Array.isArray(res.data) ? res.data : [];
       //console.log("Raw Service Providers:", result);
       setServiceProviders(result);
@@ -1284,42 +1284,63 @@ const handlePreview = async (prfNum) => {
   }
 };
 
-const handleUnpost = async (prfNum) => {
-  const confirmed = window.confirm("Are you sure you want to unpost this PRF?");
-  if (!confirmed) return;
+const handleUnpost = (prfNum) => {
+  setConfirmData({
+    title: "Unpost PRF",
+    message: "Are you sure you want to unpost this PRF?",
+    confirmText: "Unpost",
+    type: "warning",
+    onConfirm: async () => {
+      try {
+        setLoading(true);
 
-  try {
-    setLoading(true);
-    await unpostPRFTransaction(prfNum, activeUserEmail);
-    setPopupMessage("PRF unposted successfully");
-    setPopupType("success");
-    loadModule();
-  } catch (err) {
-    console.error("Failed to unpost PRF:", err);
-    setPopupMessage("Failed to unpost PRF");
-    setPopupType("error");
-  } finally {
-    setLoading(false);
-  }
+        await unpostPRFTransaction(prfNum, activeUserEmail);
+
+        setPopupMessage("PRF unposted successfully");
+        setPopupType("success");
+        loadModule();
+      } catch (err) {
+        console.error("Failed to unpost PRF:", err);
+        setPopupMessage("Failed to unpost PRF");
+        setPopupType("error");
+      } finally {
+        setLoading(false);
+        setConfirmOpen(false);
+      }
+    }
+  });
+
+  setConfirmOpen(true);
 };
 
-const handlePost = async (prfNum) => {
-  const confirmed = window.confirm("Are you sure you want to post this PRF?");
-  if (!confirmed) return;
+const handlePost = (prfNum) => {
+  setConfirmData({
+    title: "Post PRF",
+    message: "Are you sure you want to post this PRF?",
+    confirmText: "Post",
+    cancelText: "Cancel",
+    type: "info", // or "success" if you want to style it differently
+    onConfirm: async () => {
+      try {
+        setLoading(true);
 
-  try {
-    setLoading(true);
-    await postPRFTransaction(prfNum, activeUserEmail);
-    setPopupMessage("PRF posted successfully");
-    setPopupType("success");
-    loadModule();
-  } catch (err) {
-    console.error("Failed to post PRF:", err);
-    setPopupMessage("Failed to post PRF");
-    setPopupType("error");
-  } finally {
-    setLoading(false);
-  }
+        await postPRFTransaction(prfNum, activeUserEmail);
+
+        setPopupMessage("PRF posted successfully");
+        setPopupType("success");
+        loadModule();
+      } catch (err) {
+        console.error("Failed to post PRF:", err);
+        setPopupMessage("Failed to post PRF");
+        setPopupType("error");
+      } finally {
+        setLoading(false);
+        setConfirmOpen(false);
+      }
+    }
+  });
+
+  setConfirmOpen(true);
 };
 
 const getExcelColumns = (mode, savedCols = [], groupBy = "service") => {
@@ -1641,7 +1662,7 @@ if (col.column_name === "products") {
         .trim()
         .toLowerCase();
 
-      // If vendor_name is missing in service_providers, resolve from vendors master
+      // If vendor_name is missing in products, resolve from vendors master
       const vendorNameFromMaster =
         vendors.find(
           (v) =>
@@ -1915,7 +1936,7 @@ const handleNewRowChange = async (key, value, masterName) => {
   });
 
   // use normalized below too
-  if (key === "service_providers") {
+  if (key === "products") {
 
     const providerValue = normalized;
 
@@ -3024,6 +3045,18 @@ const removeChip = (chip) => {
   }
 };
 
+const toggleChipDirection = (chip) => {
+  const newDirection = chip.value === "asc" ? "desc" : "asc";
+
+  if (chip.type === "sort") {
+    handleSort(chip.column, newDirection);
+  }
+
+  if (chip.type === "group") {
+    handleGroup(chip.column, newDirection);
+  }
+};
+
 const hideColumn = (key) => {
   setVisibleColumns(prev =>
     prev.filter(col => col.column_name !== key)
@@ -3800,20 +3833,24 @@ useEffect(() => {
 
       {groupedChips.sort.map((chip, i) => (
         <div
-          key={i}
-          className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1 rounded-full text-xs"
-        >
-          <span>
-            {chip.column} {chip.value === "asc" ? "↑" : "↓"}
-          </span>
+  key={i}
+  onClick={() => toggleChipDirection(chip)}
+  className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1 rounded-full text-xs cursor-pointer hover:bg-blue-100"
+>
+  <span>
+    {chip.column} {chip.value === "asc" ? "↑" : "↓"}
+  </span>
 
-          <button
-            onClick={() => removeChip(chip)}
-            className="text-red-500 hover:text-red-700"
-          >
-            ✕
-          </button>
-        </div>
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      removeChip(chip);
+    }}
+    className="text-red-500 hover:text-red-700"
+  >
+    ✕
+  </button>
+</div>
       ))}
     </div>
   )}
@@ -3826,21 +3863,25 @@ useEffect(() => {
       </span>
 
       {groupedChips.group.map((chip, i) => (
-        <div
-          key={i}
-          className="flex items-center gap-2 bg-purple-50 border border-purple-200 text-purple-700 px-3 py-1 rounded-full text-xs"
-        >
-          <span>
-            {chip.column} {chip.value === "asc" ? "↑" : "↓"}
-          </span>
+       <div
+  key={i}
+  onClick={() => toggleChipDirection(chip)}
+  className="flex items-center gap-2 bg-purple-50 border border-purple-200 text-purple-700 px-3 py-1 rounded-full text-xs cursor-pointer hover:bg-purple-100"
+>
+  <span>
+    {chip.column} {chip.value === "asc" ? "↑" : "↓"}
+  </span>
 
-          <button
-            onClick={() => removeChip(chip)}
-            className="text-red-500 hover:text-red-700"
-          >
-            ✕
-          </button>
-        </div>
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      removeChip(chip);
+    }}
+    className="text-red-500 hover:text-red-700"
+  >
+    ✕
+  </button>
+</div>
       ))}
     </div>
   )}

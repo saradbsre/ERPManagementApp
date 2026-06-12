@@ -167,7 +167,7 @@ const addRow = () => {
 };
 
 useEffect(() => {
-getMasterData("service_providers", activeUserEmail).then(res => {
+getMasterData("products", activeUserEmail).then(res => {
   const result = Array.isArray(res.data) ? res.data : [];
   //console.log("Raw Service Providers:", result);
   setServiceProviders(result);
@@ -433,7 +433,7 @@ return (
         );
 
         // Auto-select product_type (service) for the first match
-        const firstServiceId = matchedProviders[0].services;
+        const firstServiceId = matchedProviders[0].products_types;
         const matchedService = serviceTypes.find(
           st => String(st.id) === String(firstServiceId)
         );

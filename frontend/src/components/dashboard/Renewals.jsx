@@ -173,7 +173,7 @@ const flatData = useMemo(() => {
 
                 <div className="flex justify-between items-center">
                   <p className="font-medium text-sm">
-                    {item.service_providers}
+                    {item.products}
                   </p>
 
                   <span

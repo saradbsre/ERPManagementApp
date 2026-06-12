@@ -19,7 +19,7 @@ export default function ChartforTop5() {
   const activeUserEmail = activeUser?.email;
 
   useEffect(() => {
-    getMasterData("service_providers", activeUserEmail).then((res) => {
+    getMasterData("products", activeUserEmail).then((res) => {
       const result = Array.isArray(res?.data) ? res.data : [];
       setServiceProviders(result);
     }).catch(() => setServiceProviders([]));

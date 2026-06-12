@@ -657,7 +657,7 @@ const getMasterOptions = (col, searchText = "") => {
       options = masterDataMap["plans"] || [];
     } 
     else if (name.includes("provider")) {
-      options = masterDataMap["service_providers"] || [];
+      options = masterDataMap["products"] || [];
     } 
     else {
       options = masterDataMap[master1] || [];
@@ -725,7 +725,7 @@ const handleNewRowChange = (key, value, masterName) => {
   });
 
   // ✅ provider change
- if (key === "service_providers") {
+ if (key === "products") {
 
   const providerValue =
     typeof value === "object" ? value.value : value;

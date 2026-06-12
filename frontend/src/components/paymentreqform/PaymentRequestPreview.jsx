@@ -253,11 +253,11 @@ useEffect(() => {
     const result = Array.isArray(res?.data) ? res.data : [];
     setPlans(result);
   });
-  getMasterData("service_providers", activeUser.email).then(res => {
+  getMasterData("products", activeUser.email).then(res => {
     const result = Array.isArray(res?.data) ? res.data : [];
     setProducts(result);
   });
-  getMasterData("services", activeUser.email).then(res => {
+  getMasterData("product_types", activeUser.email).then(res => {
     const result = Array.isArray(res?.data) ? res.data : [];
     setProductTypes(result);
   });

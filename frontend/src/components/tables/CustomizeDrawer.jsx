@@ -46,9 +46,14 @@ export default function CustomizeDrawer({
   }, [open]);
 
   // ================= SAVE COMPANY =================
-  const handleSaveCompany = () => {
-    localStorage.setItem(STORAGE_KEY, selectedCompany || "");
-  };
+const handleSaveCompany = () => {
+  if (!selectedCompany) {
+    localStorage.removeItem(STORAGE_KEY);
+    return;
+  }
+
+  localStorage.setItem(STORAGE_KEY, selectedCompany);
+};
 
   // ================= SORT COLUMNS =================
   const sortedColumns = useMemo(() => {
@@ -117,23 +122,27 @@ export default function CustomizeDrawer({
                     Company Header
                   </label>
 
-                  <select
-                    value={selectedCompany}
-                    onChange={(e) =>
-                      setSelectedCompany(e.target.value)
-                    }
-                    className="w-full border rounded p-2 mt-1"
-                  >
-                    <option value="">
-                      Default Company
-                    </option>
+                 <select
+  value={selectedCompany}
+  onChange={(e) => {
+    const value = e.target.value;
 
-                    {companyList.map((c, i) => (
-                      <option key={i} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+    setSelectedCompany(value);
+
+    if (!value) {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }}
+  className="w-full border rounded p-2 mt-1"
+>
+  <option value="">No Header</option>
+
+  {companyList.map((c, i) => (
+    <option key={i} value={c}>
+      {c}
+    </option>
+  ))}
+</select>
                 </div>
 
                 {/* SUB HEADER */}

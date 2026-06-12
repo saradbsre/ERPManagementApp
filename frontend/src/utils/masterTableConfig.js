@@ -30,7 +30,7 @@ const masterTableConfig = {
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
   },
-    service_providers: {
+    products: {
     displayName: "Service Providers Master",
 
     columns: [
@@ -99,7 +99,7 @@ const masterTableConfig = {
       { key: "trn", label: "TRN", data_type: "string" }
     ]
   },
-   services: {
+   product_types: {
     displayName: "Services Master",
 
     columns: [
