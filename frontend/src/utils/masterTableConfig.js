@@ -104,7 +104,7 @@ const masterTableConfig = {
     displayName: "Product Types Master",
 
     columns: [
-      { key: "prd_type", label: "Name", data_type: "string" },
+      { key: "prd_types", label: "Name", data_type: "string" },
       { key: "prdtype_code", label: "Product Type Code", data_type: "string" },
       { key: "descr", label: "Description", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
