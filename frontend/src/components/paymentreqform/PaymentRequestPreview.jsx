@@ -308,7 +308,7 @@ const selectedCompany =
           .trim()
           .toUpperCase();
 
-        const companyCode = (c.company_code || "")
+        const companyCode = (c.com_code || "")
           .toString()
           .trim()
           .toUpperCase();
@@ -773,7 +773,7 @@ const currentDate = new Date();
       </td>
 
       <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {selectedDepartment?.department_name || header.department || " - "}
+        {selectedDepartment?.dep_name || header.department || " - "}
       </td>
 
       {/* PAYMENT METHOD */}

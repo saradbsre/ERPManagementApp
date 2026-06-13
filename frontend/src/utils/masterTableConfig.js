@@ -6,7 +6,7 @@ const masterTableConfig = {
 
     columns: [
       { key: "currency", label: "Currency", data_type: "string" },
-      { key: "currency_code", label: "Currency Code", data_type: "string" },
+      { key: "curr_code", label: "Currency Code", data_type: "string" },
       { key: "description", label: "Description", data_type: "string" },
       { key: "country", label: "Country", data_type: "string" },
       { key: "sysdate", label: "Updated On", data_type: "datetime" },
@@ -83,7 +83,7 @@ const masterTableConfig = {
   company: {
     displayName: "Company Master",
     columns: [
-      { key: "company_code", label: "Company Code", data_type: "string" },
+      { key: "com_code", label: "Company Code", data_type: "string" },
       { key: "licence_no", label: "Licence Number", data_type: "string" },
       { key: "sector_brand", label: "Sector/Brand", data_type: "string" },
       { key: "trade_name", label: "Company Name", data_type: "string" },
@@ -134,7 +134,7 @@ const masterTableConfig = {
     displayName: "Department Master",
     columns: [
       { key: "department_name", label: "Department Name", data_type: "string" },
-      { key: "department_code", label: "Department Code", data_type: "string" },
+      { key: "dep_code", label: "Department Code", data_type: "string" },
       { key: "description", label: "Description", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
@@ -143,7 +143,7 @@ const masterTableConfig = {
     displayName: "Division Master",
     columns: [
       { key: "division_name", label: "Division Name", data_type: "string" },
-      { key: "division_code", label: "Division Code", data_type: "string" },
+      { key: "dv_code", label: "Division Code", data_type: "string" },
       { key: "description", label: "Description", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
