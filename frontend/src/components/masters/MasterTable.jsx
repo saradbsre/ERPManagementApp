@@ -709,7 +709,7 @@ const getLabel = (key, value) => {
         col.key.toLowerCase() === "is_inventory";
 
       const isServiceMaster =
-        col.key.toLowerCase() === "services";
+        col.key.toLowerCase() === "prd_type";
 
       const isVendor =
         col.key.toLowerCase() === "vendor";
@@ -982,7 +982,7 @@ const getLabel = (key, value) => {
           col.key.toLowerCase() === "is_inventory";
 
         const isService =
-          col.key.toLowerCase() === "services";
+          col.key.toLowerCase() === "prd_type";
 
         const isVendor =
           col.key.toLowerCase() === "vendor";
