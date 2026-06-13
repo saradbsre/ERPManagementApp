@@ -386,7 +386,7 @@ console.log("Selected Product Type:", selectedProductType);
 const getProductName = (productCode) => {
   const product = products?.find(
     p =>
-      (p.product_code || "").toUpperCase() ===
+      (p.prd_code || "").toUpperCase() ===
       (productCode || "").toUpperCase()
   );
   //console.log("products:", product);
@@ -935,7 +935,7 @@ const currentDate = new Date();
             {headers?.map((item, i) => {
               const product = products?.find(
                 p =>
-                  (p.product_code || "").toUpperCase() ===
+                  (p.prd_code || "").toUpperCase() ===
                   (item?.products || "").toUpperCase()
               );
 
@@ -996,7 +996,7 @@ const currentDate = new Date();
             {headers?.map((item, i) => {
               const product = products?.find(
                 p =>
-                  (p.product_code || "").toUpperCase() ===
+                  (p.prd_code || "").toUpperCase() ===
                   (item?.products || "").toUpperCase()
               );
 
