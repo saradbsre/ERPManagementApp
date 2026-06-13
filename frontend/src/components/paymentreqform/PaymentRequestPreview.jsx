@@ -504,7 +504,7 @@ const grand = Number(details?.total_amount || 0);
 const TotalICANN = headers?.reduce((sum, item) => {
   const product = products?.find(
     p =>
-      (p.product_code || "").toUpperCase() ===
+      (p.prd_code || "").toUpperCase() ===
       (item?.products || "").toUpperCase()
   );
 

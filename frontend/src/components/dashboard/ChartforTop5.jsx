@@ -28,7 +28,7 @@ export default function ChartforTop5() {
   const productNameByCode = useMemo(() => {
     const map = new Map();
     serviceProviders.forEach((sp) => {
-      const code = String(sp.product_code || "").trim();
+      const code = String(sp.prd_code || "").trim();
       const name = String(sp.product_name || sp.product || "").trim();
       if (code) map.set(code, name || code);
     });

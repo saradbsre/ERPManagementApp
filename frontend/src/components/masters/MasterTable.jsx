@@ -849,7 +849,7 @@ const getLabel = (key, value) => {
               >
 
                 <option value="">
-                  Select Service
+                  Select Product Type
                 </option>
 
                 {(servicesList || []).map((s, i) => (
@@ -858,7 +858,7 @@ const getLabel = (key, value) => {
                     key={i}
                     value={s.prdtype_code}
                   >
-                    {s.prd_type}
+                    {s.prd_types}
                   </option>
 
                 ))}
@@ -1083,7 +1083,7 @@ const getLabel = (key, value) => {
                 >
 
                   <option value="">
-                    Select Service
+                    Select Product Type
                   </option>
 
                   {servicesList.map((s) => (
@@ -1092,7 +1092,7 @@ const getLabel = (key, value) => {
                       key={s.prdtype_code}
                       value={s.prdtype_code}
                     >
-                      {s.prd_type}
+                      {s.prd_types}
                     </option>
 
                   ))}
@@ -1206,7 +1206,7 @@ const getLabel = (key, value) => {
 
                 servicesList.find(
                   s => s.prdtype_code === row[col.key]
-                )?.prd_type || "-"
+                )?.prd_types || "-"
 
               ) : (
 

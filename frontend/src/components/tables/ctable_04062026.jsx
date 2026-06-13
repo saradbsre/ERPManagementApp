@@ -1294,11 +1294,11 @@ if (col.column_name === "products") {
 
   const unique = products.filter(
     (item, index, self) =>
-      index === self.findIndex((p) => p.product_code === item.product_code)
+      index === self.findIndex((p) => p.prd_code === item.prd_code)
   );
 
   let mapped = unique.map((sp) => ({
-    key: sp.product_code,
+    key: sp.prd_code,
     value: sp.product,
   }));
 
@@ -1339,7 +1339,7 @@ if (col.column_name === "product_types") {
 const matchedProviders = serviceProviders.filter((sp) => {
   const selected = String(selectedProduct || "").trim().toLowerCase();
 
-  const code = String(sp.product_code || "").trim().toLowerCase();
+  const code = String(sp.prd_code || "").trim().toLowerCase();
   const name = String(sp.product || "").trim().toLowerCase();
 
   return selected === code || selected === name;
@@ -3481,8 +3481,8 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
                           amount: val,
                           currency: newRow.currency,
                           service_provider_id: serviceProviders.find(sp => {
-                            //console.log("sp", sp.product_code)
-                            const matched = sp.product_code === (newRow.products?.value || newRow.products);
+                            //console.log("sp", sp.prd_code)
+                            const matched = sp.prd_code === (newRow.products?.value || newRow.products);
                             // console.log("Matched name for amount change:", serviceProviders.product, "with new row product:", newRow.products  );
                             if (matched) {
                             }
