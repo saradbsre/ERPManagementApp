@@ -856,9 +856,9 @@ const getLabel = (key, value) => {
 
                   <option
                     key={i}
-                    value={s.service_code}
+                    value={s.prdtype_code}
                   >
-                    {s.service_name}
+                    {s.prd_type}
                   </option>
 
                 ))}
@@ -1089,10 +1089,10 @@ const getLabel = (key, value) => {
                   {servicesList.map((s) => (
 
                     <option
-                      key={s.service_code}
-                      value={s.service_code}
+                      key={s.prdtype_code}
+                      value={s.prdtype_code}
                     >
-                      {s.service_name}
+                      {s.prd_type}
                     </option>
 
                   ))}
@@ -1205,8 +1205,8 @@ const getLabel = (key, value) => {
               ) : isService ? (
 
                 servicesList.find(
-                  s => s.service_code === row[col.key]
-                )?.service_name || "-"
+                  s => s.prdtype_code === row[col.key]
+                )?.prd_type || "-"
 
               ) : (
 

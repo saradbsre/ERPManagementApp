@@ -1357,26 +1357,26 @@ const matchedProviders = serviceProviders.filter((sp) => {
     const matchedServices = serviceTypes.filter(
       st =>
         serviceIds.includes(
-          String(st.service_code)
+          String(st.prdtype_code)
         )
     );
 
   
 
-    // Remove duplicates by service_code
+    // Remove duplicates by prdtype_code
     const uniqueServices = matchedServices.filter(
       (item, index, self) =>
         index ===
         self.findIndex(
           s =>
-            s.service_code ===
-            item.service_code
+            s.prdtype_code ===
+            item.prdtype_code
         )
     );
 
     return uniqueServices.map(st => ({
-      key: st.service_code,   // S01
-      value: st.service_name // Subscriptions
+      key: st.prdtype_code,   // S01
+      value: st.prd_type // Subscriptions
     }));
   }
 
@@ -1384,8 +1384,8 @@ const matchedProviders = serviceProviders.filter((sp) => {
   // FALLBACK ALL SERVICES
   // =========================
   return serviceTypes.map(st => ({
-    key: st.service_code,    // S01
-    value: st.service_name   // Subscriptions
+    key: st.prdtype_code,    // S01
+    value: st.prd_type   // Subscriptions
   }));
 }
 

@@ -439,7 +439,7 @@ return (
         );
         setForm(form => ({
           ...form,
-          product_type: matchedService ? matchedService.service_name : ""
+          product_type: matchedService ? matchedService.prd_type : ""
         }));
       } else {
         setItems([
@@ -486,7 +486,7 @@ return (
           Product Type
         </label>
        <Select
-          options={Array.isArray(serviceTypes) ? serviceTypes.map(st => ({ label: st.service_name, value: st.service_name })) : []}
+          options={Array.isArray(serviceTypes) ? serviceTypes.map(st => ({ label: st.prd_type, value: st.prd_type })) : []}
           value={form.product_type ? { label: form.product_type, value: form.product_type } : null}
           onChange={option => {
             setForm({ ...form, product_type: option?.value || "" });

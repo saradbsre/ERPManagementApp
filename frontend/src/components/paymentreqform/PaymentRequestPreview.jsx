@@ -371,11 +371,11 @@ const selectedDepartment = Array.isArray(departments) && header.department ? dep
 ) : null;
 
 const selectedTransactionType = Array.isArray(transactionType) && header.transaction_type ? transactionType.find(
-    (tt) => (tt.transaction_code || "").toString().trim().toUpperCase() === header.transaction_type.toString().trim().toUpperCase()
+    (tt) => (tt.tt_code || "").toString().trim().toUpperCase() === header.transaction_type.toString().trim().toUpperCase()
 ) : null;
 
 const selectedProductType = Array.isArray(productTypes) && header.product_types ? productTypes.find(
-    (pt) => (pt.service_code || "").toString().trim().toUpperCase() === header.product_types.toString().trim().toUpperCase()
+    (pt) => (pt.prdtype_code || "").toString().trim().toUpperCase() === header.product_types.toString().trim().toUpperCase()
 ) : null;
 console.log("header.product_types value:", header);
 console.log(" Product Type:", productTypes);
@@ -396,11 +396,11 @@ const getProductName = (productCode) => {
 const getServiceName = (serviceCode) => {
   const service = productTypes?.find(
     s =>
-      (s.service_code || "").toUpperCase() ===
+      (s.prdtype_code || "").toUpperCase() ===
       (serviceCode || "").toUpperCase()
   );
 
-  return service?.service_name || serviceCode;
+  return service?.prd_type || serviceCode;
 };
 
 const getPlanName = (planCode) => {
@@ -632,10 +632,10 @@ const currentDate = new Date();
       REQUEST SUMMARY
     </h2>
     <h1 className="font-bold text-[13px]">
-      {selectedTerm?.value || header.term} {selectedProductType?.service_name || header.product_types} Fees
+      {selectedTerm?.value || header.term} {selectedProductType?.prd_type || header.product_types} Fees
     </h1>
    <p className="text-[12px] text-gray-700">
-   {selectedTransactionType?.transaction_code === "TT003" ? (
+   {selectedTransactionType?.tt_code === "TT003" ? (
     header.product_types === "S52"
       ? "This payment request is for a new purchase."
       : "This payment request is for a new subscription."
@@ -643,14 +643,14 @@ const currentDate = new Date();
     ""
   )}
 
-  {selectedTransactionType?.transaction_code === "TT001" &&
+  {selectedTransactionType?.tt_code === "TT001" &&
     `This payment request is for the renewal of a subscription.`}
 
-  {selectedTransactionType?.transaction_code === "TT004" &&
+  {selectedTransactionType?.tt_code === "TT004" &&
     `This payment request is related to the cancellation of a subscription service.`}
-     {selectedTransactionType?.transaction_code === "TT005" &&
+     {selectedTransactionType?.tt_code === "TT005" &&
     `This payment request is related to the transfer of a service.`}
-      {selectedTransactionType?.transaction_code === "TT006" &&
+      {selectedTransactionType?.tt_code === "TT006" &&
     `This payment request is related to the bill payment of a service.`}
     </p>
    {expiryDate && (
@@ -810,7 +810,7 @@ const currentDate = new Date();
       </td>
 
       <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {selectedCostCenter?.division_name || header.cost_center || " - "}
+        {selectedCostCenter?.dv_name || header.cost_center || " - "}
       </td>
 
       {/* PAYMENT METHOD */}

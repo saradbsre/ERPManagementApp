@@ -100,7 +100,7 @@ export default function EditRowPopup({
       return String(opt ?? "");
     }
     return String(
-      opt.value ?? opt.name ?? opt.vendor_name ?? opt.product ?? opt.service_name ?? opt.label ?? ""
+      opt.value ?? opt.name ?? opt.vendor_name ?? opt.product ?? opt.prd_type ?? opt.label ?? ""
     );
   };
 
@@ -109,7 +109,7 @@ export default function EditRowPopup({
       return String(opt ?? "");
     }
     return String(
-      opt.key ?? opt.code ?? opt.vendor_code ?? opt.product_code ?? opt.service_code ?? opt.id ?? getOptionLabel(opt)
+      opt.key ?? opt.code ?? opt.vendor_code ?? opt.product_code ?? opt.prdtype_code ?? opt.id ?? getOptionLabel(opt)
     );
   };
 
