@@ -185,8 +185,8 @@ const masterTableConfig = {
     displayName: "Projects Master",
 
     columns: [
-        { key: "project_name", label: "Project Name", data_type: "string" },
-        { key: "project_code", label: "Project Code", data_type: "string" },
+        { key: "prj_name", label: "Project Name", data_type: "string" },
+        { key: "prj_code", label: "Project Code", data_type: "string" },
         { key: "descr", label: "Description", data_type: "string" },
         { key: "address", label: "Address", data_type: "string" },
         { key: "is_active", label: "Is Active", data_type: "boolean" },     

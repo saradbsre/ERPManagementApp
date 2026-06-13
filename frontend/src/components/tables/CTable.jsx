@@ -1773,7 +1773,7 @@ const matchedProviders = serviceProviders.filter((sp) => {
 
     return uniqueServices.map(st => ({
       key: st.prdtype_code,   // S01
-      value: st.prd_type // Subscriptions
+      value: st.prd_types // Subscriptions
     }));
   }
 
@@ -1782,7 +1782,7 @@ const matchedProviders = serviceProviders.filter((sp) => {
   // =========================
   return serviceTypes.map(st => ({
     key: st.prdtype_code,    // S01
-    value: st.prd_type   // Subscriptions
+    value: st.prd_types   // Subscriptions
   }));
 }
 

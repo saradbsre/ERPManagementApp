@@ -47,9 +47,9 @@ import { REPORT_VIEWS } from "../../utils/reportStructure";
 
 export default function ReportTable() {
     const { id } = useParams();
-    console.log("ReportTable ID:", id);
+    //console.log("ReportTable ID:", id);
     const location = useLocation();
-    console.log("ReportTable Location State:", location.state);
+    //console.log("ReportTable Location State:", location.state);
     const [isCreating, setIsCreating] = useState(false);
     const [newRow, setNewRow] = useState({});
     const [editRowId, setEditRowId] = useState(null);
@@ -1970,173 +1970,63 @@ const printableGroupedRows = React.useMemo(() => {
           
 
 
-            {/* ACTIVE FILTER CHIPS */}
-            <div className="flex items-start justify-between flex-wrap gap-3">
-            <div className="flex flex-wrap gap-2 mt-0 mb-4">
 
-  {filters.map((f, i) => {
 
-    const masterName = normalize(f.master);
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"> 
 
-    const options =
-      masterName === "currency"
-        ? currencies.map(c => c.currency_code)
-        : (masterDataMap?.[masterName] || []).map(normalize);
-
-    const selectedValues = (f.values || []).map(normalize);
-
-    return (
-      <div
-        key={i}
-        className="relative flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-3 py-1 shadow-sm"
-      >
-
-        {/* MASTER NAME */}
-        <span className="text-sm font-medium text-gray-700">
-          {masterName}
-        </span>
-
-        {/* SELECTED VALUES */}
-        <div className="flex gap-1 flex-wrap">
-          {selectedValues.map((val, idx) => (
-            <span
-              key={idx}
-              className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
-            >
-              {val}
-              <button
-                onClick={() => {
-               setFilters(prev =>
-                  prev.map((item, index) => {
-                    if (index !== i) return item;
-
-                    return {
-                      ...item,
-                      values: (item.values || [])
-                        .map(normalize)
-                        .filter(v => v !== val),
-                    };
-                  })
-                );
-                }}
-                className="text-blue-500 hover:text-red-500"
+  {/* Loader */}
+  {loading ? (
+    <div className="flex justify-center items-center h-80">
+      <Loader type="orbit" />
+    </div>
+  ) : (
+    <div className="overflow-x-auto">
+      <table className="min-w-full">
+        <thead className="bg-gray-100 sticky top-0">
+          <tr>
+            {columns.map((col) => (
+              <th
+                key={col.column_name}
+                className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 border-b"
               >
-                ✕
-              </button>
-            </span>
-          ))}
-        </div>
+                {col.display_name}
+              </th>
+            ))}
+          </tr>
+        </thead>
 
-       
-
-        {/* REMOVE FILTER */}
-        <button
-          onClick={() =>
-            setFilters(filters.filter((_, index) => index !== i))
-          }
-          className="text-gray-400 hover:text-red-500 ml-1"
-        >
-          ✕
-        </button>
-
-      </div>
-    );
-  })}
-
-<div className="flex flex-col gap-3 mb-3">
-
-  {/* SEARCH */}
-  {groupedChips.search?.length > 0 && (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-bold text-gray-600 mr-2">
-        SEARCHING:
-      </span>
-
-      {groupedChips.search.map((chip, i) => (
-        <div
-          key={i}
-          className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded-full text-xs"
-        >
-          <span>{chip.column}</span>
-
-          <button
-            onClick={() => removeChip(chip)}
-            className="text-red-500 hover:text-red-700"
-          >
-            ✕
-          </button>
-        </div>
-      ))}
+        <tbody>
+          {rows.length > 0 ? (
+            rows.map((row, rowIndex) => (
+              <tr
+                key={rowIndex}
+                className="hover:bg-blue-50 transition-colors duration-150"
+              >
+                {columns.map((col) => (
+                  <td
+                    key={col.column_name}
+                    className="px-4 py-3 border-b text-sm text-gray-700"
+                  >
+                    {row[col.column_name]}
+                  </td>
+                ))}
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td
+                colSpan={columns.length}
+                className="text-center py-12 text-gray-500"
+              >
+                No records found
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   )}
-
-  {/* SORT */}
-  {groupedChips.sort?.length > 0 && (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-bold text-gray-600 mr-2">
-        SORTING:
-      </span>
-
-      {groupedChips.sort.map((chip, i) => (
-        <div
-  key={i}
-  onClick={() => toggleChipDirection(chip)}
-  className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1 rounded-full text-xs cursor-pointer hover:bg-blue-100"
->
-  <span>
-    {chip.column} {chip.value === "asc" ? "↑" : "↓"}
-  </span>
-
-  <button
-    onClick={(e) => {
-      e.stopPropagation();
-      removeChip(chip);
-    }}
-    className="text-red-500 hover:text-red-700"
-  >
-    ✕
-  </button>
 </div>
-      ))}
-    </div>
-  )}
-
-  {/* GROUP */}
-  {groupedChips.group?.length > 0 && (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-bold text-gray-600 mr-2">
-        GROUPING:
-      </span>
-
-      {groupedChips.group.map((chip, i) => (
-       <div
-  key={i}
-  onClick={() => toggleChipDirection(chip)}
-  className="flex items-center gap-2 bg-purple-50 border border-purple-200 text-purple-700 px-3 py-1 rounded-full text-xs cursor-pointer hover:bg-purple-100"
->
-  <span>
-    {chip.column} {chip.value === "asc" ? "↑" : "↓"}
-  </span>
-
-  <button
-    onClick={(e) => {
-      e.stopPropagation();
-      removeChip(chip);
-    }}
-    className="text-red-500 hover:text-red-700"
-  >
-    ✕
-  </button>
-</div>
-      ))}
-    </div>
-  )}
-
-</div>
-
-</div>
-          
-    </div>
 
            
          <div ref={printRef} className="hidden print:block">

@@ -5,6 +5,10 @@ export const REPORT_VIEWS = {
       display_name: "Company"
     },
     {
+      column_name: "currency",
+      display_name: "Currency"
+    },
+    {
       column_name: "total_amount_aed",
       display_name: "Total Amount AED"
     },
