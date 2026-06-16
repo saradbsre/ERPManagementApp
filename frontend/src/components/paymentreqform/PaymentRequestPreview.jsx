@@ -577,7 +577,7 @@ const currentDate = new Date();
 </div>
 <div className="w-full border-t border-gray-500 mb-3"></div>
 
-<div className=" items-center w-full mb-5">
+<div className=" items-center w-full mb-3">
 
   {/* TITLE SECTION */}
   <div className="text-center leading-tight">
@@ -591,7 +591,7 @@ const currentDate = new Date();
 </div>
 
   {/* COMPANY DETAILS */}
-<div className="grid grid-cols-2 border border-gray-400 mb-4">
+<div className="grid grid-cols-2 border border-gray-400 mb-3">
 
   {/* LEFT COLUMN */}
   <div className="p-3 leading-4 border-r border-gray-300">
@@ -703,7 +703,7 @@ const currentDate = new Date();
 </div>
 
 
-<table className="w-full border border-black border-collapse mb-5 text-[10px]">
+<table className="w-full border border-black border-collapse mb-3 text-[10px]">
 
   {/* HEADER */}
   <thead>
@@ -954,18 +954,11 @@ const currentDate = new Date();
                     {item?.product_types &&
                       ` - ${getServiceName(item.product_types)}`}
                   </div>
-
-                  {product?.is_icann && product?.icann_fee ? (
-                    <div className="text-[9px] mt-1">
-                      ICANN Fee added for{" "}
-                      {getProductName(item?.products)}
-                    </div>
-                  ) : null}
                 </div>
               );
             })}
 
-            <div className="mt-4 text-center text-[9px] text-gray-500">
+            <div className="mt-1 text-center text-[8px] text-gray-500">
               *** SPACE INTENTIONALLY LEFT BLANK ***
             </div>
           </td>

@@ -1737,7 +1737,7 @@ const matchedProviders = serviceProviders.filter((sp) => {
   const selected = String(selectedProduct || "").trim().toLowerCase();
 
   const code = String(sp.prd_code || "").trim().toLowerCase();
-  const name = String(sp.product || "").trim().toLowerCase();
+  const name = String(sp.prd_name || "").trim().toLowerCase();
 
   return selected === code || selected === name;
 });
@@ -4291,6 +4291,8 @@ onDrop={() => handleDrop(col.column_name)}
                                         newRow
                                       );
 
+                                     
+
                                       const filteredOptions =
                                         rawOptions.filter((option) => {
 
@@ -4868,6 +4870,12 @@ onDrop={() => handleDrop(col.column_name)}
                                             currentValue,
                                             editRow
                                           ).slice(0, 20);
+                                          console.log("RAW OPTIONS:", {
+                                            col: col.column_name,
+                                            master: col.master,
+                                            currentValue,
+                                            rawOptions
+                                          });
 
                                         const filteredOptions =
                                           rawOptions.filter((val) => {
@@ -5724,9 +5732,9 @@ onDrop={() => handleDrop(col.column_name)}
                 <td className="p-3 border-b min-w-[220px]">
 
                  <input
-  value={item.prd_name || ""}
+  value={item.product || ""}
   onChange={(e) =>
-    handleItemChange(i, "prd_name", e.target.value)
+    handleItemChange(i, "product", e.target.value)
   }
   readOnly
   className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium"
