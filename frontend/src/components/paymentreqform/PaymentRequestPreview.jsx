@@ -278,7 +278,7 @@ const selectedVendor =
           .trim()
           .toUpperCase();
 
-        const vendorCode = (v.vendor_code || "")
+        const vendorCode = (v.vend_code || "")
           .toString()
           .trim()
           .toUpperCase();
@@ -363,11 +363,11 @@ const selectedTerm = Array.isArray(terms) && header.term ? terms.find(
 ) : null;
 
 const selectedCostCenter = Array.isArray(costCenters) && header.cost_center ? costCenters.find(
-    (cc) => (cc.division_code || "").toString().trim().toUpperCase() === header.cost_center.toString().trim().toUpperCase()   
+    (cc) => (cc.dv_code || "").toString().trim().toUpperCase() === header.cost_center.toString().trim().toUpperCase()   
 ) : null;
 
 const selectedDepartment = Array.isArray(departments) && header.department ? departments.find(
-    (d) => (d.department_code || "").toString().trim().toUpperCase() === header.department.toString().trim().toUpperCase()
+    (d) => (d.dep_code || "").toString().trim().toUpperCase() === header.department.toString().trim().toUpperCase()
 ) : null;
 
 const selectedTransactionType = Array.isArray(transactionType) && header.transaction_type ? transactionType.find(
@@ -375,7 +375,7 @@ const selectedTransactionType = Array.isArray(transactionType) && header.transac
 ) : null;
 
 const selectedProductType = Array.isArray(productTypes) && header.product_types ? productTypes.find(
-    (pt) => (pt.prdtype_code || "").toString().trim().toUpperCase() === header.product_types.toString().trim().toUpperCase()
+    (pt) => (pt.pt_code || "").toString().trim().toUpperCase() === header.product_types.toString().trim().toUpperCase()
 ) : null;
 console.log("header.product_types value:", header);
 console.log(" Product Type:", productTypes);
@@ -396,7 +396,7 @@ const getProductName = (productCode) => {
 const getServiceName = (serviceCode) => {
   const service = productTypes?.find(
     s =>
-      (s.prdtype_code || "").toUpperCase() ===
+      (s.pt_code || "").toUpperCase() ===
       (serviceCode || "").toUpperCase()
   );
 
@@ -620,6 +620,9 @@ const currentDate = new Date();
      
     {selectedVendor?.phone_number
         ? `Tel: ${selectedVendor.phone_number}`
+        : ""}
+    {selectedVendor?.trn
+        ? ` | TRN: ${selectedVendor.trn}`
         : ""}
     </p>
 
