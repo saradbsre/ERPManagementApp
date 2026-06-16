@@ -425,7 +425,7 @@ return (
           matchedProviders.map(sp => ({
             doc_date: "",
             doc_no: "",
-            narration: sp.product || "",
+            narration: sp.prd_name || "",
             amount: "",
             vat: "",
             total_amount: ""

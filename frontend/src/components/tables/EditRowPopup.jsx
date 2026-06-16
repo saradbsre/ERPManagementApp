@@ -61,7 +61,7 @@ export default function EditRowPopup({
         if (!matchedProvider && updatedRow.products) {
           matchedProvider = serviceProviders.find(
             (sp) =>
-              String(sp.product || "").trim().toLowerCase() ===
+              String(sp.prd_name || "").trim().toLowerCase() ===
               String(updatedRow.products || "").trim().toLowerCase()
           );
         }
@@ -100,7 +100,7 @@ export default function EditRowPopup({
       return String(opt ?? "");
     }
     return String(
-      opt.value ?? opt.name ?? opt.vendor_name ?? opt.product ?? opt.prd_type ?? opt.label ?? ""
+      opt.value ?? opt.name ?? opt.vendor_name ?? opt.prd_name ?? opt.pt_code ?? opt.label ?? ""
     );
   };
 

@@ -50,11 +50,6 @@ export default function ReportTable() {
     //console.log("ReportTable ID:", id);
     const location = useLocation();
     //console.log("ReportTable Location State:", location.state);
-    const [isCreating, setIsCreating] = useState(false);
-    const [newRow, setNewRow] = useState({});
-    const [editRowId, setEditRowId] = useState(null);
-    const [editRow, setEditRow] = useState({});
-    const [originalRow, setOriginalRow] = useState({});
     const [report, setReport] = useState(location.state?.report || null);
     const [columns, setColumns] = useState([]);
     const [rows, setRows] = useState([]);
@@ -67,88 +62,35 @@ export default function ReportTable() {
     const printRef = useRef();
     const pageSize = 10;
     const [columnSearch, setColumnSearch] = useState("");
-    const [showColumnSelector, setShowColumnSelector] = useState(false);
     const [selectedColumns, setSelectedColumns] = useState([]);
-    const [showImportModal, setShowImportModal] = useState(false);
-    const [showPrintModal, setShowPrintModal] = useState(false);
-    const [showExcelModal, setShowExcelModal] = useState(false);
-    const [showPdfModal, setShowPdfModal] = useState(false);
-    const [showPrintOptions, setShowPrintOptions] = useState(false);
     const [masterDataMap, setMasterDataMap] = useState({});
-    const [activeDropdown, setActiveDropdown] = useState(null);
     const [currencies, setCurrencies] = useState([]);
     const [filters, setFilters] = useState([]);
-    const [openIndex, setOpenIndex] = useState(null);
-    const dropdownRefs = useRef([]);
     const [selectedCompany, setSelectedCompany] = useState("");
     const [printLogo, setPrintLogo] = useState(null);
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email;
     const activeUserName = activeUser?.name;
-    const isUserHavePrfAccess = activeUser?.prf_access;
     const userRole = activeUser?.role;
-    const [vatPercent, setVatPercent] = useState(0);
-    const [providerPlansMap, setProviderPlansMap] = useState({});
-    const [providerPlans, setProviderPlans] = useState([]);
-    const [autoFilledFields, setAutoFilledFields] = useState({});
-    const [planManuallyChanged, setPlanManuallyChanged] = useState(false);
     const [groupBy, setGroupBy] = useState({
       key: null,
       direction: "asc"
     });
     const [activeDateFilter, setActiveDateFilter] = useState(null);
-    const [showSaveFilter, setShowSaveFilter] = useState(false);
-    const [saveFilterName, setSaveFilterName] = useState("");
     const currentModule =  report?.report_id;
-    const [savedTableColumns, setSavedTableColumns] = useState([]);
     const [printModuleName, setPrintModuleName] = useState("");
-    const [showPlanProviderPopup, setShowPlanProviderPopup] = useState(false);
-    const [pendingColumn, setPendingColumn] = useState(null);
-    const [inputValues, setInputValues] = useState({});
-    const [activeField, setActiveField] = useState(null);
-    const isInitialLoading = loading || columns.length === 0;
-    const [loadingMaster, setLoadingMaster] = useState(null);
-    const [tempSelectedColumns, setTempSelectedColumns] = useState([]);
-    const [confirmOpen, setConfirmOpen] = useState(false);
-    const [confirmData, setConfirmData] = useState({});
-    const [popupMessage, setPopupMessage] = useState("");
-    const [popupType, setPopupType] = useState("");
-    const [vendors, setVendors] = useState([]);
-    const [company, setCompany] = useState([]);
-    const [serviceProviders, setServiceProviders] = useState([]);
-    const [creditCards, setCreditCards] = useState([]);
-    const [serviceTypes, setServiceTypes] = useState([]);
-    const [showGenerateModal, setShowGenerateModal] = useState(false);
-    const [selectedRow, setSelectedRow] = useState(null);
-    const [modalItems, setModalItems] = useState([]);
-    const [prfNumber, setPrfNumber] = useState("");
-    const [showPreview, setShowPreview] = useState(false);
-    const [previewData, setPreviewData] = useState(null);
-    const [previewFromGenerateModal, setPreviewFromGenerateModal] = useState(false);
-    const [workflow, setWorkflow] = useState({});
-    const [availableProducts, setAvailableProducts] = useState([]);
-    const [availableServices, setAvailableServices] = useState([]);
-    const [pinnedColumns, setPinnedColumns] = useState([]);
-    const [visibleColumnsState, setVisibleColumnsState] = useState([]);
-    const [showEditPopup, setShowEditPopup] = useState(false);
-    const [showCustomizeDrawer, setShowCustomizeDrawer] = useState(false);
-    const [columnChips, setColumnChips] = useState([]);
-    const [sortConfig, setSortConfig] = useState([]);
-    const [groupByColumn, setGroupByColumn] = useState(null);
-  
-    const [selectedRowIds, setSelectedRowIds] = useState([]);
-    const [showActions, setShowActions] = useState(false);
     const [showMobileFilters, setShowMobileFilters] = useState(false);
-    const tableContainerRef = useRef(null);
     const searchInputRef = useRef(null);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-    const [isAdvertising, setIsAdvertising] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
     const [openMenu, setOpenMenu] = useState(null);
-    const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
-    const [showHidePopup, setShowHidePopup] = useState(false);
-    const [hidePopupColumn, setHidePopupColumn] = useState(null);
-    const [tempHideColumns, setTempHideColumns] = useState([]);
+    const [vendors, setVendors] = useState([]);
+    const [company, setCompany] = useState([]);
+    const [products, setProducts] = useState([]);
+    const [currency, setCurrency] = useState([]);
+    const [term, setTerm] = useState([]);
+    const [currencyMap, setCurrencyMap] = useState({});
+    const [termMap, setTermMap] = useState({});
     useEffect(() => {
       const handleResize = () => {
         setIsMobile(window.innerWidth < 768);
@@ -160,39 +102,7 @@ export default function ReportTable() {
    
     
   
-    useEffect(() => {
-    getMasterData("products", activeUserEmail).then(res => {
-      const result = Array.isArray(res.data) ? res.data : [];
-      //console.log("Raw Service Providers:", result);
-      setServiceProviders(result);
-      //console.log("Service Providers:", result);
-    });
-     getMasterData("vendors", activeUserEmail).then(res => {
-        const result = Array.isArray(res?.data) ? res.data : [];
-        setVendors(result);
-        //console.log("Vendors:", result);
-      });
-        getMasterData("product_types", activeUserEmail).then(res => {
-        const result = Array.isArray(res?.data) ? res.data : [];
-        setServiceTypes(result);
-      //  console.log("Service Types:", result);
-      });
-        getMasterData("credit_card", activeUserEmail).then(res => {
-        const result = Array.isArray(res?.data) ? res.data : [];
-        setCreditCards(result);
-      //  console.log("Credit Cards:", result);
-      });
-    getMasterData("company", activeUserEmail).then(res => {
-  const result = Array.isArray(res?.data) ? res.data : [];
-
-  const tradeNames = result.map(item => item.trade_name);
-
-  setCompany(tradeNames);
-
- // console.log("Company trade names:", tradeNames);
-});
-    }, []);
-
+  
 const getCurrentMonth = () => {
   const now = new Date();
 
@@ -213,40 +123,59 @@ const getCurrentMonth = () => {
   };
 };
 
-const handleDragEnd = (event) => {
-  const { active, over } = event;
 
-  if (!over || active.id === over.id) return;
-
-  const oldIndex = columns.findIndex(
-    (c) => c.column_name === active.id
-  );
-
-  const newIndex = columns.findIndex(
-    (c) => c.column_name === over.id
-  );
-
-  const reordered = arrayMove(columns, oldIndex, newIndex);
-
-  // ❌ DO NOT re-sort again
-  setColumns(reordered);
-
-  // keep selection stable
-  setTempSelectedColumns((prev) =>
-    reordered
-      .map((c) => c.column_name)
-      .filter((name) => prev.includes(name))
-  );
-};
 
 const [dateFilters, setDateFilters] = useState(getCurrentMonth());
 
 const isFilterActive = search || filters?.length > 0 
 
+ useEffect(() => {
+    getMasterValues("products").then(res => {
+      const result = Array.isArray(res.data) ? res.data : [];
+      //console.log("Raw Service Providers:", result);
+      setProducts(result);
+      //console.log("Service Providers:", result);
+    });
+     getMasterValues("vendors").then(res => {
+        const result = Array.isArray(res.data) ? res.data : [];
+        setVendors(result);
+        //console.log("Vendors:", result);
+      });
+getMasterValues("currency").then(res => {
+  const result = Array.isArray(res?.data?.data)
+    ? res.data.data
+    : [];
+
+  setCurrencies(result);
+  console.log("Currencies:", result);
+});
+console.log("Initial currencies state:", currencies);
+       getMasterValues("billing_cycle").then(res => {
+  const result = Array.isArray(res?.data?.data)
+    ? res.data.data
+    : [];
+
+  setTerm(result);
+});
 
 
 
 
+    getMasterValues("company").then(res => {
+  const result = Array.isArray(res?.data) ? res.data : [];
+
+  const tradeNames = result.map(item => item.trade_name);
+
+  setCompany(tradeNames);
+
+ // console.log("Company trade names:", tradeNames);
+});
+    }, []);
+
+
+
+console.log("Currency Map:", currencyMap);
+console.log("Term Map:", termMap);
 
 const onInputChange = (e) => {
   const { name, value } = e.target;
@@ -510,43 +439,7 @@ const transformColumns = (mod, dataRows = []) => {
 };
 
   
-const loadReport = async (
-  reportId,
-  overrideDateFilters = dateFilters
-) => {
-  try {
-    setLoading(true);
 
-    const payload = {
-      filters: JSON.stringify(filters || []),
-      dateFilters: JSON.stringify({
-        date: {
-          startDate: overrideDateFilters.startDate,
-          endDate: overrideDateFilters.endDate,
-        },
-      }),
-    };
-
-    const dataRes = await getReportData(
-      reportId,
-      activeUserEmail,
-      payload
-    );
-
-    setRows(dataRes.data || []);
-
-    setColumns(
-      REPORT_VIEWS[reportId] || []
-    );
-    console.log("columns from structure:", REPORT_VIEWS[reportId] || []);
-    console.log("data from API:", dataRes.data || []);
-    console.log("columns set in state:", columns);
-  } catch (err) {
-    console.error("Load Report Error:", err);
-  } finally {
-    setLoading(false);
-  }
-};
 
 
 
@@ -554,21 +447,7 @@ useEffect(() => {
   loadReport(id, dateFilters);
 }, [ filters, search]);
 
-    const loadCurrencies = async () => {
-        try {
-            const res = await currencises();
-            setCurrencies(res.data || []);
-        } catch (err) {
-            console.error("Failed to load currencies:", err);
-        }
-    };
 
-   useEffect(() => {
-       // loadModule();
-        loadCurrencies();
-
-    }, [id]);
- 
 
 
 
@@ -632,11 +511,7 @@ const calculateCost = (amount, currencyCode, term) => {
   return Number(amount) * Number(rate);
 };
 
-const groupedChips = columnChips.reduce((acc, chip) => {
-  if (!acc[chip.type]) acc[chip.type] = [];
-  acc[chip.type].push(chip);
-  return acc;
-}, {});
+
 
     const toMasterKey = (columnName, rawVal) => {
 if (rawVal === null || rawVal === undefined || rawVal === "") return rawVal;
@@ -1281,324 +1156,161 @@ const handleQuickDateChange = (value) => {
   }
 };
 
-const handleSort = (key, direction) => {
-  setSortConfig(prev => {
-    const safe = Array.isArray(prev) ? prev : [];
-
-    return [
-      ...safe.filter(s => s.key !== key),
-      { key, direction }
-    ];
-  });
-
-  setColumnChips(prev => {
-    const filtered = prev.filter(
-      c => !(c.type === "sort" && c.column === key)
-    );
-
-    return [
-      ...filtered,
-      {
-        type: "sort",
-        column: key,
-        value: direction
-      }
-    ];
-  });
-
-  setOpenMenu(null);
-};
 
 
+useEffect(() => {
+  const loadMasters = async () => {
+    try {
+      const currencyRes = await getMasterValues("currency");
+      const termRes = await getMasterValues("billing_cycle");
 
-const handleSearch = (key) => {
-  setSearchColumnKey(key);
-  searchInputRef.current?.focus();
-  searchInputRef.current?.select();
-  setOpenMenu(null);
+      console.log("🔥 RAW currencyRes:", currencyRes);
+      console.log("🔥 RAW termRes:", termRes);
 
-  setColumnChips(prev => {
-    const filtered = prev.filter(
-      c => !(c.type === "search" && c.column === key)
-    );
+      const currencyData =
+        currencyRes?.data?.data ||
+        currencyRes?.data ||
+        [];
 
-    return [
-      ...filtered,
-      {
-        type: "search",
-        column: key,
-        value: ""
-      }
-    ];
-  });
-};
+      const termData =
+        termRes?.data?.data ||
+        termRes?.data ||
+        [];
 
-const handleGroup = (key, direction) => {
-  setGroupBy({ key, direction });
+      console.log("👉 currencyData:", currencyData);
+      console.log("👉 termData:", termData);
 
-  setColumnChips(prev => {
-    const filtered = prev.filter(
-      c => !(c.type === "group" && c.column === key)
-    );
+      const { currencyMap, termMap } =
+        buildMasterMaps(currencyData, termData);
 
-    return [
-      ...filtered,
-      {
-        type: "group",
-        column: key,
-        value: direction
-      }
-    ];
-  });
+      setCurrencies(currencyData);
+      setTerm(termData);
+      setCurrencyMap(currencyMap);
+      setTermMap(termMap);
 
-  setOpenMenu(null);
-};
+      console.log("🔥 currencyMap:", currencyMap);
+      console.log("🔥 termMap:", termMap);
 
-const removeChip = (chip) => {
-  setColumnChips(prev =>
-    prev.filter(c =>
-      !(c.type === chip.type && c.column === chip.column)
-    )
-  );
-
-  if (chip.type === "search") {
-    setSearchColumnKey("");
-    setSearch("");
-  }
-
-  if (chip.type === "sort") {
-    setSortConfig(prev =>
-      prev.filter(s => s.key !== chip.column)
-    );
-  }
-
-  if (chip.type === "group") {
-    setGroupBy("");
-  }
-};
-
-const toggleChipDirection = (chip) => {
-  const newDirection = chip.value === "asc" ? "desc" : "asc";
-
-  if (chip.type === "sort") {
-    handleSort(chip.column, newDirection);
-  }
-
-  if (chip.type === "group") {
-    handleGroup(chip.column, newDirection);
-  }
-};
-
-const hideColumn = (key) => {
-  setVisibleColumns(prev =>
-    prev.filter(col => col.column_name !== key)
-  );
-  setOpenMenu(null);
-};
-
-const togglePinColumn = (columnName) => {
-  setPinnedColumns((prev) =>
-    prev.includes(columnName)
-      ? prev.filter((c) => c !== columnName)
-      : [...prev, columnName]
-  );
-};
-
-//  const paginatedRows = filteredRows.slice(
-//         (page - 1) * pageSize,
-//         page * pageSize
-//     );
-
-const sortedAllRows = React.useMemo(() => {
-  return [...filteredRows].sort((a, b) => {
-    for (const sort of sortConfig) {
-      let aValue = a?.[sort.key];
-      let bValue = b?.[sort.key];
-
-      aValue = typeof aValue === "object" ? aValue?.value ?? "" : aValue ?? "";
-      bValue = typeof bValue === "object" ? bValue?.value ?? "" : bValue ?? "";
-
-      const isNumeric = !isNaN(aValue) && !isNaN(bValue);
-
-      let result = 0;
-
-      if (isNumeric) {
-        result = Number(aValue) - Number(bValue);
-      } else {
-        result = String(aValue).localeCompare(String(bValue));
-      }
-
-      if (result !== 0) {
-        return sort.direction === "asc" ? result : -result;
-      }
+    } catch (err) {
+      console.error(err);
     }
-    return 0;
-  });
-}, [filteredRows, sortConfig]);
+  };
 
-const processedRows = React.useMemo(() => {
-  let data = [...filteredRows];
+  loadMasters();
+}, []);
 
-  // 1. SORT
-  data = [...data].sort((a, b) => {
-    for (const sort of sortConfig) {
-      let aValue = a?.[sort.key];
-      let bValue = b?.[sort.key];
+const buildMasterMaps = (currencyData, termData) => {
+  const currencyMap = {};
+  const termMap = {};
 
-      aValue = typeof aValue === "object" ? aValue?.value ?? "" : aValue ?? "";
-      bValue = typeof bValue === "object" ? bValue?.value ?? "" : bValue ?? "";
-
-      const isNumeric = !isNaN(aValue) && !isNaN(bValue);
-
-      let result = 0;
-
-      if (isNumeric) {
-        result = Number(aValue) - Number(bValue);
-      } else {
-        result = String(aValue).localeCompare(String(bValue));
-      }
-
-      if (result !== 0) {
-        return sort.direction === "asc" ? result : -result;
-      }
+  (currencyData || []).forEach(c => {
+    if (c?.key) {
+      currencyMap[String(c.key).trim()] = c.value;
     }
-    return 0;
   });
 
-  return data;
-}, [filteredRows, sortConfig]);
+  (termData || []).forEach(t => {
+    if (t?.key) {
+      termMap[String(t.key).trim()] = t.value;
+    }
+  });
 
-const groupedAllRows = React.useMemo(() => {
-  if (!groupBy?.key) {
-    return [
-      {
-        group: "All Records",
-        rows: sortedAllRows
-      }
-    ];
+  return { currencyMap, termMap };
+};
+
+
+const buildDynamicColumns = (data, currencyMap, termMap) => {
+  if (!data || data.length === 0) return [];
+
+  const sample = data[0];
+  const keys = Object.keys(sample);
+
+  return keys.map((key) => {
+
+    if (key === "company") {
+      return {
+        column_name: key,
+        display_name: "Company"
+      };
+    }
+
+    if (key.startsWith("CR")) {
+      return {
+        column_name: key,
+        display_name: `Cost (${currencyMap?.[key] || key})`
+      };
+    }
+
+    if (key.startsWith("BC")) {
+      return {
+        column_name: key,
+        display_name: `Total Cost (${termMap?.[key] || key} AED)`
+      };
+    }
+
+    return {
+      column_name: key,
+      display_name: key
+    };
+  });
+};
+
+const getCellValue = (row, col) => {
+  const value = row[col.column_name];
+
+  if (col.column_name.startsWith("CR")) {
+    return value ?? "-";
   }
 
-  const groups = {};
-
-  sortedAllRows.forEach((row) => {
-    const key = row[groupBy.key] || "(Blank)";
-
-    if (!groups[key]) groups[key] = [];
-
-    groups[key].push(row);
-  });
-
-  let entries = Object.entries(groups);
-
-  entries.sort((a, b) => {
-    return groupBy.direction === "desc"
-      ? String(b[0]).localeCompare(String(a[0]))
-      : String(a[0]).localeCompare(String(b[0]));
-  });
-
-  return entries.map(([group, rows]) => ({
-    group,
-    rows
-  }));
-}, [sortedAllRows, groupBy]);
-
-const flatGroupedRows = React.useMemo(() => {
-  const flat = [];
-
-  groupedAllRows.forEach((g) => {
-    g.rows.forEach((row) => {
-      flat.push({
-        ...row,
-        __group: g.group
-      });
-    });
-  });
-
-  return flat;
-}, [groupedAllRows]);
-
-const paginatedRows = React.useMemo(() => {
-  const start = (page - 1) * pageSize;
-  const end = start + pageSize;
-
-  return flatGroupedRows.slice(start, end);
-}, [flatGroupedRows, page, pageSize]);
-
-const groupedByRows = React.useMemo(() => {
-  const groups = {};
-
-  paginatedRows.forEach((row) => {
-    const key = row.__group || "All Records";
-
-    if (!groups[key]) groups[key] = [];
-
-    groups[key].push(row);
-  });
-
-  let entries = Object.entries(groups);
-
-  entries.sort((a, b) => {
-    return groupBy?.direction === "desc"
-      ? String(b[0]).localeCompare(String(a[0]))
-      : String(a[0]).localeCompare(String(b[0]));
-  });
-
-  return entries.map(([group, rows]) => ({
-    group,
-    rows
-  }));
-}, [paginatedRows, groupBy]);
-
-
-const rowIndexMap = React.useMemo(() => {
-  const map = new Map();
-
-  flatGroupedRows.forEach((row, index) => {
-    map.set(row.id, index);
-  });
-
-  return map;
-}, [flatGroupedRows]);
-
-
-
-
-const printableGroupedRows = React.useMemo(() => {
-  const rows = sortedAllRows; // 🔥 IMPORTANT: NOT flatGroupedRows
-
-  if (!groupBy?.key) {
-    return [
-      {
-        group: "All Records",
-        rows
-      }
-    ];
+  if (col.column_name.startsWith("BC")) {
+    return value ?? "-";
   }
 
-  const groups = {};
+  return value ?? "-";
+};
 
-  rows.forEach((row) => {
-    //console.log("groupby", groupBy);
-    const key = getGroupKey(row, groupBy); // 🔥 IMPORTANT
-    
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(row);
-  });
+const loadReport = async (reportId, overrideDateFilters = dateFilters) => {
+  try {
+    setLoading(true);
 
-  let entries = Object.entries(groups);
+    const payload = {
+      filters: JSON.stringify(filters || []),
+      dateFilters: JSON.stringify({
+        date: {
+          startDate: overrideDateFilters.startDate,
+          endDate: overrideDateFilters.endDate,
+        },
+      }),
+    };
 
-  // optional group sort
-  entries.sort((a, b) => {
-    return groupBy?.direction === "desc"
-      ? String(b[0]).localeCompare(String(a[0]))
-      : String(a[0]).localeCompare(String(b[0]));
-  });
+    const res = await getReportData(reportId, activeUserEmail, payload);
 
-  return entries.map(([group, rows]) => ({
-    group,
-    rows
-  }));
-}, [sortedAllRows, groupBy]);
+    const data = res.data || [];
+
+    setRows(data);
+
+    // ✅ MASTER DRIVEN COLUMNS
+    const dynamicCols = buildDynamicColumns(data);
+    setColumns(dynamicCols);
+
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1656,27 +1368,7 @@ const printableGroupedRows = React.useMemo(() => {
   >
     Customize
   </button>
-<CustomizeDrawer
-  open={showCustomizeDrawer}
-  onClose={() => setShowCustomizeDrawer(false)}
 
-  // Columns (ONLY what is actually used)
-  columns={columns}
- // visibleColumns={visibleColumns}
-
-  tempSelectedColumns={tempSelectedColumns}
-  setTempSelectedColumns={setTempSelectedColumns}
-
-  // Header (Printer Custom)
-  selectedCompany={selectedCompany}
-  setSelectedCompany={setSelectedCompany}
-  companyList={company}
-
-  // Sub Header
-  printModuleName={printModuleName}
-  setPrintModuleName={setPrintModuleName}
-
-/>
   <button
   onClick={() => window.location.reload()}
   className="
@@ -1700,68 +1392,10 @@ const printableGroupedRows = React.useMemo(() => {
         Filters
    </button>
  
- <TableFiltersDrawer
-  open={showFilters}
-  onClose={() => setShowFilters(false)}
-  //masterList={masterList}
-  filters={filters}
-  setFilters={setFilters}
-  currencies={currencies}
-  masterDataMap={masterDataMap}
-  setMasterDataMap={setMasterDataMap}
-  saveFilterName={saveFilterName}
-  setSaveFilterName={setSaveFilterName}
- // handleSaveFilter={handleSaveFilter}
-/>
+
 
 </div>
-<div className="flex md:hidden">
-  <button
-    onClick={() => setShowActions(!showActions)}
-    className="px-4 py-2 text-sm rounded-md bg-gray-900 text-white w-full"
-  >
-    Actions ▾
-  </button>
 
-  {showActions && (
-    <div className="absolute right-3 mt-12 w-52 bg-white border rounded-lg shadow-lg z-50 overflow-hidden">
-
-      <button onClick={handleCreate} className="w-full text-left px-4 py-2 text-sm hover:bg-green-50">
-        + New
-      </button>
-
-      <button onClick={() => setShowPrintModal(true)} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100">
-        Print
-      </button>
-
-      <button onClick={() => setShowExcelModal(true)} className="w-full text-left px-4 py-2 text-sm hover:bg-green-50">
-        Excel
-      </button>
-
-      <button onClick={() => setShowPdfModal(true)} className="w-full text-left px-4 py-2 text-sm hover:bg-red-50">
-        PDF
-      </button>
-
-      <button onClick={() => setShowTableColumnModal(true)} className="w-full text-left px-4 py-2 text-sm hover:bg-blue-50">
-        Customize
-      </button>
-
-      <button  className="w-full text-left px-4 py-2 text-sm hover:bg-orange-50">
-        Filters
-      </button>
-
-      <button
-        disabled={selectedRowIds.length === 0}
-        onClick={handleGenerateSelected}
-        className="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 disabled:opacity-40"
-      >
-        Generate
-      </button>
-      
-
-    </div>
-  )}
-</div>
 
             </div>
 
@@ -2007,7 +1641,7 @@ const printableGroupedRows = React.useMemo(() => {
                     key={col.column_name}
                     className="px-4 py-3 border-b text-sm text-gray-700"
                   >
-                    {row[col.column_name]}
+                    {getCellValue(row, col)}
                   </td>
                 ))}
               </tr>

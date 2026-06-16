@@ -709,10 +709,10 @@ const getLabel = (key, value) => {
         col.key.toLowerCase() === "is_inventory";
 
       const isServiceMaster =
-        col.key.toLowerCase() === "prd_type";
+        col.key.toLowerCase() === "prd_type" || col.key.toLowerCase() === "pt_code";
 
       const isVendor =
-        col.key.toLowerCase() === "vendor";
+        col.key.toLowerCase() === "vend_code" ;
 
       const isInventoryType =
         col.key.toLowerCase() === "inventory_type";
@@ -733,12 +733,12 @@ const getLabel = (key, value) => {
 
             <select
               className="border px-2 py-1 rounded w-full"
-              value={newRow.vendor || ""}
+              value={newRow.vend_code || ""}
               //disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
               onChange={(e) =>
                 setNewRow(prev => ({
                   ...prev,
-                  vendor: e.target.value
+                  vend_code: e.target.value
                 }))
               }
             >
@@ -750,8 +750,8 @@ const getLabel = (key, value) => {
               {vendorList.map(v => (
 
                 <option
-                  key={v.vendor_code}
-                  value={v.vendor_code}
+                  key={v.vend_code}
+                  value={v.vend_code}
                 >
                   {v.vendor_name}
                 </option>
@@ -856,7 +856,7 @@ const getLabel = (key, value) => {
 
                   <option
                     key={i}
-                    value={s.prdtype_code}
+                    value={s.pt_code}
                   >
                     {s.prd_types}
                   </option>
@@ -982,10 +982,10 @@ const getLabel = (key, value) => {
           col.key.toLowerCase() === "is_inventory";
 
         const isService =
-          col.key.toLowerCase() === "prd_type";
+          col.key.toLowerCase() === "prd_type" || col.key.toLowerCase() === "pt_code";
 
         const isVendor =
-          col.key.toLowerCase() === "vendor";
+          col.key.toLowerCase() === "vend_code";
 
         const inputType = "date";
 
@@ -1010,7 +1010,7 @@ const getLabel = (key, value) => {
                 <select
                   className="border px-2 py-1 rounded w-full"
                   value={editRow[col.key] || ""}
-                  disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
+                  //disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
                   onChange={(e) =>
                     setEditRow(prev => ({
                       ...prev,
@@ -1026,8 +1026,8 @@ const getLabel = (key, value) => {
                   {vendorList.map(v => (
 
                     <option
-                      key={v.vendor_code}
-                      value={v.vendor_code}
+                      key={v.vend_code}
+                      value={v.vend_code}
                     >
                       {v.vendor_name}
                     </option>
@@ -1073,7 +1073,7 @@ const getLabel = (key, value) => {
                 <select
                   className="border px-2 py-1 rounded w-full"
                   value={editRow[col.key] || ""}
-                  disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
+                 // disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
                   onChange={(e) =>
                     setEditRow(prev => ({
                       ...prev,
@@ -1089,8 +1089,8 @@ const getLabel = (key, value) => {
                   {servicesList.map((s) => (
 
                     <option
-                      key={s.prdtype_code}
-                      value={s.prdtype_code}
+                      key={s.pt_code}
+                      value={s.pt_code}
                     >
                       {s.prd_types}
                     </option>
@@ -1194,7 +1194,7 @@ const getLabel = (key, value) => {
               ) : isVendor ? (
 
                 vendorList.find(
-                  v => v.vendor_code === row[col.key]
+                  v => v.vend_code === row[col.key]
                 )?.vendor_name || "-"
 
               ) : isInventoryType ? (
@@ -1205,7 +1205,7 @@ const getLabel = (key, value) => {
               ) : isService ? (
 
                 servicesList.find(
-                  s => s.prdtype_code === row[col.key]
+                  s => s.pt_code === row[col.key]
                 )?.prd_types || "-"
 
               ) : (

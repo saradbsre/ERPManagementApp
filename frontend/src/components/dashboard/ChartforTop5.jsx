@@ -29,7 +29,7 @@ export default function ChartforTop5() {
     const map = new Map();
     serviceProviders.forEach((sp) => {
       const code = String(sp.prd_code || "").trim();
-      const name = String(sp.product_name || sp.product || "").trim();
+      const name = String(sp.prd_name || sp.prd_name || "").trim();
       if (code) map.set(code, name || code);
     });
     return map;

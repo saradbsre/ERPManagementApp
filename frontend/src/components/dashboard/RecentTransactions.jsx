@@ -78,7 +78,7 @@ export default function RecentTransactions() {
 
           const nameKey =
             Object.keys(row).find((k) =>
-              k.toLowerCase().includes("product")
+              k.toLowerCase().includes("_name")
             );
 
           if (row[codeKey] && row[nameKey]) {

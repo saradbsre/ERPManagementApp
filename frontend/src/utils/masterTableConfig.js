@@ -35,10 +35,10 @@ const masterTableConfig = {
     displayName: "Products Master",
 
     columns: [
-      { key: "product", label: "Product Name", data_type: "string" },
+      { key: "prd_name", label: "Product Name", data_type: "string" },
       { key: "prd_code", label: "Product Code", data_type: "string" },
-      { key: "vendor", label: "Vendor", data_type: "string" },
-      { key: "prd_type", label: "Product Type", data_type: "string" },
+      { key: "vend_code", label: "Vendor", data_type: "string" },
+      { key: "pt_code", label: "Product Type", data_type: "string" },
       { key: "approved", label: "Approved By", data_type: "boolean" },
       { key: "descr", label: "Description", data_type: "string" },
       { key: "is_vat", label: "VAT Applicable", data_type: "boolean" },

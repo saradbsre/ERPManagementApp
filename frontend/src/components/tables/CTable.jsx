@@ -1696,7 +1696,7 @@ if (col.column_name === "products") {
 
   let mapped = unique.map((sp) => ({
     key: sp.prd_code,
-    value: sp.product,
+    value: sp.prd_name,
   }));
 
   // Keep current value visible in edit/create even if not in mapped list
@@ -1745,7 +1745,7 @@ const matchedProviders = serviceProviders.filter((sp) => {
 
     // Get service codes
     const serviceIds = matchedProviders.map(
-      sp => String(sp.prd_type)
+      sp => String(sp.pt_code)
     );
 
    
@@ -1754,25 +1754,25 @@ const matchedProviders = serviceProviders.filter((sp) => {
     const matchedServices = serviceTypes.filter(
       st =>
         serviceIds.includes(
-          String(st.prdtype_code)
+          String(st.pt_code)
         )
     );
 
   
 
-    // Remove duplicates by prdtype_code
+    // Remove duplicates by pt_code
     const uniqueServices = matchedServices.filter(
       (item, index, self) =>
         index ===
         self.findIndex(
           s =>
-            s.prdtype_code ===
-            item.prdtype_code
+            s.pt_code ===
+            item.pt_code
         )
     );
 
     return uniqueServices.map(st => ({
-      key: st.prdtype_code,   // S01
+      key: st.pt_code,   // S01
       value: st.prd_types // Subscriptions
     }));
   }
@@ -1781,7 +1781,7 @@ const matchedProviders = serviceProviders.filter((sp) => {
   // FALLBACK ALL SERVICES
   // =========================
   return serviceTypes.map(st => ({
-    key: st.prdtype_code,    // S01
+    key: st.pt_code,    // S01
     value: st.prd_types   // Subscriptions
   }));
 }
@@ -4752,7 +4752,7 @@ onDrop={() => handleDrop(col.column_name)}
 
                                           matchedProvider = serviceProviders.find(
                                             sp =>
-                                              String(sp.product || "")
+                                              String(sp.prd_name || "")
                                                 .trim()
                                                 .toLowerCase() ===
                                               String(updatedRow.products || "")
@@ -5724,9 +5724,9 @@ onDrop={() => handleDrop(col.column_name)}
                 <td className="p-3 border-b min-w-[220px]">
 
                  <input
-  value={item.product || ""}
+  value={item.prd_name || ""}
   onChange={(e) =>
-    handleItemChange(i, "product", e.target.value)
+    handleItemChange(i, "prd_name", e.target.value)
   }
   readOnly
   className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium"

@@ -390,7 +390,7 @@ const getProductName = (productCode) => {
       (productCode || "").toUpperCase()
   );
   //console.log("products:", product);
-  return product?.product || productCode;
+  return product?.prd_name || productCode;
 };
 
 const getServiceName = (serviceCode) => {
@@ -400,7 +400,7 @@ const getServiceName = (serviceCode) => {
       (serviceCode || "").toUpperCase()
   );
 
-  return service?.prd_type || serviceCode;
+  return service?.prd_types || serviceCode;
 };
 
 const getPlanName = (planCode) => {
@@ -632,7 +632,7 @@ const currentDate = new Date();
       REQUEST SUMMARY
     </h2>
     <h1 className="font-bold text-[13px]">
-      {selectedTerm?.value || header.term} {selectedProductType?.prd_type || header.product_types} Fees
+      {selectedTerm?.value || header.term} {selectedProductType?.prd_types || header.product_types} Fees
     </h1>
    <p className="text-[12px] text-gray-700">
    {selectedTransactionType?.tt_code === "TT003" ? (

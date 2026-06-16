@@ -1299,7 +1299,7 @@ if (col.column_name === "products") {
 
   let mapped = unique.map((sp) => ({
     key: sp.prd_code,
-    value: sp.product,
+    value: sp.prd_name,
   }));
 
   // Keep current value visible in edit/create even if not in mapped list
@@ -1340,7 +1340,7 @@ const matchedProviders = serviceProviders.filter((sp) => {
   const selected = String(selectedProduct || "").trim().toLowerCase();
 
   const code = String(sp.prd_code || "").trim().toLowerCase();
-  const name = String(sp.product || "").trim().toLowerCase();
+  const name = String(sp.prd_name || "").trim().toLowerCase();
 
   return selected === code || selected === name;
 });
