@@ -316,7 +316,7 @@ useEffect(() => {
       const res = await getMasterData("product_types", activeUserEmail);
 
       setServicesList(res?.data ||  []);
-      console.log("Loaded services:", res.data|| []);
+      //console.log("Loaded services:", res.data|| []);
     } catch (err) {
       console.error("Error loading services:", err);
     }
@@ -331,7 +331,7 @@ useEffect(() => {
       const res = await getMasterData("providers", activeUserEmail);
 
       setProvidersList(res?.data ||  []);
-      console.log("Loaded providers:", res.data|| []);
+      //console.log("Loaded providers:", res.data|| []);
     } catch (err) {
       console.error("Error loading providers:", err);
     }
@@ -700,7 +700,6 @@ const getLabel = (key, value) => {
     <td className="px-4 py-3">#</td>
 
     {columns.map(col => {
-
       const isDate = isDateColumn(col);
 
       const isToggle =
@@ -712,8 +711,8 @@ const getLabel = (key, value) => {
         col.key.toLowerCase() === "prd_type" || col.key.toLowerCase() === "pt_code";
 
       const isVendor =
-        col.key.toLowerCase() === "vend_code" ;
-
+        col.key.toLowerCase() === "vend_code" && masterName === "products";
+      console.log("isVendor:", isVendor, "col.key:", col.key, "masterName:", masterName);
       const isInventoryType =
         col.key.toLowerCase() === "inventory_type";
 
@@ -982,10 +981,12 @@ const getLabel = (key, value) => {
           col.key.toLowerCase() === "is_inventory";
 
         const isService =
-          col.key.toLowerCase() === "prd_type" || col.key.toLowerCase() === "pt_code";
+          (col.key.toLowerCase() === "prd_type" || col.key.toLowerCase() === "pt_code") && masterName === "products";
 
-        const isVendor =
-          col.key.toLowerCase() === "vend_code";
+       
+      const isVendor =
+        col.key.toLowerCase() === "vend_code" && masterName === "products";
+       
 
         const inputType = "date";
 

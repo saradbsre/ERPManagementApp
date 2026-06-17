@@ -202,8 +202,8 @@ const handleExportPrf = async (prfNum) => {
     setPopupMessage("Export count incremented successfully.");
     setPopupType("success");
   } catch (err) {
-    setPopupMessage("Failed to increment export count.");
-    setPopupType("error");
+    // setPopupMessage("Failed to increment export count.");
+    // setPopupType("error");
   }
 };
 
@@ -442,7 +442,8 @@ function handlePrint() {
   hh = hh ? hh : 12;
   hh = String(hh).padStart(2, "0");
 
-  const formattedDateTime = `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss} ${ampm}`;
+  const formattedDateTime =
+    `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss} ${ampm}`;
 
   printWindow.document.write(`
 <html>
@@ -454,7 +455,7 @@ function handlePrint() {
 <style>
 @page {
   size: A4;
-   margin: 10mm 10mm 22mm 10mm;
+  margin: 10mm 10mm 20mm 10mm;
 }
 
 html, body {
@@ -464,10 +465,6 @@ html, body {
   background: white;
   -webkit-print-color-adjust: exact !important;
   print-color-adjust: exact !important;
-}
-
-.print-wrapper {
-  width: 100%;
 }
 
 table {
@@ -483,19 +480,37 @@ tr, td, th {
   page-break-inside: avoid;
 }
 
+/* FOOTER */
 .approval-footer {
   margin-top: 15px;
 }
 
-/* blank message */
+/* BLANK SPACE */
 .print-blank-space {
-  text-align: center;
-  font-size: 8px;
-  color: #6b7280;
-  margin-top: 10px;
   display: none;
+  margin-top: 20px;
+  text-align: center;
+  font-size: 10px;
+  color: #666;
 }
 
+
+/* PRINT FOOTER INFO */
+@media print {
+  @page {
+    @bottom-left {
+      content: "User: ${activeUser?.name || ""} | Printed: ${formattedDateTime}";
+      font-size: 9px;
+      font-family: "Times New Roman", serif;
+    }
+
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 9px;
+      font-family: "Times New Roman", serif;
+    }
+  }
+}
 </style>
 
 </head>
@@ -526,75 +541,51 @@ tr, td, th {
     *** SPACE INTENTIONALLY LEFT BLANK ***
   </div>
 
+ 
+
 </div>
-
-<script>
-
-(function () {
-  const style = document.createElement("style");
-
-  style.textContent = \`
-    @media print {
-      @page {
-        @bottom-left {
-          content: "User: ${activeUser.name} | Printed: ${formattedDateTime}";
-          font-size: 9px;
-        }
-
-        @bottom-right {
-          content: "Page " counter(page) " of " counter(pages);
-          font-size: 9px;
-        }
-      }
-    }
-  \`;
-
-  document.head.appendChild(style);
-})();
-
-window.onload = function () {
-
-  setTimeout(() => {
-
-    const wrapper = document.querySelector(".print-wrapper");
-
-    // ✅ REAL print layout measurement
-    const contentHeight = wrapper.scrollHeight;
-
-    // A4 printable height approximation (adjust if needed)
-    const pageHeight = 1050;
-
-    const totalPages = Math.ceil(contentHeight / pageHeight);
-
-    console.log("Content height:", contentHeight);
-    console.log("Total pages:", totalPages);
-
-    const blank = document.getElementById("blankSpace");
-
-    // ✅ ONLY SHOW IF MORE THAN 1 PAGE
-    if (totalPages > 1) {
-      blank.style.display = "block";
-    } else {
-      blank.style.display = "none";
-    }
-
-    // wait for DOM update before print
-    setTimeout(() => {
-      window.focus();
-      window.print();
-      window.close();
-    }, 200);
-
-  }, 500);
-};
-
-</script>
 
 </body>
 </html>
-`);
+  `);
 
   printWindow.document.close();
+
+  // =========================
+  // FINAL PRINT LOGIC (IMPORTANT)
+  // =========================
+  printWindow.onload = function () {
+    setTimeout(() => {
+      const wrapper = printWindow.document.querySelector(".print-wrapper");
+      const blankSpace = printWindow.document.getElementById("blankSpace");
+
+      const pageHeight = 1055;
+      const contentHeight = wrapper.scrollHeight;
+
+      const totalPages = Math.ceil(contentHeight / pageHeight);
+
+      const isMultiPage = totalPages > 1;
+
+      console.log("Content Height:", contentHeight);
+      console.log("Total Pages:", totalPages);
+
+      // =========================
+      // FINAL CONTROL (NO CSS RELIANCE)
+      // =========================
+      if (isMultiPage) {
+        blankSpace.style.display = "block";
+      } else {
+        blankSpace.style.display = "none";
+      }
+
+      setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+        printWindow.close();
+      }, 400);
+
+    }, 600);
+  };
 }
 const Total = Number(details?.amount || 0);
 

@@ -7,7 +7,7 @@ const masterTableConfig = {
     columns: [
       { key: "currency", label: "Currency", data_type: "string" },
       { key: "curr_code", label: "Currency Code", data_type: "string" },
-      { key: "descr", label: "Description", data_type: "string" },
+      { key: "curr_descr", label: "Description", data_type: "string" },
       { key: "country", label: "Country", data_type: "string" },
       { key: "sysdate", label: "Updated On", data_type: "datetime" },
       { key: "exchange_rate", label: "Exchange Rate", data_type: "number" }
@@ -40,11 +40,9 @@ const masterTableConfig = {
       { key: "vend_code", label: "Vendor", data_type: "string" },
       { key: "pt_code", label: "Product Type", data_type: "string" },
       { key: "approved", label: "Approved By", data_type: "boolean" },
-      { key: "descr", label: "Description", data_type: "string" },
+      { key: "prd_descr", label: "Description", data_type: "string" },
       { key: "is_vat", label: "VAT Applicable", data_type: "boolean" },
       { key: "is_inventory", label: "Inventory Type", data_type: "boolean" },
-      // { key: "is_icann", label: "ICANN Applicable", data_type: "boolean" },
-      // { key: "icann_fee", label: "ICANN Fee", data_type: "number" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
   },
@@ -63,9 +61,9 @@ const masterTableConfig = {
     displayName: "Billing Cycle Master",
 
     columns: [
-        { key: "value", label: "Term Name", data_type: "string" },
+        { key: "bc_name", label: "Term Name", data_type: "string" },
         { key: "bc_code", label: "Term Code", data_type: "number" },
-        { key: "descr", label: "Description", data_type: "string" },
+        { key: "bc_descr", label: "Description", data_type: "string" },
         { key: "is_active", label: "Is Active", data_type: "boolean" },
     ]
   },
@@ -75,7 +73,7 @@ const masterTableConfig = {
     columns: [
         { key: "method_name", label: "Payment Method", data_type: "string" },
         { key: "pm_code", label: "Payment Method Code", data_type: "string" },
-        { key: "description", label: "Description", data_type: "string" },
+        { key: "pm_descr", label: "Description", data_type: "string" },
         { key: "is_active", label: "Is Active", data_type: "boolean" },
         
         
@@ -94,7 +92,7 @@ const masterTableConfig = {
       { key: "country", label: "Country", data_type: "string" },
       { key: "email", label: "Email", data_type: "string" },
       { key: "phn_number", label: "Phone", data_type: "string" },
-      { key: "descr", label: "Description", data_type: "string" },
+      { key: "com_descr", label: "Description", data_type: "string" },
       { key: "issue_date", label: "Issue Date", data_type: "datetime" },
       { key: "expiry_date", label: "Expiry Date", data_type: "datetime" },
       { key: "trn", label: "TRN", data_type: "string" }
@@ -106,7 +104,7 @@ const masterTableConfig = {
     columns: [
       { key: "prd_types", label: "Name", data_type: "string" },
       { key: "pt_code", label: "Product Type Code", data_type: "string" },
-      { key: "descr", label: "Description", data_type: "string" },
+      { key: "pt_descr", label: "Description", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
   },
@@ -118,7 +116,7 @@ const masterTableConfig = {
       { key: "card_4number", label: "Card Number - Last 4 Digits", data_type: "string" },
       { key: "card_brand", label: "Card Type", data_type: "string" },
       { key: "expiry_date", label: "Expiry Date", data_type: "datetime" },
-      { key: "descr", label: "Description", data_type: "string" },
+      { key: "cc_descr", label: "Description", data_type: "string" },
       { key: "billing_address", label: "Billing Address", data_type: "string" }
     ]
   },
@@ -127,7 +125,7 @@ const masterTableConfig = {
     columns: [
       { key: "plan_name", label: "Plan Name", data_type: "string" },
       { key: "plan_code", label: "Plan Code", data_type: "string" },
-      { key: "descr", label: "Description", data_type: "string" },
+      { key: "plan_descr", label: "Description", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
   },
@@ -136,7 +134,7 @@ const masterTableConfig = {
     columns: [
       { key: "dep_name", label: "Department Name", data_type: "string" },
       { key: "dep_code", label: "Department Code", data_type: "string" },
-      { key: "descr", label: "Description", data_type: "string" },
+      { key: "dep_descr", label: "Description", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
   },
@@ -145,7 +143,7 @@ const masterTableConfig = {
     columns: [
       { key: "dv_name", label: "Division Name", data_type: "string" },
       { key: "dv_code", label: "Division Code", data_type: "string" },
-      { key: "descr", label: "Description", data_type: "string" },
+      { key: "dv_descr", label: "Description", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
   },
@@ -166,7 +164,7 @@ const masterTableConfig = {
     columns: [
         { key: "tt_name", label: "Transaction Name", data_type: "string" },
         { key: "tt_code", label: "Transaction Code", data_type: "string" },
-        { key: "descr", label: "Description", data_type: "string" },
+        { key: "tt_descr", label: "Description", data_type: "string" },
         { key: "is_active", label: "Is Active", data_type: "boolean" },     
     ]
   },
@@ -187,7 +185,7 @@ const masterTableConfig = {
     columns: [
         { key: "prj_name", label: "Project Name", data_type: "string" },
         { key: "prj_code", label: "Project Code", data_type: "string" },
-        { key: "descr", label: "Description", data_type: "string" },
+        { key: "prj_descr", label: "Description", data_type: "string" },
         { key: "address", label: "Address", data_type: "string" },
         { key: "is_active", label: "Is Active", data_type: "boolean" },     
     ]
