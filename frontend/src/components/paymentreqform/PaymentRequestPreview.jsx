@@ -454,7 +454,7 @@ function handlePrint() {
 <style>
 @page {
   size: A4;
-  margin: 9mm;
+   margin: 10mm 10mm 22mm 10mm;
 }
 
 html, body {

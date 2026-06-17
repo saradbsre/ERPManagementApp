@@ -19,8 +19,8 @@ const masterTableConfig = {
 
     columns: [
       { key: "vendor_name", label: "Vendor Name", data_type: "string" },
-      { key: "vendor_code", label: "Vendor Code", data_type: "string" },
-      { key: "descr", label: "Description", data_type: "string" },
+      { key: "vend_code", label: "Vendor Code", data_type: "string" },
+      { key: "vend_descr", label: "Description", data_type: "string" },
       { key: "website", label: "Website", data_type: "string" },
       { key: "is_vat", label: "VAT Applicable", data_type: "boolean" },
       { key: "address", label: "Address", data_type: "string" },
@@ -105,7 +105,7 @@ const masterTableConfig = {
 
     columns: [
       { key: "prd_types", label: "Name", data_type: "string" },
-      { key: "prdtype_code", label: "Product Type Code", data_type: "string" },
+      { key: "pt_code", label: "Product Type Code", data_type: "string" },
       { key: "descr", label: "Description", data_type: "string" },
       { key: "is_active", label: "Active Status", data_type: "boolean" },
     ]
