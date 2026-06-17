@@ -737,7 +737,7 @@ const currentDate = new Date();
       REQUEST SUMMARY
     </h2>
     <h1 className="font-bold text-[13px]">
-      {selectedTerm?.value || header.term} {selectedProductType?.prd_types || header.product_types} Fees
+      {selectedTerm?.bc_name || header.term} {selectedProductType?.prd_types || header.product_types} Fees
     </h1>
    <p className="text-[12px] text-gray-700">
    {selectedTransactionType?.tt_code === "TT003" ? (
