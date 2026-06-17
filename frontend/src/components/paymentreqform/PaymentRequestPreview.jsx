@@ -365,7 +365,9 @@ const selectedTerm = Array.isArray(terms) && header.term ? terms.find(
 const selectedCostCenter = Array.isArray(costCenters) && header.cost_center ? costCenters.find(
     (cc) => (cc.dv_code || "").toString().trim().toUpperCase() === header.cost_center.toString().trim().toUpperCase()   
 ) : null;
-
+console.log("header.cost_center value:", header.cost_center);
+console.log("Cost Centers:", costCenters);
+console.log("Selected Cost Center:", selectedCostCenter);
 const selectedDepartment = Array.isArray(departments) && header.department ? departments.find(
     (d) => (d.dep_code || "").toString().trim().toUpperCase() === header.department.toString().trim().toUpperCase()
 ) : null;
@@ -414,86 +416,185 @@ const getPlanName = (planCode) => {
 };
 
 function handlePrint() {
-  const content = document.getElementById("print-area").innerHTML;
-
   const printWindow = window.open("", "", "width=1200,height=900");
 
-const now = new Date();
+  const header =
+    document.getElementById("print-header")?.innerHTML || "";
 
-const dd = String(now.getDate()).padStart(2, '0');
-const mm = String(now.getMonth() + 1).padStart(2, '0');
-const yyyy = now.getFullYear();
+  const body =
+    document.getElementById("print-body")?.innerHTML || "";
 
-let hh = now.getHours();
-const min = String(now.getMinutes()).padStart(2, '0');
-const ss = String(now.getSeconds()).padStart(2, '0');
+  const footer =
+    document.getElementById("approval-footer")?.innerHTML || "";
 
-const ampm = hh >= 12 ? 'PM' : 'AM';
+  const now = new Date();
 
-// convert to 12-hour format
-hh = hh % 12;
-hh = hh ? hh : 12; // 0 should be 12
-hh = String(hh).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const yyyy = now.getFullYear();
 
-const formattedDateTime = `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss} ${ampm}`;
+  let hh = now.getHours();
+  const min = String(now.getMinutes()).padStart(2, "0");
+  const ss = String(now.getSeconds()).padStart(2, "0");
+  const ampm = hh >= 12 ? "PM" : "AM";
+
+  hh = hh % 12;
+  hh = hh ? hh : 12;
+  hh = String(hh).padStart(2, "0");
+
+  const formattedDateTime = `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss} ${ampm}`;
 
   printWindow.document.write(`
-    <html>
-      <head>
-        <title>Payment Request</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <style>
-          @page { size: A4; margin: 10mm; }
-          html, body { background: white; margin: 0; padding: 0; font-family: "Times New Roman", serif; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          body { padding: 10px; }
-          table { border-collapse: collapse; width: 100%; }
-          th, td { border-collapse: collapse; }
-          .print-area { width: 100%; }
-        </style>
-      </head>
-      <body>
-        <div class="print-area">${content}</div>
-         <script>
-        (function () {
-          const style = document.createElement('style');
-          style.textContent = \`
-            @media print {
-              @page {
-                
-                @bottom-left {
-                  content: "User:${activeUser.name}  | Printed: ${formattedDateTime}";
-                  font-size: 10px;
-                  margin-bottom: 20mm;
-                  font-family: "Times New Roman", serif;
-                }
-                @bottom-right {
-                  content: "Page " counter(page) " of " counter(pages);
-                  font-size: 10px;
-                  margin-bottom: 20mm;
-                  font-family: "Times New Roman", serif;
-                }
-              }
-            }\`;
-          document.head.appendChild(style);
-        })();
+<html>
+<head>
+<title>Payment Request</title>
 
-        window.onload = function() {
-          window.focus();
-          window.print();
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+@page {
+  size: A4;
+  margin: 9mm;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: "Times New Roman", serif;
+  background: white;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+.print-wrapper {
+  width: 100%;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+thead {
+  display: table-header-group;
+}
+
+tr, td, th {
+  page-break-inside: avoid;
+}
+
+.approval-footer {
+  margin-top: 15px;
+}
+
+/* blank message */
+.print-blank-space {
+  text-align: center;
+  font-size: 8px;
+  color: #6b7280;
+  margin-top: 10px;
+  display: none;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="print-wrapper">
+
+  <table>
+    <thead>
+      <tr>
+        <td>${header}</td>
+      </tr>
+    </thead>
+
+    <tbody>
+      <tr>
+        <td>${body}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="approval-footer">
+    ${footer}
+  </div>
+
+  <div id="blankSpace" class="print-blank-space">
+    *** SPACE INTENTIONALLY LEFT BLANK ***
+  </div>
+
+</div>
+
+<script>
+
+(function () {
+  const style = document.createElement("style");
+
+  style.textContent = \`
+    @media print {
+      @page {
+        @bottom-left {
+          content: "User: ${activeUser.name} | Printed: ${formattedDateTime}";
+          font-size: 9px;
         }
-      </script>
-      </body>
-    </html>
-  `);
+
+        @bottom-right {
+          content: "Page " counter(page) " of " counter(pages);
+          font-size: 9px;
+        }
+      }
+    }
+  \`;
+
+  document.head.appendChild(style);
+})();
+
+window.onload = function () {
+
+  setTimeout(() => {
+
+    const wrapper = document.querySelector(".print-wrapper");
+
+    // ✅ REAL print layout measurement
+    const contentHeight = wrapper.scrollHeight;
+
+    // A4 printable height approximation (adjust if needed)
+    const pageHeight = 1050;
+
+    const totalPages = Math.ceil(contentHeight / pageHeight);
+
+    console.log("Content height:", contentHeight);
+    console.log("Total pages:", totalPages);
+
+    const blank = document.getElementById("blankSpace");
+
+    // ✅ ONLY SHOW IF MORE THAN 1 PAGE
+    if (totalPages > 1) {
+      blank.style.display = "block";
+    } else {
+      blank.style.display = "none";
+    }
+
+    // wait for DOM update before print
+    setTimeout(() => {
+      window.focus();
+      window.print();
+      window.close();
+    }, 200);
+
+  }, 500);
+};
+
+</script>
+
+</body>
+</html>
+`);
 
   printWindow.document.close();
-
-  // Wait for the new window to finish loading
-  printWindow.onload = function () {
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
-  };
 }
 const Total = Number(details?.amount || 0);
 
@@ -550,6 +651,7 @@ const currentDate = new Date();
   "
 >
 
+<div id="print-header">
       <div className="flex justify-between items-start w-full ">
   {/* Left: Company & Vendor Details */}
   <div className="leading-4">
@@ -701,8 +803,8 @@ const currentDate = new Date();
   </div>
 
 </div>
-
-
+</div>
+<div id="print-body">
 <table className="w-full border border-black border-collapse mb-3 text-[10px]">
 
   {/* HEADER */}
@@ -833,12 +935,6 @@ const currentDate = new Date();
 
 </table>
 
-
-
-
-
-{/* ================= DETAILS TABLE ================= */}
-
 <table className="w-full border border-black-800 border-collapse mb-0 text-[10px]">
 
   {/* TABLE HEADER */}
@@ -934,34 +1030,34 @@ const currentDate = new Date();
           </td>
 
           {/* PRODUCT DESCRIPTION */}
-          <td className="border border-gray-800 p-2 align-top text-left">
-            {headers?.map((item, i) => {
-              const product = products?.find(
-                p =>
-                  (p.prd_code || "").toUpperCase() ===
-                  (item?.products || "").toUpperCase()
-              );
+         <td className="border border-gray-800 p-2 align-top text-left">
+  {headers?.map((item, i) => {
+    const product = products?.find(
+      p =>
+        (p.prd_code || "").toUpperCase() ===
+        (item?.products || "").toUpperCase()
+    );
 
-              return (
-                <div
-                  key={i}
-                  className={`${rowHeight} flex flex-col py-1`}
-                >
-                  <div>
-                    {getProductName(item?.products)}
-                    {item?.plan_provider &&
-                      ` - ${getPlanName(item.plan_provider)}`}
-                    {item?.product_types &&
-                      ` - ${getServiceName(item.product_types)}`}
-                  </div>
-                </div>
-              );
-            })}
+    return (
+      <div key={i} className={`${rowHeight} flex flex-col py-1`}>
+        <div>
+          {getProductName(item?.products)}
+          {item?.plan_provider &&
+            ` - ${getPlanName(item.plan_provider)}`}
+          {item?.product_types &&
+            ` - ${getServiceName(item.product_types)}`}
+        </div>
+      </div>
+    );
+  })}
 
-            <div className="mt-1 text-center text-[8px] text-gray-500">
-              *** SPACE INTENTIONALLY LEFT BLANK ***
-            </div>
-          </td>
+  {/* ✅ ONLY SHOW WHEN ROWS < 6 */}
+  {(!headers || headers.length < 6) && (
+    <div className="mt-1 text-center text-[8px] text-gray-500">
+      *** SPACE INTENTIONALLY LEFT BLANK ***
+    </div>
+  )}
+</td>
 
           {/* AMOUNT */}
           <td className="border border-gray-800 p-2 align-top text-right">
@@ -1074,10 +1170,6 @@ const currentDate = new Date();
 
 </table>
 
-   
-
-{/* ================= ADDITIONAL DETAILS ================= */}
-
 <table className="w-full border-x border-b border-gray-800 border-collapse mb-5 text-[10px]">
 
   {/* HEADER */}
@@ -1135,10 +1227,8 @@ const currentDate = new Date();
   </tbody>
 
 </table>
-
-
-{/* ================= APPROVALS ================= */}
-
+<div className="print-end-section">
+<div className="approval-footer">
 <table className="w-full mt-15 table-fixed border border-gray-800 border-collapse text-center text-[10px]">
 
   {/* HEADER */}
@@ -1277,28 +1367,9 @@ const currentDate = new Date();
   </tbody>
 
 </table>
+</div>
 
-        {/* <table
-  className="w-full mt-8"
-  style={{
-    borderCollapse: "collapse",
-    border: "none",
-    fontSize: "11px"
-  }}
->
-  <tbody>
-    <tr>
-      <td style={{ border: "none", padding: "4px 0" }}>
-         User: {activeUser?.name || "User"} | Printed: {formatDateTime(new Date())}
-      </td>
-      <td style={{ border: "none", padding: "4px 0", textAlign: "right" }}>
-         Page <span>1</span> of <span>1</span>
-      </td>
-    </tr>
-  </tbody>
-</table> */}
-
-        {/* ================= ACTION BUTTONS ================= */}
+  </div>
         <div className="flex justify-end gap-3 mt-8 print:hidden">
 
           <button
@@ -1336,7 +1407,7 @@ const currentDate = new Date();
 
         </div>
       
-
+</div>
       </div>
 
     </div>
