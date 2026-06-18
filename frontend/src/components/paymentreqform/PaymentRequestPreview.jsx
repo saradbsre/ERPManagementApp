@@ -446,133 +446,166 @@ function handlePrint() {
     `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss} ${ampm}`;
 
   printWindow.document.write(`
-<html>
-<head>
-<title>Payment Request</title>
+    <html>
+      <head>
+        <title>Payment Request</title>
 
-<script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://cdn.tailwindcss.com"></script>
 
-<style>
-@page {
-  size: A4;
-  margin: 10mm 10mm 20mm 10mm;
-}
+        <style>
+          @page {
+            size: A4;
+            margin: 10mm 10mm 20mm 10mm;
+          }
 
-html, body {
-  margin: 0;
-  padding: 0;
-  font-family: "Times New Roman", serif;
-  background: white;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
+          html,
+          body {
+            margin: 0;
+            padding: 0;
+            background: white;
+            font-family: "Times New Roman", serif;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
 
-thead {
-  display: table-header-group;
-}
+          thead {
+            display: table-header-group;
+          }
 
-tr, td, th {
-  page-break-inside: avoid;
-}
+          tr,
+          td,
+          th {
+            page-break-inside: avoid;
+          }
 
-/* FOOTER */
-.approval-footer {
-  margin-top: 15px;
-}
+          .approval-footer {
+            margin-top: 15px;
+          }
 
-/* BLANK SPACE */
-.print-blank-space {
-  display: none;
-  margin-top: 20px;
-  text-align: center;
-  font-size: 10px;
-  color: #666;
-}
+          .continue-msg,
+          .blank-space {
+            display: none;
+            text-align: center;
+            font-size: 10px;
+            font-weight: bold;
+            margin: 10px 0;
+          }
 
+          @media print {
+            @page {
+              @bottom-left {
+                content: "User: ${activeUser?.name || ""} | Printed: ${formattedDateTime}";
+                font-size: 9px;
+                font-family: "Times New Roman", serif;
+              }
 
-/* PRINT FOOTER INFO */
-@media print {
-  @page {
-    @bottom-left {
-      content: "User: ${activeUser?.name || ""} | Printed: ${formattedDateTime}";
-      font-size: 9px;
-      font-family: "Times New Roman", serif;
-    }
+              @bottom-right {
+                content: "Page " counter(page) " of " counter(pages);
+                font-size: 9px;
+                font-family: "Times New Roman", serif;
+              }
+            }
+          }
+        </style>
+      </head>
 
-    @bottom-right {
-      content: "Page " counter(page) " of " counter(pages);
-      font-size: 9px;
-      font-family: "Times New Roman", serif;
-    }
-  }
-}
-</style>
+      <body>
 
-</head>
+        <div class="print-wrapper">
 
-<body>
+          <table>
+            <thead>
+              <tr>
+                <td>${header}</td>
+              </tr>
+            </thead>
 
-<div class="print-wrapper">
+            <tbody>
+              <tr>
+                <td>${body}</td>
+              </tr>
+            </tbody>
+          </table>
 
-  <table>
-    <thead>
-      <tr>
-        <td>${header}</td>
-      </tr>
-    </thead>
+          <div id="continueMsg" class="continue-msg">
+            *** CONTINUE ON NEXT PAGE ***
+          </div>
 
-    <tbody>
-      <tr>
-        <td>${body}</td>
-      </tr>
-    </tbody>
-  </table>
+          <div class="approval-footer">
+            ${footer}
+          </div>
 
-  <div class="approval-footer">
-    ${footer}
-  </div>
+          <div id="blankSpace" class="blank-space">
+            *** SPACE INTENTIONALLY LEFT BLANK ***
+          </div>
 
-  <div id="blankSpace" class="print-blank-space">
-    *** SPACE INTENTIONALLY LEFT BLANK ***
-  </div>
+        </div>
 
- 
-
-</div>
-
-</body>
-</html>
+      </body>
+    </html>
   `);
 
   printWindow.document.close();
 
-  // =========================
-  // FINAL PRINT LOGIC (IMPORTANT)
-  // =========================
   printWindow.onload = function () {
     setTimeout(() => {
-      const wrapper = printWindow.document.querySelector(".print-wrapper");
-      const blankSpace = printWindow.document.getElementById("blankSpace");
+      const wrapper =
+        printWindow.document.querySelector(".print-wrapper");
 
-      const pageHeight = 1055;
-      const contentHeight = wrapper.scrollHeight;
+      const continueMsg =
+        printWindow.document.getElementById("continueMsg");
 
-      const totalPages = Math.ceil(contentHeight / pageHeight);
+      const blankSpace =
+        printWindow.document.getElementById("blankSpace");
 
-      const isMultiPage = totalPages > 1;
+      const pageHeight = 1050; // A4 printable height approx
 
-      console.log("Content Height:", contentHeight);
+      const totalHeight = wrapper.scrollHeight;
+
+      const totalPages = Math.ceil(totalHeight / pageHeight);
+
+      console.log("========== PRINT DEBUG ==========");
+      console.log("Total Content Height:", totalHeight);
       console.log("Total Pages:", totalPages);
 
-      // =========================
-      // FINAL CONTROL (NO CSS RELIANCE)
-      // =========================
-      if (isMultiPage) {
+      let lastPageUsedSpace = totalHeight % pageHeight;
+      if (lastPageUsedSpace === 0) lastPageUsedSpace = pageHeight;
+
+      const lastPageRemainingSpace = pageHeight - lastPageUsedSpace;
+
+      console.log("Last Page Used Space:", lastPageUsedSpace);
+      console.log("Last Page Remaining Space:", lastPageRemainingSpace);
+
+      for (let i = 1; i <= totalPages; i++) {
+        const start = (i - 1) * pageHeight;
+
+        const usedSpace =
+          i === totalPages
+            ? totalHeight - start
+            : pageHeight;
+
+        const remainingSpace = pageHeight - usedSpace;
+
+        console.log(`Page ${i}:`);
+        console.log("  Used Space:", usedSpace);
+        console.log("  Remaining Space:", remainingSpace);
+      }
+
+      console.log("=================================");
+
+      // ✅ FINAL LOGIC
+      if (totalPages > 1 && lastPageRemainingSpace < 100) {
+        continueMsg.style.display = "block";
+      } else {
+        continueMsg.style.display = "none";
+      }
+
+      if (totalPages > 1) {
         blankSpace.style.display = "block";
       } else {
         blankSpace.style.display = "none";
@@ -582,9 +615,9 @@ tr, td, th {
         printWindow.focus();
         printWindow.print();
         printWindow.close();
-      }, 400);
+      }, 500);
 
-    }, 600);
+    }, 700);
   };
 }
 const Total = Number(details?.amount || 0);
@@ -643,157 +676,196 @@ const currentDate = new Date();
 >
 
 <div id="print-header">
-      <div className="flex justify-between items-start w-full ">
-  {/* Left: Company & Vendor Details */}
-  <div className="leading-4">
-    <h1 className="font-bold text-[15px] uppercase">
-      {selectedCompany?.trade_name || header.company || "Company Name"}
-    </h1>
-    <p className="text-[11px] text-gray-700">
-      {selectedCompany?.address || "Company Address"}
-    </p>
-    <p className="text-[11px] text-gray-700">
-      {selectedCompany?.area || ""}, {selectedCompany?.emirate || ""}, {selectedCompany?.country || "UAE"}
-      {selectedCompany?.phn_number ? ` Tel ${selectedCompany?.phn_number}` : ""}
-      {selectedCompany?.email ? `, Email: ${selectedCompany?.email}` : ""}
-    </p>
-    <p className="text-[11px] text-gray-700 mb-2">
-      TRN : {selectedCompany?.trn || ""}
-    </p>
-   
-  </div>
-  {/* Right: Barcode */}
- 
-  <div className="pl-8 flex items-start">
-    <svg ref={barcodeRef}></svg>
-  </div>
-</div>
-<div className="w-full border-t border-gray-500 mb-3"></div>
 
-<div className=" items-center w-full mb-3">
+<table
+  style={{
+    width: "100%",
+    borderCollapse: "collapse",
+    borderSpacing: 0
+  }}
+>
+  <tbody>
+    
+    {/* ================= HEADER ROW ================= */}
+    <tr>
+      <td style={{ width: "60%", verticalAlign: "top", padding: 0 }}>
+        <div style={{ lineHeight: "1.3" }}>
 
-  {/* TITLE SECTION */}
-  <div className="text-center leading-tight">
+          <div style={{
+            fontWeight: "bold",
+            fontSize: "15px",
+            textTransform: "uppercase"
+          }}>
+            {selectedCompany?.trade_name || header.company || "Company Name"}
+          </div>
 
-    <h2 className="font-bold text-[20px] text-center">
-      PAYMENT REQUEST FORM
-    </h2>
+          <div style={{ fontSize: "11px", color: "#374151" }}>
+            {selectedCompany?.address || "Company Address"}
+          </div>
 
-  </div>
+          <div style={{ fontSize: "11px", color: "#374151" }}>
+            {selectedCompany?.area || ""}, {selectedCompany?.emirate || ""}, {selectedCompany?.country || "UAE"}
+            {selectedCompany?.phn_number ? ` Tel ${selectedCompany?.phn_number}` : ""}
+            {selectedCompany?.email ? `, Email: ${selectedCompany?.email}` : ""}
+          </div>
 
-</div>
+          <div style={{ fontSize: "11px", color: "#374151" }}>
+            TRN: {selectedCompany?.trn || ""}
+          </div>
 
-  {/* COMPANY DETAILS */}
-<div className="grid grid-cols-2 border border-gray-400 mb-3">
+        </div>
+      </td>
 
-  {/* LEFT COLUMN */}
-  <div className="p-3 leading-4 border-r border-gray-300">
+      <td style={{ width: "40%", textAlign: "right", verticalAlign: "top" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <div id="barcode-container"></div>
+        </div>
+      </td>
+    </tr>
 
-    <h2 className="font-bold text-[12px] uppercase mb-1">
-      PAYEE / SUPPLIER
-    </h2>
+    {/* ================= TITLE ROW ================= */}
+    <tr>
+      <td colSpan="2" style={{ textAlign: "center", padding: "2px 0" }}>
 
-    <h1 className="font-bold text-[13px]">
-      {selectedVendor?.vendor_name || header.vendors || "Vendor Name"}
-      {isVatApplicable ? " (VAT Included)" : ""}
-    </h1>
+        <div style={{ borderTop: "1px solid #000" }} />
 
-    <p className="text-[12px] text-gray-700">
-      {selectedVendor?.address || "Vendor Address"} {selectedVendor?.country ?`, ${selectedVendor?.country}` : ""}
-    </p>
+        <div style={{
+          fontWeight: "bold",
+          fontSize: "20px",
+          lineHeight: "1.2",
+          paddingTop: "4px"
+        }}>
+          PAYMENT REQUEST FORM
+        </div>
 
-    <p className="text-[12px] text-gray-700">
-      Email: {selectedVendor?.email || "-"}{" "}
-      {selectedVendor?.website
-        ? `| Website: ${selectedVendor.website}`
-        : ""}
-   
-    </p>
-      <p className="text-[12px] text-gray-700">
-     
-    {selectedVendor?.phone_number
-        ? `Tel: ${selectedVendor.phone_number}`
-        : ""}
-    {selectedVendor?.trn
-        ? ` | TRN: ${selectedVendor.trn}`
-        : ""}
-    </p>
+      </td>
+    </tr>
 
-  </div>
+  </tbody>
+</table>
+<table
+  style={{
+    width: "100%",
+    borderCollapse: "collapse",
+    borderSpacing: 0,
+    marginTop: "10px"
+  }}
+  className="mb-3"
+>
+  <tbody>
 
-  {/* RIGHT COLUMN */}
-  <div className="p-3 leading-4">
+    <tr>
 
-    <h2 className="font-bold text-[12px] uppercase mb-1">
-      REQUEST SUMMARY
-    </h2>
-    <h1 className="font-bold text-[13px]">
-      {selectedTerm?.bc_name || header.term} {selectedProductType?.prd_types || header.product_types} Fees
-    </h1>
-   <p className="text-[12px] text-gray-700">
-   {selectedTransactionType?.tt_code === "TT003" ? (
-    header.product_types === "S52"
-      ? "This payment request is for a new purchase."
-      : "This payment request is for a new subscription."
-  ) : (
-    ""
-  )}
+      {/* LEFT COLUMN */}
+      <td
+        style={{
+          width: "50%",
+          verticalAlign: "top",
+          border: "1px solid #9ca3af",
+          padding: "10px"
+        }}
+      >
+        <div style={{ fontWeight: "bold", fontSize: "12px" }}>
+          PAYEE / SUPPLIER
+        </div>
 
-  {selectedTransactionType?.tt_code === "TT001" &&
-    `This payment request is for the renewal of a subscription.`}
+        <div style={{ fontWeight: "bold", fontSize: "13px", marginTop: "4px" }}>
+          {selectedVendor?.vendor_name || header.vendors || "Vendor Name"}
+          {isVatApplicable ? " (VAT Included)" : ""}
+        </div>
 
-  {selectedTransactionType?.tt_code === "TT004" &&
-    `This payment request is related to the cancellation of a subscription service.`}
-     {selectedTransactionType?.tt_code === "TT005" &&
-    `This payment request is related to the transfer of a service.`}
-      {selectedTransactionType?.tt_code === "TT006" &&
-    `This payment request is related to the bill payment of a service.`}
-    </p>
-   {expiryDate && (
-  <p className="text-[12px] text-gray-700">
-    Subscription expiry on {expiryDate}
-  </p>
-)}
+        <div style={{ fontSize: "12px", color: "#374151" }}>
+          {selectedVendor?.address || "Vendor Address"}
+          {selectedVendor?.country ? `, ${selectedVendor?.country}` : ""}
+        </div>
 
-    <p className="text-[12px] text-gray-700">
-      
-      Paid by {paid_by} using {(() => {
-        let paidBy = (paid_by || "")
-          .toString()
-          .trim()
-          .toUpperCase();
+        <div style={{ fontSize: "12px", color: "#374151" }}>
+          Email: {selectedVendor?.email || "-"}
+          {selectedVendor?.website ? ` | Website: ${selectedVendor.website}` : ""}
+        </div>
 
-        const card = creditCards.find(
-          c =>
-            (c.card_holder_name || "")
-              .toString()
-              .trim()
-              .toUpperCase() === paidBy
-        );
+        <div style={{ fontSize: "12px", color: "#374151" }}>
+          {selectedVendor?.phone_number ? `Tel: ${selectedVendor.phone_number}` : ""}
+          {selectedVendor?.trn ? ` | TRN: ${selectedVendor.trn}` : ""}
+        </div>
+      </td>
 
-        return card?.card_brand || card?.card_brand || "";
-      })()} ending with ****
-      {(() => {
-        let paidBy = (paid_by || "")
-          .toString()
-          .trim()
-          .toUpperCase();
+      {/* RIGHT COLUMN */}
+      <td
+        style={{
+          width: "50%",
+          verticalAlign: "top",
+          border: "1px solid #9ca3af",
+          padding: "10px"
+        }}
+      >
+        <div style={{ fontWeight: "bold", fontSize: "12px" }}>
+          REQUEST SUMMARY
+        </div>
 
-        const card = creditCards.find(
-          c =>
-            (c.card_holder_name || "")
-              .toString()
-              .trim()
-              .toUpperCase() === paidBy
-        );
+        <div style={{ fontWeight: "bold", fontSize: "13px", marginTop: "4px" }}>
+          {selectedTerm?.bc_name || header.term}{" "}
+          {selectedProductType?.prd_types || header.product_types} Fees
+        </div>
 
-        return card?.card_number || card?.card_4number || "";
-      })()}
-    </p>
+        <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px" }}>
+          {selectedTransactionType?.tt_code === "TT003"
+            ? header.product_types === "S52"
+              ? "This payment request is for a new purchase."
+              : "This payment request is for a new subscription."
+            : ""}
 
-  </div>
+          {selectedTransactionType?.tt_code === "TT001" &&
+            "This payment request is for the renewal of a subscription."}
 
-</div>
+          {selectedTransactionType?.tt_code === "TT004" &&
+            "This payment request is related to the cancellation of a subscription service."}
+
+          {selectedTransactionType?.tt_code === "TT005" &&
+            "This payment request is related to the transfer of a service."}
+
+          {selectedTransactionType?.tt_code === "TT006" &&
+            "This payment request is related to the bill payment of a service."}
+        </div>
+
+        {expiryDate && (
+          <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px" }}>
+            Subscription expiry on {expiryDate}
+          </div>
+        )}
+
+        <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px" }}>
+          Paid by {paid_by} using {(() => {
+            let paidBy = (paid_by || "").toString().trim().toUpperCase();
+
+            const card = creditCards.find(
+              c =>
+                (c.card_holder_name || "").toString().trim().toUpperCase() ===
+                paidBy
+            );
+
+            return card?.card_brand || "";
+          })()} ending with ****
+          {(() => {
+            let paidBy = (paid_by || "").toString().trim().toUpperCase();
+
+            const card = creditCards.find(
+              c =>
+                (c.card_holder_name || "").toString().trim().toUpperCase() ===
+                paidBy
+            );
+
+            return card?.card_number || card?.card_4number || "";
+          })()}
+        </div>
+
+      </td>
+
+    </tr>
+
+  </tbody>
+</table>
+
 </div>
 <div id="print-body">
 <table className="w-full border border-black border-collapse mb-3 text-[10px]">
@@ -1096,6 +1168,8 @@ const currentDate = new Date();
                   key={i}
                   className={`${rowHeight} flex flex-col items-end py-1`}
                 >
+                  
+                  
                   <div>
                     {formatDecimal(mainAmount)}
                   </div>
