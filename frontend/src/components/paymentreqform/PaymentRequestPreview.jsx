@@ -718,7 +718,7 @@ const currentDate = new Date();
 
       <td style={{ width: "40%", textAlign: "right", verticalAlign: "top" }}>
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <div id="barcode-container"></div>
+          <svg ref={barcodeRef} style={{ display: "block" }} />
         </div>
       </td>
     </tr>
