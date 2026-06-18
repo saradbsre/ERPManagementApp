@@ -23,6 +23,7 @@ const headers = Array.isArray(data?.header)
 const header = headers[0] || {};
 // console.log("Using header:", header);
 const details = data?.details || {};
+console.log("Details:", details);
 const isAdvertisingEnabled =
   details?.is_advertising === true ||
   details?.is_advertising === 1 ||
@@ -35,7 +36,7 @@ const remarksList = headers
   .map(h => h.remarks)
   .filter(Boolean);
 
-const remarks = remarksList.join(", ");
+const remarks = details?.remarks || "";
 const currencyNames = {
   // Currency codes
   AED: "DIRHAMS",
@@ -416,35 +417,40 @@ const getPlanName = (planCode) => {
 };
 
 function handlePrint() {
-  const printWindow = window.open("", "", "width=1200,height=900");
+  // ================= BARCODE FIX =================
+  const svgElement = barcodeRef.current;
 
-  const header =
+  let barcodeImage = "";
+
+  if (svgElement) {
+    const svgString = new XMLSerializer().serializeToString(svgElement);
+
+    barcodeImage =
+      "data:image/svg+xml;base64," +
+      window.btoa(unescape(encodeURIComponent(svgString)));
+  }
+
+  // ================= HEADER =================
+  let header =
     document.getElementById("print-header")?.innerHTML || "";
 
+  // Replace SVG barcode with IMAGE
+  header = header.replace(
+    /<svg[\s\S]*?<\/svg>/,
+    `<img src="${barcodeImage}" style="width:116px;height:55px;display:block;" />`
+  );
+
+  // ================= BODY & FOOTER =================
   const body =
     document.getElementById("print-body")?.innerHTML || "";
 
   const footer =
     document.getElementById("approval-footer")?.innerHTML || "";
 
-  const now = new Date();
+  // ================= PRINT WINDOW =================
+  const printWindow = window.open("", "", "width=1200,height=900");
 
-  const dd = String(now.getDate()).padStart(2, "0");
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const yyyy = now.getFullYear();
-
-  let hh = now.getHours();
-  const min = String(now.getMinutes()).padStart(2, "0");
-  const ss = String(now.getSeconds()).padStart(2, "0");
-  const ampm = hh >= 12 ? "PM" : "AM";
-
-  hh = hh % 12;
-  hh = hh ? hh : 12;
-  hh = String(hh).padStart(2, "0");
-
-  const formattedDateTime =
-    `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss} ${ampm}`;
-
+  // ================= HTML =================
   printWindow.document.write(`
     <html>
       <head>
@@ -477,9 +483,7 @@ function handlePrint() {
             display: table-header-group;
           }
 
-          tr,
-          td,
-          th {
+          tr, td, th {
             page-break-inside: avoid;
           }
 
@@ -499,7 +503,7 @@ function handlePrint() {
           @media print {
             @page {
               @bottom-left {
-                content: "User: ${activeUser?.name || ""} | Printed: ${formattedDateTime}";
+                content: "User: ${activeUser?.name || ""} | Printed: ${new Date().toLocaleString()}";
                 font-size: 9px;
                 font-family: "Times New Roman", serif;
               }
@@ -515,7 +519,6 @@ function handlePrint() {
       </head>
 
       <body>
-
         <div class="print-wrapper">
 
           <table>
@@ -545,13 +548,13 @@ function handlePrint() {
           </div>
 
         </div>
-
       </body>
     </html>
   `);
 
   printWindow.document.close();
 
+  // ================= PRINT LOGIC =================
   printWindow.onload = function () {
     setTimeout(() => {
       const wrapper =
@@ -563,14 +566,10 @@ function handlePrint() {
       const blankSpace =
         printWindow.document.getElementById("blankSpace");
 
-      const pageHeight = 1050; // A4 printable height approx
-
+      const pageHeight = 1050;
       const totalHeight = wrapper.scrollHeight;
-
       const totalPages = Math.ceil(totalHeight / pageHeight);
 
-      console.log("========== PRINT DEBUG ==========");
-      console.log("Total Content Height:", totalHeight);
       console.log("Total Pages:", totalPages);
 
       let lastPageUsedSpace = totalHeight % pageHeight;
@@ -578,37 +577,12 @@ function handlePrint() {
 
       const lastPageRemainingSpace = pageHeight - lastPageUsedSpace;
 
-      console.log("Last Page Used Space:", lastPageUsedSpace);
-      console.log("Last Page Remaining Space:", lastPageRemainingSpace);
-
-      for (let i = 1; i <= totalPages; i++) {
-        const start = (i - 1) * pageHeight;
-
-        const usedSpace =
-          i === totalPages
-            ? totalHeight - start
-            : pageHeight;
-
-        const remainingSpace = pageHeight - usedSpace;
-
-        console.log(`Page ${i}:`);
-        console.log("  Used Space:", usedSpace);
-        console.log("  Remaining Space:", remainingSpace);
-      }
-
-      console.log("=================================");
-
-      // ✅ FINAL LOGIC
       if (totalPages > 1 && lastPageRemainingSpace < 100) {
         continueMsg.style.display = "block";
-      } else {
-        continueMsg.style.display = "none";
       }
 
       if (totalPages > 1) {
         blankSpace.style.display = "block";
-      } else {
-        blankSpace.style.display = "none";
       }
 
       setTimeout(() => {
@@ -717,7 +691,10 @@ const currentDate = new Date();
       </td>
 
       <td style={{ width: "40%", textAlign: "right", verticalAlign: "top" }}>
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+       <div
+          id="barcode-container"
+          style={{ display: "flex", justifyContent: "flex-end" }}
+        >
           <svg ref={barcodeRef} style={{ display: "block" }} />
         </div>
       </td>
@@ -725,16 +702,17 @@ const currentDate = new Date();
 
     {/* ================= TITLE ROW ================= */}
     <tr>
-      <td colSpan="2" style={{ textAlign: "center", padding: "2px 0" }}>
+      <td colSpan="2" style={{ textAlign: "center", padding: "2px 0" }} >
 
-        <div style={{ borderTop: "1px solid #000" }} />
+        <div style={{ borderTop: "1px solid #000" }} className="mt-1" />
 
         <div style={{
           fontWeight: "bold",
           fontSize: "20px",
           lineHeight: "1.2",
           paddingTop: "4px"
-        }}>
+        }} className="mt-2">
+
           PAYMENT REQUEST FORM
         </div>
 
@@ -769,22 +747,22 @@ const currentDate = new Date();
           PAYEE / SUPPLIER
         </div>
 
-        <div style={{ fontWeight: "bold", fontSize: "13px", marginTop: "4px" }}>
+        <div style={{ fontWeight: "bold", fontSize: "13px", marginTop: "4px", lineHeight: "1.2" }}>
           {selectedVendor?.vendor_name || header.vendors || "Vendor Name"}
           {isVatApplicable ? " (VAT Included)" : ""}
         </div>
 
-        <div style={{ fontSize: "12px", color: "#374151" }}>
+        <div style={{ fontSize: "12px", color: "#374151", lineHeight: "1.2" }}>
           {selectedVendor?.address || "Vendor Address"}
           {selectedVendor?.country ? `, ${selectedVendor?.country}` : ""}
         </div>
 
-        <div style={{ fontSize: "12px", color: "#374151" }}>
+        <div style={{ fontSize: "12px", color: "#374151", lineHeight: "1.2" }}>
           Email: {selectedVendor?.email || "-"}
           {selectedVendor?.website ? ` | Website: ${selectedVendor.website}` : ""}
         </div>
 
-        <div style={{ fontSize: "12px", color: "#374151" }}>
+        <div style={{ fontSize: "12px", color: "#374151", lineHeight: "1.2" }}>
           {selectedVendor?.phone_number ? `Tel: ${selectedVendor.phone_number}` : ""}
           {selectedVendor?.trn ? ` | TRN: ${selectedVendor.trn}` : ""}
         </div>
@@ -803,12 +781,12 @@ const currentDate = new Date();
           REQUEST SUMMARY
         </div>
 
-        <div style={{ fontWeight: "bold", fontSize: "13px", marginTop: "4px" }}>
+        <div style={{ fontWeight: "bold", fontSize: "13px", marginTop: "4px" , lineHeight: "1"}}>
           {selectedTerm?.bc_name || header.term}{" "}
           {selectedProductType?.prd_types || header.product_types} Fees
         </div>
 
-        <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px" }}>
+        <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px", lineHeight: "1" }}>
           {selectedTransactionType?.tt_code === "TT003"
             ? header.product_types === "S52"
               ? "This payment request is for a new purchase."
@@ -829,12 +807,12 @@ const currentDate = new Date();
         </div>
 
         {expiryDate && (
-          <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px" }}>
+          <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px", lineHeight: "1" }}>
             Subscription expiry on {expiryDate}
           </div>
         )}
 
-        <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px" }}>
+        <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px", lineHeight: "1" }}>
           Paid by {paid_by} using {(() => {
             let paidBy = (paid_by || "").toString().trim().toUpperCase();
 
@@ -867,6 +845,13 @@ const currentDate = new Date();
 </table>
 
 </div>
+
+
+
+
+
+
+
 <div id="print-body">
 <table className="w-full border border-black border-collapse mb-3 text-[10px]">
 
@@ -1006,7 +991,7 @@ const currentDate = new Date();
     {/* TITLE */}
     <tr className="bg-gray-200 text-black">
       <th
-        colSpan={7}
+        colSpan={8}
         className="text-left px-2 py-1 border border-gray-800 text-[14px] font-bold"
       >
         INVOICE / PAYMENT PARTICULARS
@@ -1020,29 +1005,34 @@ const currentDate = new Date();
         S/N
       </th>
 
-      <th className="border border-gray-800 px-2 py-1 w-[15%]">
+      <th className="border border-gray-800 px-2 py-1 w-[11%]">
         INVOICE / PO DOC DATE
       </th>
 
-      <th className="border border-gray-800 px-2 py-1 w-[15%]">
+      <th className="border border-gray-800 px-2 py-1 w-[11%]">
         INVOICE / PO DOC NO
       </th>
 
       <th className="border border-gray-800 px-2 py-1">
         PRODUCT DESCRIPTION
       </th>
+       <th className="border border-gray-800 px-1 py-1 w-[18%]">
+       NARRATION
+      </th>
 
-      <th className="border border-gray-800 px-1 py-1 w-[10%] text-right">
+      <th className="border border-gray-800 px-1 py-1 w-[8%] text-right">
         AMOUNT ({selectedCurrency?.currency || header.currency})
       </th>
 
-      <th className="border border-gray-800 px-1 py-1 w-[10%] text-right">
+      <th className="border border-gray-800 px-1 py-1 w-[8%] text-right">
         VAT AMOUNT ({selectedCurrency?.currency || header.currency})
       </th>
 
-      <th className="border border-gray-800 px-1 py-1 w-[10%] text-right">
+      <th className="border border-gray-800 px-1 py-1 w-[8%] text-right">
         TOTAL AMOUNT ({selectedCurrency?.currency || header.currency})
       </th>
+
+      
 
     </tr>
 
@@ -1050,7 +1040,7 @@ const currentDate = new Date();
 
 <tbody>
   {(() => {
-    const rowHeight = "min-h-[38px]";
+    const rowHeight = "min-h-[40px]";
 
     return (
       <>
@@ -1093,7 +1083,7 @@ const currentDate = new Date();
           </td>
 
           {/* PRODUCT DESCRIPTION */}
-         <td className="border border-gray-800 p-2 align-top text-left">
+         <td className="border border-gray-800 p-1 align-top text-left">
   {headers?.map((item, i) => {
     const product = products?.find(
       p =>
@@ -1120,6 +1110,23 @@ const currentDate = new Date();
       *** SPACE INTENTIONALLY LEFT BLANK ***
     </div>
   )}
+</td>
+
+          <td className="border border-gray-800 p-2 align-top text-left">
+  {headers?.map((item, i) => (
+    <div
+      key={i}
+      className={`${rowHeight} flex flex-col py-1`}
+    >
+      {item?.remarks ? (
+        item.remarks
+      ) : (
+        <div className="flex items-center justify-center w-full h-full text-gray-500">
+          -
+        </div>
+      )}
+    </div>
+  ))}
 </td>
 
           {/* AMOUNT */}
@@ -1183,13 +1190,14 @@ const currentDate = new Date();
               );
             })}
           </td>
+         
 
         </tr>
 
         {/* TOTAL */}
         <tr className="bg-[#e5e7eb]">
           <td
-            colSpan={4}
+            colSpan={5}
             className="border border-gray-800 p-2 font-bold text-right"
           >
             TOTAL
@@ -1206,6 +1214,7 @@ const currentDate = new Date();
           <td className="border border-gray-800 p-2 text-right font-bold text-[12px]">
             {formatDecimal(grandTotal)}
           </td>
+          
         </tr>
 
         {/* AMOUNT IN WORDS */}
@@ -1218,7 +1227,7 @@ const currentDate = new Date();
           </td>
 
           <td
-            colSpan={4}
+            colSpan={5}
             className="border border-gray-800 p-2 font-bold"
           >
             {numberToWords(

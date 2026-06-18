@@ -1141,6 +1141,7 @@ const handleGenerate = async () => {
     exchange_rate,
     userid: activeUserEmail,
     is_advertising: isAdvertising ? 1 : 0,
+    remarks: form.remarks
   };
 
   setPreviewFromGenerateModal(false);
@@ -1178,7 +1179,8 @@ const handleGenerate = async () => {
     verified_by_it: "",
     verified_by: "",
     signed_by: "",
-    approved_by: ""
+    approved_by: "",
+    remarks: "",
   });
 };
 
@@ -1240,6 +1242,7 @@ const handleDraftPreviewFromModal = () => {
     prf_date: new Date().toISOString(),
     sysdate: new Date().toISOString(),
     is_advertising: isAdvertising ? 1 : 0,
+    remarks: form.remarks || "",
   };
  
   const paidByName =
@@ -5732,13 +5735,13 @@ onDrop={() => handleDrop(col.column_name)}
                 <td className="p-3 border-b min-w-[220px]">
 
                  <input
-  value={item.product || ""}
-  onChange={(e) =>
-    handleItemChange(i, "product", e.target.value)
-  }
-  readOnly
-  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium"
-/>
+                  value={item.product || ""}
+                  onChange={(e) =>
+                    handleItemChange(i, "product", e.target.value)
+                  }
+                  readOnly
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium"
+                />
 
                 </td>
 
@@ -5750,31 +5753,6 @@ onDrop={() => handleDrop(col.column_name)}
                     step="0.01"
                     readOnly
                     value={Number(item.amount || 0).toFixed(2)}
-                    // onChange={(e) => {
-
-                    //   const amount =
-                    //     parseFloat(e.target.value || 0);
-
-                    //   const vat =
-                    //     (amount * parseFloat(vatPercent || 0)) / 100;
-
-                    //   const total =
-                    //     amount + vat;
-
-                    //   const updatedItems = [...modalItems];
-
-                    //   updatedItems[i].amount =
-                    //     amount.toFixed(2);
-
-                    //   updatedItems[i].vat =
-                    //     vat.toFixed(2);
-
-                    //   updatedItems[i].total_amount =
-                    //     total.toFixed(2);
-
-                    //   setModalItems(updatedItems);
-
-                    // }}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-right focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none"
                   />
 
@@ -5802,18 +5780,6 @@ onDrop={() => handleDrop(col.column_name)}
 
                 </td>
 
-                {/* ACTION */}
-                {/* <td className="p-3 border-b text-center">
-
-                  <button
-                    onClick={() => removeRow(i)}
-                    className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-sm transition"
-                  >
-                    Delete
-                  </button>
-
-                </td> */}
-
               </tr>
 
             ))}
@@ -5825,7 +5791,25 @@ onDrop={() => handleDrop(col.column_name)}
       </div>
 
     </div>
+    {/* ================= REMARKS ================= */}
+<div className="bg-white border border-slate-200 rounded-xl p-4 flex gap-3">
+  <label className="text-sm font-medium text-slate-700 mt-2 whitespace-nowrap">
+    Remarks :
+  </label>
 
+  <textarea
+    value={form.remarks || ""}
+    onChange={(e) =>
+      setForm((prev) => ({
+        ...prev,
+        remarks: e.target.value,
+      }))
+    }
+    rows={2}
+    placeholder="Enter remarks"
+    className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+  />
+</div>
     {/* ================= APPROVAL ================= */}
   <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
 
