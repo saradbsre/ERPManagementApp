@@ -375,7 +375,7 @@ const selectedTransactionType = Array.isArray(transactionType) && header.transac
 ) : null;
 
 const selectedProductType = Array.isArray(productTypes) && header.product_types ? productTypes.find(
-    (pt) => (pt.prdtype_code || "").toString().trim().toUpperCase() === header.product_types.toString().trim().toUpperCase()
+    (pt) => (pt.pt_code || "").toString().trim().toUpperCase() === header.product_types.toString().trim().toUpperCase()
 ) : null;
 
 
@@ -394,11 +394,11 @@ const getProductName = (productCode) => {
 const getServiceName = (serviceCode) => {
   const service = productTypes?.find(
     s =>
-      (s.prdtype_code || "").toUpperCase() ===
+      (s.pt_code || "").toUpperCase() ===
       (serviceCode || "").toUpperCase()
   );
 
-  return service?.prdtype_name || serviceCode;
+  return service?.prd_types || serviceCode;
 };
 
 const getPlanName = (planCode) => {
@@ -778,7 +778,7 @@ const currentDate = new Date();
 
         <div style={{ fontWeight: "bold", fontSize: "13px", marginTop: "4px" , lineHeight: "1"}}>
           {selectedTerm?.bc_name || header.term}{" "}
-          {selectedProductType?.prdtype_name || header.product_types} Fees
+          {selectedProductType?.prd_types || header.product_types} Fees
         </div>
 
         <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px", lineHeight: "1" }}>
@@ -1039,7 +1039,7 @@ const currentDate = new Date();
 
     return (
       <>
-        <tr className="text-center align-top h-[250px] bg-[#f8fafc] border border-black-800">
+        <tr className="text-center align-top h-[230px] bg-[#f8fafc] border border-black-800">
 
           {/* S/N */}
           <td className="border border-gray-800 p-2 align-top ">
