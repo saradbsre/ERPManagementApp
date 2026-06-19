@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import JsBarcode from "jsbarcode";
 import { getMasterData, createPaymentRequest, incrementPRFExportCount  } from "../../api/api";
 export default function PaymentRequestPreview({ data, onBack, disablePrint = false }) {
-  console.log("PaymentRequestPreview data:", data);
+ // console.log("PaymentRequestPreview data:", data);
   if (!data) {
     return (
       <div className="p-10 text-center text-gray-500">
@@ -23,7 +23,7 @@ const headers = Array.isArray(data?.header)
 const header = headers[0] || {};
 // console.log("Using header:", header);
 const details = data?.details || {};
-console.log("Details:", details);
+//console.log("Details:", details);
 const isAdvertisingEnabled =
   details?.is_advertising === true ||
   details?.is_advertising === 1 ||
@@ -270,7 +270,7 @@ useEffect(() => {
 }, []);
 
 
-console.log("vendor:", vendor);
+//console.log("vendor:", vendor);
 const selectedVendor =
   Array.isArray(vendor) && header.vendors
     ? vendor.find((v) => {
@@ -296,8 +296,7 @@ const selectedVendor =
       })
     : null;
 
-console.log("Selected Vendor:", selectedVendor);
-console.log("header.vendors value:", header.vendors); 
+
 const isVatApplicable = selectedVendor ? selectedVendor.is_vat : false;
 
 
@@ -327,7 +326,7 @@ const selectedCompany =
         );
       })
     : null;
-console.log("Selected Company:", selectedCompany);
+
 
 
 
@@ -366,9 +365,7 @@ const selectedTerm = Array.isArray(terms) && header.term ? terms.find(
 const selectedCostCenter = Array.isArray(costCenters) && header.cost_center ? costCenters.find(
     (cc) => (cc.dv_code || "").toString().trim().toUpperCase() === header.cost_center.toString().trim().toUpperCase()   
 ) : null;
-console.log("header.cost_center value:", header.cost_center);
-console.log("Cost Centers:", costCenters);
-console.log("Selected Cost Center:", selectedCostCenter);
+
 const selectedDepartment = Array.isArray(departments) && header.department ? departments.find(
     (d) => (d.dep_code || "").toString().trim().toUpperCase() === header.department.toString().trim().toUpperCase()
 ) : null;
@@ -378,11 +375,9 @@ const selectedTransactionType = Array.isArray(transactionType) && header.transac
 ) : null;
 
 const selectedProductType = Array.isArray(productTypes) && header.product_types ? productTypes.find(
-    (pt) => (pt.pt_code || "").toString().trim().toUpperCase() === header.product_types.toString().trim().toUpperCase()
+    (pt) => (pt.prdtype_code || "").toString().trim().toUpperCase() === header.product_types.toString().trim().toUpperCase()
 ) : null;
-console.log("header.product_types value:", header);
-console.log(" Product Type:", productTypes);
-console.log("Selected Product Type:", selectedProductType); 
+
 
 
 
@@ -399,11 +394,11 @@ const getProductName = (productCode) => {
 const getServiceName = (serviceCode) => {
   const service = productTypes?.find(
     s =>
-      (s.pt_code || "").toUpperCase() ===
+      (s.prdtype_code || "").toUpperCase() ===
       (serviceCode || "").toUpperCase()
   );
 
-  return service?.prd_types || serviceCode;
+  return service?.prdtype_name || serviceCode;
 };
 
 const getPlanName = (planCode) => {
@@ -570,7 +565,7 @@ function handlePrint() {
       const totalHeight = wrapper.scrollHeight;
       const totalPages = Math.ceil(totalHeight / pageHeight);
 
-      console.log("Total Pages:", totalPages);
+    
 
       let lastPageUsedSpace = totalHeight % pageHeight;
       if (lastPageUsedSpace === 0) lastPageUsedSpace = pageHeight;
@@ -783,7 +778,7 @@ const currentDate = new Date();
 
         <div style={{ fontWeight: "bold", fontSize: "13px", marginTop: "4px" , lineHeight: "1"}}>
           {selectedTerm?.bc_name || header.term}{" "}
-          {selectedProductType?.prd_types || header.product_types} Fees
+          {selectedProductType?.prdtype_name || header.product_types} Fees
         </div>
 
         <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px", lineHeight: "1" }}>
@@ -1016,7 +1011,7 @@ const currentDate = new Date();
       <th className="border border-gray-800 px-2 py-1">
         PRODUCT DESCRIPTION
       </th>
-       <th className="border border-gray-800 px-1 py-1 w-[18%]">
+       <th className="border border-gray-800 px-1 py-1 w-[15%]">
        NARRATION
       </th>
 
@@ -1040,7 +1035,7 @@ const currentDate = new Date();
 
 <tbody>
   {(() => {
-    const rowHeight = "min-h-[40px]";
+    const rowHeight = "min-h-[38px]";
 
     return (
       <>
@@ -1083,7 +1078,7 @@ const currentDate = new Date();
           </td>
 
           {/* PRODUCT DESCRIPTION */}
-         <td className="border border-gray-800 p-1 align-top text-left">
+         <td className="border border-gray-800 p-2 align-top text-left">
   {headers?.map((item, i) => {
     const product = products?.find(
       p =>
@@ -1459,25 +1454,26 @@ const currentDate = new Date();
             Back
           </button>
 
-          <button
-           onClick={() => {
-  if (disablePrint) return;
-  handlePrint();
-  handleExportPrf(details?.prf_num);
-}}
-            disabled={disablePrint}
-            className="
-              px-5 py-2
-              bg-blue-600
-              text-white
-              rounded
-              hover:bg-blue-700
-              disabled:bg-gray-400
-              disabled:cursor-not-allowed
-            "
-          >
-            Print
-          </button>
+        <button
+  onClick={() => {
+    if (disablePrint || !header?.is_posted) return;
+
+    handlePrint();
+    handleExportPrf(details?.prf_num);
+  }}
+  disabled={disablePrint || !header?.is_posted}
+  className="
+    px-5 py-2
+    bg-blue-600
+    text-white
+    rounded
+    hover:bg-blue-700
+    disabled:bg-gray-400
+    disabled:cursor-not-allowed
+  "
+>
+  Print
+</button>
 
         </div>
       
