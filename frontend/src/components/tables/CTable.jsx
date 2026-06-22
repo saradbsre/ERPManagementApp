@@ -739,19 +739,19 @@ const applyTermMultiplier = (value, term) => {
 
 useEffect(() => {
   const amount = Number(newRow.total_amount);
-
+  console.log("starting currency calculation with amount:", amount);
   const currency =
-    typeof newRow.currency === "object"
-      ? newRow.currency?.value
-      : newRow.currency;
-
+    typeof newRow.curr_code === "object"
+      ? newRow.curr_code?.value
+      : newRow.curr_code;
+  console.log("currency:", currency);
   if (isNaN(amount) || !currency) return;
 
 
   const calc = calculateCost(
     amount,
     currency,
-    newRow.term
+    newRow.billcycle_code
   );
 
   if (calc == null || isNaN(calc)) return;
@@ -761,15 +761,15 @@ useEffect(() => {
     total_amount_aed: calc.toFixed(2)
   }));
 
-}, [newRow.amount, newRow.currency, newRow.term]);
+}, [newRow.amount, newRow.curr_code, newRow.billcycle_code]);
 
 useEffect(() => {
   if (!editRowId) return;
-  if (!editRow.total_amount || !editRow.currency) return;
+  if (!editRow.total_amount || !editRow.curr_code) return;
   const calc = calculateCost(
     editRow.total_amount,
-    editRow.currency,
-    editRow.term
+    editRow.curr_code,
+    editRow.billcycle_code
   );
 
   if (calc === null) return;
@@ -779,7 +779,7 @@ useEffect(() => {
     total_amount_aed: calc.toFixed(2)
   }));
 
-}, [editRow.total_amount, editRow.currency, editRow.term]);
+}, [editRow.total_amount, editRow.curr_code, editRow.billcycle_code]);
 
  const formatForInput = (value) => {
   if (!value) return "";
@@ -1074,12 +1074,12 @@ const rowCurrency = (
 //console.log("Row Currency:", rowCurrency);
 
 const selectedCurrency = currencies.find((c) => {
-  const currencyCode = (c.currency_code || "")
+  const currencyCode = (c.curr_code || "")
     .toString()
     .trim()
     .toUpperCase();
 
-  const currencyName = (c.currency || "")
+  const currencyName = (c.curr_name || "")
     .toString()
     .trim()
     .toUpperCase();
@@ -1092,7 +1092,7 @@ const selectedCurrency = currencies.find((c) => {
 
 // console.log("Selected Currency:", selectedCurrency);
 // console.log("Selected currency for PRF generation:", selectedCurrency);
-const exchange_rate = selectedCurrency?.exchange_rate || 1;
+const exchange_rate = selectedCurrency?.curr_exchange_rate || 1;
 //console.log("exchange_rate:", exchange_rate, "for currency:", selectedCurrency);
 const loadPreviewData = async (prfNum) => {
   const res = await getPreviewPRF(prfNum);
@@ -1595,7 +1595,7 @@ const loadModule = async (
   }
 };
 
-const isGenerated = rows.some(r => !!r.prf_generate);
+const isGenerated = rows.some(r => !!r.prf_num);
 //console.log("Is Generated row:", isGenerated);
 
 useEffect(() => {
@@ -1641,142 +1641,73 @@ const fetchMasterDataForColumn = async (master) => {
 };
 
 const getMasterOptions = (col, searchText = "") => {
-
-  const selectedVendor =
-    newRow?.vendors || editRow?.vendors || null;
-//console.log("Selected vendor for master options:", selectedVendor);
-// console.log("newRow:", newRow?.vendors, "editRow:", editRow?.vendors);
-
-if (col.column_name === "products") {
-  const selectedVendorValue = String(selectedVendor || "")
-    .trim()
-    .toLowerCase();
-
-  const currentProductValue = String(
-    newRow?.products || editRow?.products || ""
-  )
-    .trim();
-
+  const selectedVendor = newRow?.vend_code || editRow?.vend_code || null;
+  if (col.column_name === "prd_code") {
+  const selectedVendorValue = String(selectedVendor || "").trim().toLowerCase();
+  const currentProductValue = String( newRow?.prd_code || editRow?.prd_code || "").trim().toLowerCase();
   let products = [];
-
   if (selectedVendorValue && serviceProviders?.length) {
-    products = serviceProviders.filter((sp) => {
-      const vendorCode = String(sp.vendor || "")
-        .trim()
-        .toLowerCase();
-
-      // If vendor_name is missing in products, resolve from vendors master
-      const vendorNameFromMaster =
-        vendors.find(
-          (v) =>
-            String(v.vendor_code || "").trim().toLowerCase() === vendorCode
-        )?.vendor_name || "";
-
-      const vendorName = String(
-        sp.vendor_name || vendorNameFromMaster || ""
-      )
-        .trim()
-        .toLowerCase();
-
-      return (
-        selectedVendorValue === vendorCode ||
-        selectedVendorValue === vendorName
-      );
+      products = serviceProviders.filter((sp) => {
+      const vendorCode = String(sp.vend_code || "").trim().toLowerCase();
+      const vendorNameFromMaster =vendors.find( (v) =>
+            String(v.vend_code || "").trim().toLowerCase() === vendorCode)?.vend_name || "";
+      const vendorName = String( sp.vend_name || vendorNameFromMaster || "" ).trim().toLowerCase();
+      return ( selectedVendorValue === vendorCode || selectedVendorValue === vendorName );
     });
-
     // Fallback: if selected vendor has no mapped products, show all products
-    if (products.length === 0) {
-      products = [...serviceProviders];
-    }
-  } else if (serviceProviders?.length) {
-    products = [...serviceProviders];
-  }
-
-  const unique = products.filter(
-    (item, index, self) =>
-      index === self.findIndex((p) => p.prd_code === item.prd_code)
-  );
-
+    if (products.length === 0) { products = [...serviceProviders];}
+  } else if (serviceProviders?.length) { products = [...serviceProviders]; }
+  const unique = products.filter((item, index, self) => index === self.findIndex((p) => p.prd_code === item.prd_code) );
   let mapped = unique.map((sp) => ({
     key: sp.prd_code,
     value: sp.prd_name,
   }));
-
   // Keep current value visible in edit/create even if not in mapped list
   if (
     currentProductValue &&
-    !mapped.some(
-      (o) =>
+    !mapped.some( (o) =>
         String(o.value || "").toLowerCase() === currentProductValue.toLowerCase() ||
-        String(o.key || "").toLowerCase() === currentProductValue.toLowerCase()
-    )
+        String(o.key || "").toLowerCase() === currentProductValue.toLowerCase() )
   ) {
-    mapped = [
-      { key: currentProductValue, value: currentProductValue },
-      ...mapped,
-    ];
+    mapped = [ { key: currentProductValue, value: currentProductValue },
+      ...mapped, ];
   }
-
   return mapped;
 }
 
-if (col.column_name === "product_types") {
-
- // console.log("editRow.products", editRow.products);
-  const selectedProduct =
-    newRow?.products ||
-    editRow?.products ||
-    null;
-    
-
-
-  // =========================
-  // FILTER SERVICES BY PRODUCT
-  // =========================
+if (col.column_name === "prdtype_code") {
+  const selectedProduct = newRow?.prd_code ||  editRow?.prd_code ||  null;
+    //console.log("Selected product for service filtering:", selectedProduct);
   if (selectedProduct && serviceProviders?.length) {
-
-    // Find provider rows matching selected product code
 const matchedProviders = serviceProviders.filter((sp) => {
   const selected = String(selectedProduct || "").trim().toLowerCase();
-
   const code = String(sp.prd_code || "").trim().toLowerCase();
   const name = String(sp.prd_name || "").trim().toLowerCase();
-
   return selected === code || selected === name;
 });
-
-
-    // Get service codes
-    const serviceIds = matchedProviders.map(
-      sp => String(sp.pt_code)
-    );
-
-   
-
-    // Match service master
-    const matchedServices = serviceTypes.filter(
-      st =>
-        serviceIds.includes(
-          String(st.pt_code)
+  const serviceIds = matchedProviders.map( sp => String(sp.prdtype_code));
+   //console.log("Service type codes from matched providers:", serviceIds);
+    const matchedServices = serviceTypes.filter( st => serviceIds.includes(
+          String(st.prdtype_code)
         )
     );
-
+ //console.log("Matched service types for product:", matchedServices);
   
 
-    // Remove duplicates by pt_code
+    // Remove duplicates by prdtype_code
     const uniqueServices = matchedServices.filter(
       (item, index, self) =>
         index ===
         self.findIndex(
           s =>
-            s.pt_code ===
-            item.pt_code
+            s.prdtype_code ===
+            item.prdtype_code
         )
     );
 
     return uniqueServices.map(st => ({
-      key: st.pt_code,   // S01
-      value: st.prd_types // Subscriptions
+      key: st.prdtype_code,   // S01
+      value: st.prdtype_name // Subscriptions
     }));
   }
 
@@ -1784,8 +1715,8 @@ const matchedProviders = serviceProviders.filter((sp) => {
   // FALLBACK ALL SERVICES
   // =========================
   return serviceTypes.map(st => ({
-    key: st.pt_code,    // S01
-    value: st.prd_types   // Subscriptions
+    key: st.prdtype_code,    // S01
+    value: st.prdtype_name   // Subscriptions
   }));
 }
 
@@ -1795,7 +1726,7 @@ const matchedProviders = serviceProviders.filter((sp) => {
   if (col.master && masterDataMap?.[col.master]) {
     options = [...masterDataMap[col.master]];
   }
-
+  console.log("masterdatamap ", masterDataMap);
   if (col.master1 && masterDataMap?.[col.master1]) {
     options = [...options, ...masterDataMap[col.master1]];
   }
@@ -1804,7 +1735,7 @@ const matchedProviders = serviceProviders.filter((sp) => {
   options = options.filter(
     (item, index, self) =>
       index === self.findIndex(
-        t => t.id === item.id
+        t => t.key === item.key
       )
   );
 
@@ -1848,7 +1779,7 @@ if (searchText) {
 
   });
 }
-
+  console.log(`Options for column ${col.column_name} :`, options);
   return options;
 };
 
@@ -1862,12 +1793,12 @@ const getExchangeRate = (currencyCode) => {
     .toUpperCase();
 
   const currency = list.find(c => {
-    const code = (c.currency_code || "")
+    const code = (c.curr_code || "")
       .toString()
       .trim()
       .toUpperCase();
 
-    const name = (c.currency || "")
+    const name = (c.curr_name || "")
       .toString()
       .trim()
       .toUpperCase();
@@ -1877,8 +1808,8 @@ const getExchangeRate = (currencyCode) => {
 
   if (searchValue === "AED") return 1;
 
-  if (currency?.exchange_rate) {
-    return 1 / Number(currency.exchange_rate);
+  if (currency?.curr_exchange_rate) {
+    return 1 / Number(currency.curr_exchange_rate);
   }
 
   return 1;
@@ -1886,6 +1817,7 @@ const getExchangeRate = (currencyCode) => {
 const calculateCost = (amount, currencyCode, term) => {
   if (!amount || !currencyCode) return null;
   const rate = getExchangeRate(currencyCode);
+  console.log(`Calculating cost: amount=${amount}, currency=${currencyCode}, term=${term}, rate=${rate}`);
   if (!rate || isNaN(rate)) return null;
   return Number(amount) * Number(rate);
 };
@@ -1932,8 +1864,14 @@ const handleNewRowChange = async (key, value, masterName) => {
 
     if (masterName === "billing_cycle") {
       sessionStorage.setItem("billing_cycle", normalized);
-      updated.term = normalized;
+      updated.billcycle_code = normalized;
     }
+
+    console.log({
+  key,
+  masterName,
+  normalized
+});
 
     return updated;
   });
@@ -2911,7 +2849,7 @@ ${groupedRows.map(group => `
   setModalItems(selectedRows.map(row => ({
     doc_date: row.date || "",
     doc_no: row.invoice_number || "",
-    product: row.products || "",
+    product: row.prd_code || "",
     amount: row.amount || "",
     vat: row.vat_amount || "",
     total_amount: row.total_amount || "",
@@ -2923,15 +2861,18 @@ ${groupedRows.map(group => `
 
 function calculateRowTotals({ amount, currency, service_provider_id }) {
   const provider = serviceProviders.find(p => p.id === service_provider_id);
-  //console.log("Calculating totals for amount:", amount, "currency:", currency, "provider ID:", service_provider_id, "provider:", provider);
-  const isVat = provider?.is_vat;
+  console.log("Calculating totals for amount:", amount, "currency:", currency, "provider ID:", service_provider_id, "provider:", provider);
+  const isVat = provider?.prd_is_vat;
   const amt = Number(amount) || 0;
   const vat = isVat ? (amt * vatPercent) / 100 : 0;
   const total = amt + vat;
 
   // Find currency value (exchange rate)
-  const currencyObj = currencies.find(c => c.code === currency);
-  const currencyValue = currencyObj ? Number(currencyObj.value) : 1;
+  const currencyObj = currencies.find(c => c.curr_code === currency);
+  console.log("Currency object found:", currencyObj);
+  console.log("currencies list:", currencies);
+  const currencyValue = currencyObj ? Number(currencyObj.curr_exchange_rate) : 1;
+  console.log("total:", total, "currencyValue:", currencyValue);
   const totalAed = total * currencyValue;
  // console.log("VAT:", vat, "Total:", total, "Total in AED:", totalAed, "Currency value:", currencyValue);
 
@@ -4086,7 +4027,7 @@ onDrop={() => handleDrop(col.column_name)}
                           <td className="px-4 py-3 whitespace-nowrap sticky left-0 z-20 bg-blue-50 w-16 min-w-16 border-r border-gray-200"></td>
 
                           {orderedVisibleColumns.map((col) => {
-
+                            
                             const isMaster = !!col.master;
 
                             const isDate =
@@ -4106,7 +4047,7 @@ onDrop={() => handleDrop(col.column_name)}
                                 : fieldValue ??
                                   newRow[col.column_name] ??
                                   "";
-
+                            
                             return (
 
                               <td
@@ -4168,7 +4109,7 @@ onDrop={() => handleDrop(col.column_name)}
                                       col.column_name === "total_amount_aed" ||
                                       col.column_name === "vat_amount" ||
                                       col.column_name === "total_amount" ||
-                                      col.column_name === "prf_generate"
+                                      col.column_name === "prf_num"
                                     }
 
                                     onChange={(e) => {
@@ -4186,7 +4127,7 @@ onDrop={() => handleDrop(col.column_name)}
 
                         const totals = calculateRowTotals({
                           amount: val,
-                          currency: newRow.currency,
+                          currency: newRow.currency || newRow.curr_code,
                           service_provider_id: serviceProviders.find(sp => {
                             //console.log("sp", sp.prd_code)
                             const matched = sp.prd_code === (newRow.products?.value || newRow.products);
@@ -4342,52 +4283,52 @@ onDrop={() => handleDrop(col.column_name)}
                                                   border-b border-gray-100
                                                 "
 
-                      onMouseDown={async () => {
+                                                  onMouseDown={async () => {
 
-                        const value =
-                          typeof option === "object"
-                            ? option.key ?? option.id ?? option.value
-                            : option;
+                                                    const value =
+                                                      typeof option === "object"
+                                                        ? option.key ?? option.id ?? option.value
+                                                        : option;
 
-                        const label =
-                          typeof option === "object"
-                            ? option.value
-                            : option;
+                                                    const label =
+                                                      typeof option === "object"
+                                                        ? option.value
+                                                        : option;
 
-                        // ✅ 1. update NEW ROW FIRST (source of truth)
-                      setNewRow(prev => ({
-                        ...prev,
-                        [col.column_name]: value,
-                        ...(col.column_name === "products"
-                          ? { product_types: "" }
-                          : {})
-                      }));
+                                                    // ✅ 1. update NEW ROW FIRST (source of truth)
+                                                  setNewRow(prev => ({
+                                                    ...prev,
+                                                    [col.column_name]: value,
+                                                    ...(col.column_name === "products"
+                                                      ? { product_types: "" }
+                                                      : {})
+                                                  }));
 
-                        // ✅ 2. UI state
-                        setInputValues(prev => ({
-                          ...prev,
-                          [col.column_name]: { key: value, value: label }
-                        }));
+                                                    // ✅ 2. UI state
+                                                    setInputValues(prev => ({
+                                                      ...prev,
+                                                      [col.column_name]: { key: value, value: label }
+                                                    }));
 
-                        // ✅ 3. DB state
-                      if (col.column_name === "product_types") {
-                        console.log("PRODUCT TYPE SELECTED", option);
-                      }
-                        handleNewRowChange(col.column_name, value, col.master);
+                                                    // ✅ 3. DB state
+                                                  if (col.column_name === "product_types") {
+                                                    console.log("PRODUCT TYPE SELECTED", option);
+                                                  }
+                                                    handleNewRowChange(col.column_name, value, col.master);
 
-                        // ✅ 4. load dependent data
-                        if (col.column_name === "products") {
+                                                    // ✅ 4. load dependent data
+                                                    if (col.column_name === "products") {
 
-                          const matchedProvider = serviceProviders.find(sp =>
-                            String(sp.product || "").trim().toLowerCase() ===
-                            String(label || "").trim().toLowerCase()
-                          );
+                                                      const matchedProvider = serviceProviders.find(sp =>
+                                                        String(sp.product || "").trim().toLowerCase() ===
+                                                        String(label || "").trim().toLowerCase()
+                                                      );
 
-                          await loadProviderPlans(matchedProvider?.id);
-                        }
+                                                      await loadProviderPlans(matchedProvider?.id);
+                                                    }
 
-                        setActiveField(null);
-                      }}
+                                                    setActiveField(null);
+                                                  }}
                                               >
 
                                                 {label}
@@ -4473,7 +4414,7 @@ onDrop={() => handleDrop(col.column_name)}
         key={row.id ?? i}
         className="group hover:bg-gray-50 transition-colors cursor-pointer"
         onDoubleClick={() => {
-          if (!row.prf_generate || isRowUnposted(row)) {
+          if (!row.prf_num || isRowUnposted(row)) {
             setEditRowId(row.id);
             setEditRow({ ...row });
             setOriginalRow(row);
@@ -4519,7 +4460,7 @@ onDrop={() => handleDrop(col.column_name)}
 
                               value = `**** **** **** ${last4}`;
                             }
-                           if (col.column_name === "prf_generate") {
+                           if (col.column_name === "prf_num") {
 
                               const val = row[col.column_name];
                               const disablePrfCheckbox = isPrfBlockedProductType(row.product_types);
@@ -5176,7 +5117,7 @@ onDrop={() => handleDrop(col.column_name)}
       )}
     </>
 
-  ) : row.prf_generate ? (
+  ) : row.prf_num ? (
 
     <>
       {isRowUnposted(row) ? (
@@ -5204,7 +5145,7 @@ onDrop={() => handleDrop(col.column_name)}
           </PermissionButton>
 
           <button
-            onClick={() => handlePost(encodeURIComponent(row.prf_generate))}
+            onClick={() => handlePost(encodeURIComponent(row.prf_num))}
             disabled={!isUserHavePrfAccess}
              className="px-3 py-1 bg-green-400 hover:bg-green-500 text-white rounded-md text-sm font-medium"
           >
@@ -5213,7 +5154,7 @@ onDrop={() => handleDrop(col.column_name)}
         </>
       ) : (
         <button
-          onClick={() => handleUnpost(encodeURIComponent(row.prf_generate))}
+          onClick={() => handleUnpost(encodeURIComponent(row.prf_num))}
           disabled={!isUserHavePrfAccess}
           className={`px-3 py-1 text-white rounded-md text-sm font-medium transition-colors
     ${
@@ -5229,7 +5170,7 @@ onDrop={() => handleDrop(col.column_name)}
        
      <button
   
-  onClick={() => handlePreview(encodeURIComponent(row.prf_generate))}
+  onClick={() => handlePreview(encodeURIComponent(row.prf_num))}
   className="btn btn-primary"
 >
   Preview
@@ -5435,7 +5376,7 @@ onDrop={() => handleDrop(col.column_name)}
       {/* Actions */}
       <div className="p-4 bg-gray-50 border-t">
 
-        {row.prf_generate ? (
+        {row.prf_num ? (
 
           <div className="grid grid-cols-2 gap-2">
             {isRowUnposted(row) ? (
@@ -5461,7 +5402,7 @@ onDrop={() => handleDrop(col.column_name)}
                 </PermissionButton>
 
                 <button
-                  onClick={() => handlePost(encodeURIComponent(row.prf_generate))}
+                  onClick={() => handlePost(encodeURIComponent(row.prf_num))}
                   disabled={!isUserHavePrfAccess}
                   className="
                     w-full
@@ -5480,7 +5421,7 @@ onDrop={() => handleDrop(col.column_name)}
                 <button
                   onClick={() =>
                     handleUnpost(
-                      encodeURIComponent(row.prf_generate)
+                      encodeURIComponent(row.prf_num)
                     )
                   }
                   disabled={!isUserHavePrfAccess}
@@ -5497,7 +5438,7 @@ onDrop={() => handleDrop(col.column_name)}
                 <button
                   onClick={() =>
                     handlePreview(
-                      encodeURIComponent(row.prf_generate)
+                      encodeURIComponent(row.prf_num)
                     )
                   }
                   className="
@@ -5733,8 +5674,9 @@ onDrop={() => handleDrop(col.column_name)}
 
                 {/* PRODUCT */}
                 <td className="p-3 border-b min-w-[220px]">
-
+{console.log("Rendering product input for item:", item)}
                  <input
+                
                   value={item.product || ""}
                   onChange={(e) =>
                     handleItemChange(i, "product", e.target.value)

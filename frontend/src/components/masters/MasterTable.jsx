@@ -498,8 +498,8 @@ useEffect(() => {
 
 
 const getLabel = (key, value) => {
-  if (key === "is_vat") return value ? "YES" : "NO";
-  if (key === "is_active") return value ? "ACTIVE" : "INACTIVE";
+  if (key.includes("is_vat")) return value ? "YES" : "NO";
+  if (key.includes("is_active")) return value ? "ACTIVE" : "INACTIVE";
   return value ? "YES" : "NO";
 };
 
@@ -703,18 +703,18 @@ const getLabel = (key, value) => {
       const isDate = isDateColumn(col);
 
       const isToggle =
-        col.key.toLowerCase() === "is_active" ||
-        col.key.toLowerCase() === "is_vat" ||
-        col.key.toLowerCase() === "is_inventory";
+        col.key.toLowerCase().includes("is_active") ||
+        col.key.toLowerCase().includes("is_vat") ||
+        col.key.toLowerCase().includes("is_inventory");
 
       const isServiceMaster =
-        col.key.toLowerCase() === "prd_type" || col.key.toLowerCase() === "pt_code";
+         col.key.toLowerCase() === "prdtype_code" && masterName === "products";
 
       const isVendor =
         col.key.toLowerCase() === "vend_code" && masterName === "products";
       console.log("isVendor:", isVendor, "col.key:", col.key, "masterName:", masterName);
       const isInventoryType =
-        col.key.toLowerCase() === "inventory_type";
+        col.key.toLowerCase() === "inventory_type" && masterName === "products";
 
       const isCodeColumn = col.key.toLowerCase().includes("_code");
 
@@ -752,7 +752,7 @@ const getLabel = (key, value) => {
                   key={v.vend_code}
                   value={v.vend_code}
                 >
-                  {v.vendor_name}
+                  {v.vend_name}
                 </option>
 
               ))}
@@ -855,9 +855,9 @@ const getLabel = (key, value) => {
 
                   <option
                     key={i}
-                    value={s.pt_code}
+                    value={s.prdtype_code}
                   >
-                    {s.prd_types}
+                    {s.prdtype_name}
                   </option>
 
                 ))}
@@ -972,16 +972,16 @@ const getLabel = (key, value) => {
 
       {/* ================= DYNAMIC COLUMNS ================= */}
       {columns.map(col => {
-
+       // console.log("columns.map col:", col);
         const isDate = isDateColumn(col);
 
         const isToggle =
-          col.key.toLowerCase() === "is_active" ||
-          col.key.toLowerCase() === "is_vat" ||
-          col.key.toLowerCase() === "is_inventory";
+          col.key.toLowerCase().includes("is_active") ||
+          col.key.toLowerCase().includes("is_vat") ||
+          col.key.toLowerCase().includes("is_inventory");
 
         const isService =
-          (col.key.toLowerCase() === "prd_type" || col.key.toLowerCase() === "pt_code") && masterName === "products";
+          (col.key.toLowerCase() === "prd_type" || col.key.toLowerCase() === "prdtype_code") && masterName === "products";
 
        
       const isVendor =
@@ -990,8 +990,8 @@ const getLabel = (key, value) => {
 
         const inputType = "date";
 
-        const isCodeColumn = col.key.toLowerCase().includes("_code");
-
+        const isCodeColumn = col.key?.toLowerCase().includes("_code") && col.is_code === true;
+ // console.log("isCodeColumn:", isCodeColumn, "col.key:", col.key, "col.is_code:", col.is_code);
         const isIcannFee = col.key.toLowerCase() === "icann_fee";
         const isInventoryType =
           col.key.toLowerCase() === "inventory_type";
@@ -1011,7 +1011,7 @@ const getLabel = (key, value) => {
                 <select
                   className="border px-2 py-1 rounded w-full"
                   value={editRow[col.key] || ""}
-                  //disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
+                  disabled={isCodeColumn}
                   onChange={(e) =>
                     setEditRow(prev => ({
                       ...prev,
@@ -1030,7 +1030,7 @@ const getLabel = (key, value) => {
                       key={v.vend_code}
                       value={v.vend_code}
                     >
-                      {v.vendor_name}
+                      {v.vend_name}
                     </option>
 
                   ))}
@@ -1043,7 +1043,7 @@ const getLabel = (key, value) => {
                 <select
                   className="border px-2 py-1 rounded w-full"
                   value={editRow[col.key] || ""}
-                  disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
+                  disabled={isCodeColumn}
                   onChange={(e) =>
                     setEditRow(prev => ({
                       ...prev,
@@ -1074,7 +1074,7 @@ const getLabel = (key, value) => {
                 <select
                   className="border px-2 py-1 rounded w-full"
                   value={editRow[col.key] || ""}
-                 // disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
+                  disabled={isCodeColumn}
                   onChange={(e) =>
                     setEditRow(prev => ({
                       ...prev,
@@ -1090,10 +1090,10 @@ const getLabel = (key, value) => {
                   {servicesList.map((s) => (
 
                     <option
-                      key={s.pt_code}
-                      value={s.pt_code}
+                      key={s.prdtype_code}
+                      value={s.prdtype_code}
                     >
-                      {s.prd_types}
+                      {s.prdtype_name}
                     </option>
 
                   ))}
@@ -1135,7 +1135,7 @@ const getLabel = (key, value) => {
                 /* ================= INPUT ================= */
                 <input
                   type={isDate ? inputType : "text"}
-                  //disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
+                  disabled={isCodeColumn}
                   className={`
                     border px-2 py-1 rounded w-full
                     ${getAlignClass(col.key)}
@@ -1196,7 +1196,7 @@ const getLabel = (key, value) => {
 
                 vendorList.find(
                   v => v.vend_code === row[col.key]
-                )?.vendor_name || "-"
+                )?.vend_name || "-"
 
               ) : isInventoryType ? (
 
@@ -1206,8 +1206,8 @@ const getLabel = (key, value) => {
               ) : isService ? (
 
                 servicesList.find(
-                  s => s.pt_code === row[col.key]
-                )?.prd_types || "-"
+                  s => s.prdtype_code === row[col.key]
+                )?.prdtype_name || "-"
 
               ) : (
 

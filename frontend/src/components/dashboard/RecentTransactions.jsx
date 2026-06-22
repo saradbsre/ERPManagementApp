@@ -67,18 +67,18 @@ export default function RecentTransactions() {
       try {
         const res = await getMasterData("products", activeUserEmail);
         const rows = Array.isArray(res?.data) ? res.data : [];
-
+        //console.log("Loaded service providers:", rows);
         const map = {};
 
         rows.forEach((row) => {
           const codeKey =
             Object.keys(row).find((k) =>
-              k.toLowerCase().includes("_code")
-            ) || "id";
+              k.toLowerCase().includes("prd_code")
+            ) || "key";
 
           const nameKey =
             Object.keys(row).find((k) =>
-              k.toLowerCase().includes("_name")
+              k.toLowerCase().includes("prd_name")
             );
 
           if (row[codeKey] && row[nameKey]) {
@@ -87,6 +87,7 @@ export default function RecentTransactions() {
         });
 
         setServiceProviderMap(map);
+        //console.log("Service Provider Map:", map);
       } catch (err) {
         console.error(err);
       }
@@ -286,7 +287,7 @@ export default function RecentTransactions() {
               <div className="ml-3 flex-1 min-w-0">
                 <h3 className="font-semibold text-gray-800 text-sm truncate">
                   {/* ✅ FINAL FIX: ALWAYS SHOW NAME */}
-                  {serviceProviderMap[item.products] || item.products}
+                  {serviceProviderMap[item.prd_code] || item.prd_code}
                 </h3>
 
                 <p className="text-xs text-gray-400 mt-1">

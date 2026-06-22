@@ -18,11 +18,11 @@ export default function CurrencyWidget() {
 
       setCurrencies(data);
 
-      const base = data.find(c => c.is_base_currency);
-
+      const base = data.find(c => c.curr_is_basecurr);
+      console.log("Base currency:", base);
       if (base) {
-        setFrom(base.currency_code);
-        setTo(data.find(c => c.currency_code !== base.currency_code)?.currency_code);
+        setFrom(base.curr_code);
+        setTo(data.find(c => c.curr_code !== base.curr_code)?.curr_code);
       }
     };
 
@@ -33,13 +33,13 @@ export default function CurrencyWidget() {
   // CONVERT
   // -----------------------------
   const converted = useMemo(() => {
-    const fromC = currencies.find(c => c.currency_code === from);
-    const toC = currencies.find(c => c.currency_code === to);
+    const fromC = currencies.find(c => c.curr_code === from);
+    const toC = currencies.find(c => c.curr_code === to);
 
     if (!fromC || !toC) return 0;
 
     const result =
-      (amount / fromC.exchange_rate) * toC.exchange_rate;
+      (amount / fromC.curr_exchange_rate) * toC.curr_exchange_rate;
 
     return result.toFixed(toC.decimal_places || 2);
   }, [amount, from, to, currencies]);
@@ -49,20 +49,20 @@ export default function CurrencyWidget() {
   // -----------------------------
  const exchangeLabel = useMemo(() => {
   const fromC = currencies.find(
-    c => c.currency_code === from
+    c => c.curr_code === from
   );
 
   const toC = currencies.find(
-    c => c.currency_code === to
+    c => c.curr_code === to
   );
 
   if (!fromC || !toC) return "";
 
   const rate =
-    (1 / fromC.exchange_rate) * toC.exchange_rate;
+    (1 / fromC.curr_exchange_rate) * toC.curr_exchange_rate;
 
-  const fromCode = fromC.currency;   // USD / AED
-  const toCode = toC.currency;
+  const fromCode = fromC.curr_name;   // USD / AED
+  const toCode = toC.curr_name;
 
   return `1 ${fromCode} = ${rate.toFixed(2)} ${toCode}`;
 }, [from, to, currencies]);
@@ -102,8 +102,8 @@ export default function CurrencyWidget() {
           className="flex-1 border rounded-lg p-2 text-sm bg-white focus:ring-2 focus:ring-indigo-300 transition"
         >
           {currencies.map(c => (
-            <option key={c.id} value={c.currency_code}>
-              {c.currency}
+            <option key={c.curr_code} value={c.curr_code}>
+              {c.curr_name}
             </option>
           ))}
         </select>
@@ -122,8 +122,8 @@ export default function CurrencyWidget() {
           className="flex-1 border rounded-lg p-2 text-sm bg-white focus:ring-2 focus:ring-indigo-300 transition"
         >
           {currencies.map(c => (
-            <option key={c.id} value={c.currency_code}>
-              {c.currency}
+            <option key={c.curr_code} value={c.curr_code}>
+              {c.curr_name}
             </option>
           ))}
         </select>

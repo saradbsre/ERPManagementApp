@@ -272,9 +272,9 @@ useEffect(() => {
 
 //console.log("vendor:", vendor);
 const selectedVendor =
-  Array.isArray(vendor) && header.vendors
+  Array.isArray(vendor) && header.vend_code
     ? vendor.find((v) => {
-        const headerValue = header.vendors
+        const headerValue = header.vend_code
           .toString()
           .trim()
           .toUpperCase();
@@ -284,7 +284,7 @@ const selectedVendor =
           .trim()
           .toUpperCase();
 
-        const vendorName = (v.vendor_name || "")
+        const vendorName = (v.vend_name || "")
           .toString()
           .trim()
           .toUpperCase();
@@ -297,13 +297,13 @@ const selectedVendor =
     : null;
 
 
-const isVatApplicable = selectedVendor ? selectedVendor.is_vat : false;
+const isVatApplicable = selectedVendor ? selectedVendor.vend_is_vat : false;
 
 
 const selectedCompany =
-  Array.isArray(company) && header.company
+  Array.isArray(company) && header.com_code
     ? company.find((c) => {
-        const headerValue = header.company
+        const headerValue = header.com_code
           .toString()
           .trim()
           .toUpperCase();
@@ -313,7 +313,7 @@ const selectedCompany =
           .trim()
           .toUpperCase();
 
-        const tradeName = (c.trade_name || "")
+        const tradeName = (c.com_name || "")
           .toString()
           .trim()
           .toUpperCase();
@@ -332,9 +332,9 @@ const selectedCompany =
 
 
 const selectedCurrency =
-  Array.isArray(currency) && header.currency
+  Array.isArray(currency) && header.curr_code
     ? currency.find((c) => {
-        const headerValue = header.currency
+        const headerValue = header.curr_code
           .toString()
           .trim()
           .toUpperCase();
@@ -356,26 +356,26 @@ const selectedCurrency =
       })
     : null;
 
-const selectedTerm = Array.isArray(terms) && header.term ? terms.find(
+const selectedTerm = Array.isArray(terms) && header.billcycle_code ? terms.find(
   (t) =>
-    (t.bc_code || "").toString().trim().toUpperCase() ===
-    header.term.toString().trim().toUpperCase()
+    (t.billcycle_code || "").toString().trim().toUpperCase() ===
+    header.billcycle_code.toString().trim().toUpperCase()
 ) : null;
 
-const selectedCostCenter = Array.isArray(costCenters) && header.cost_center ? costCenters.find(
-    (cc) => (cc.dv_code || "").toString().trim().toUpperCase() === header.cost_center.toString().trim().toUpperCase()   
+const selectedCostCenter = Array.isArray(costCenters) && header.dv_code ? costCenters.find(
+    (cc) => (cc.dv_code || "").toString().trim().toUpperCase() === header.dv_code.toString().trim().toUpperCase()   
 ) : null;
 
-const selectedDepartment = Array.isArray(departments) && header.department ? departments.find(
-    (d) => (d.dep_code || "").toString().trim().toUpperCase() === header.department.toString().trim().toUpperCase()
+const selectedDepartment = Array.isArray(departments) && header.dep_code ? departments.find(
+    (d) => (d.dep_code || "").toString().trim().toUpperCase() === header.dep_code.toString().trim().toUpperCase()
 ) : null;
 
-const selectedTransactionType = Array.isArray(transactionType) && header.transaction_type ? transactionType.find(
-    (tt) => (tt.tt_code || "").toString().trim().toUpperCase() === header.transaction_type.toString().trim().toUpperCase()
+const selectedTransactionType = Array.isArray(transactionType) && header.trntype_code ? transactionType.find(
+    (tt) => (tt.trntype_code || "").toString().trim().toUpperCase() === header.trntype_code.toString().trim().toUpperCase()
 ) : null;
 
-const selectedProductType = Array.isArray(productTypes) && header.product_types ? productTypes.find(
-    (pt) => (pt.pt_code || "").toString().trim().toUpperCase() === header.product_types.toString().trim().toUpperCase()
+const selectedProductType = Array.isArray(productTypes) && header.prdtype_code ? productTypes.find(
+    (pt) => (pt.prdtype_code || "").toString().trim().toUpperCase() === header.prdtype_code.toString().trim().toUpperCase()
 ) : null;
 
 
@@ -394,11 +394,11 @@ const getProductName = (productCode) => {
 const getServiceName = (serviceCode) => {
   const service = productTypes?.find(
     s =>
-      (s.pt_code || "").toUpperCase() ===
+      (s.prdtype_code || "").toUpperCase() ===
       (serviceCode || "").toUpperCase()
   );
 
-  return service?.prd_types || serviceCode;
+  return service?.prdtype_name || serviceCode;
 };
 
 const getPlanName = (planCode) => {
@@ -665,21 +665,21 @@ const currentDate = new Date();
             fontSize: "15px",
             textTransform: "uppercase"
           }}>
-            {selectedCompany?.trade_name || header.company || "Company Name"}
+            {selectedCompany?.com_name || header.com_code || "Company Name"}
           </div>
 
           <div style={{ fontSize: "11px", color: "#374151" }}>
-            {selectedCompany?.address || "Company Address"}
+            {selectedCompany?.com_address || "Company Address"}
           </div>
 
           <div style={{ fontSize: "11px", color: "#374151" }}>
-            {selectedCompany?.area || ""}, {selectedCompany?.emirate || ""}, {selectedCompany?.country || "UAE"}
-            {selectedCompany?.phn_number ? ` Tel ${selectedCompany?.phn_number}` : ""}
-            {selectedCompany?.email ? `, Email: ${selectedCompany?.email}` : ""}
+            {selectedCompany?.com_area || ""}, {selectedCompany?.com_state || ""}, {selectedCompany?.com_country || " "}
+            {selectedCompany?.com_phn ? ` Tel ${selectedCompany?.com_phn}` : ""}
+            {selectedCompany?.com_email ? `, Email: ${selectedCompany?.com_email}` : ""}
           </div>
 
           <div style={{ fontSize: "11px", color: "#374151" }}>
-            TRN: {selectedCompany?.trn || ""}
+            TRN: {selectedCompany?.com_trn || ""}
           </div>
 
         </div>
@@ -743,23 +743,23 @@ const currentDate = new Date();
         </div>
 
         <div style={{ fontWeight: "bold", fontSize: "13px", marginTop: "4px", lineHeight: "1.2" }}>
-          {selectedVendor?.vendor_name || header.vendors || "Vendor Name"}
+          {selectedVendor?.vend_name || header.vend_code || "Vendor Name"}
           {isVatApplicable ? " (VAT Included)" : ""}
         </div>
 
         <div style={{ fontSize: "12px", color: "#374151", lineHeight: "1.2" }}>
-          {selectedVendor?.address || "Vendor Address"}
-          {selectedVendor?.country ? `, ${selectedVendor?.country}` : ""}
+          {selectedVendor?.vend_address || "Vendor Address"}
+          {selectedVendor?.vend_country ? `, ${selectedVendor?.vend_country}` : ""}
         </div>
 
         <div style={{ fontSize: "12px", color: "#374151", lineHeight: "1.2" }}>
-          Email: {selectedVendor?.email || "-"}
-          {selectedVendor?.website ? ` | Website: ${selectedVendor.website}` : ""}
+          Email: {selectedVendor?.vend_email || "-"}
+          {selectedVendor?.vend_website ? ` | Website: ${selectedVendor.vend_website}` : ""}
         </div>
 
         <div style={{ fontSize: "12px", color: "#374151", lineHeight: "1.2" }}>
-          {selectedVendor?.phone_number ? `Tel: ${selectedVendor.phone_number}` : ""}
-          {selectedVendor?.trn ? ` | TRN: ${selectedVendor.trn}` : ""}
+          {selectedVendor?.vend_phn ? `Tel: ${selectedVendor.vend_phn}` : ""}
+          {selectedVendor?.vend_trn ? ` | TRN: ${selectedVendor.vend_trn}` : ""}
         </div>
       </td>
 
@@ -777,27 +777,27 @@ const currentDate = new Date();
         </div>
 
         <div style={{ fontWeight: "bold", fontSize: "13px", marginTop: "4px" , lineHeight: "1"}}>
-          {selectedTerm?.bc_name || header.term}{" "}
-          {selectedProductType?.prd_types || header.product_types} Fees
+          {selectedTerm?.billcycle_name || header.billcycle_code}{" "}
+          {selectedProductType?.prdtype_name || header.prdtype_code} Fees
         </div>
 
         <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px", lineHeight: "1" }}>
-          {selectedTransactionType?.tt_code === "TT003"
-            ? header.product_types === "S52"
+          {selectedTransactionType?.trntype_code === "TT003"
+            ? header.prdtype_code === "S52"
               ? "This payment request is for a new purchase."
               : "This payment request is for a new subscription."
             : ""}
 
-          {selectedTransactionType?.tt_code === "TT001" &&
+          {selectedTransactionType?.trntype_code === "TT001" &&
             "This payment request is for the renewal of a subscription."}
 
-          {selectedTransactionType?.tt_code === "TT004" &&
+          {selectedTransactionType?.trntype_code === "TT004" &&
             "This payment request is related to the cancellation of a subscription service."}
 
-          {selectedTransactionType?.tt_code === "TT005" &&
+          {selectedTransactionType?.trntype_code === "TT005" &&
             "This payment request is related to the transfer of a service."}
 
-          {selectedTransactionType?.tt_code === "TT006" &&
+          {selectedTransactionType?.trntype_code === "TT006" &&
             "This payment request is related to the bill payment of a service."}
         </div>
 
@@ -813,22 +813,20 @@ const currentDate = new Date();
 
             const card = creditCards.find(
               c =>
-                (c.card_holder_name || "").toString().trim().toUpperCase() ===
-                paidBy
+                (c.crcd_holder_name || "").toString().trim().toUpperCase() === paidBy
             );
 
-            return card?.card_brand || "";
+            return card?.crcd_type || "";
           })()} ending with ****
           {(() => {
             let paidBy = (paid_by || "").toString().trim().toUpperCase();
 
             const card = creditCards.find(
               c =>
-                (c.card_holder_name || "").toString().trim().toUpperCase() ===
-                paidBy
+                (c.crcd_holder_name || "").toString().trim().toUpperCase() === paidBy
             );
 
-            return card?.card_number || card?.card_4number || "";
+            return card?.card_number || card?.crcd_last4num || "";
           })()}
         </div>
 
@@ -921,7 +919,7 @@ const currentDate = new Date();
       </td>
 
       <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {selectedDepartment?.dep_name || header.department || " - "}
+        {selectedDepartment?.dep_name || header.dep_code || " - "}
       </td>
 
       {/* PAYMENT METHOD */}
@@ -938,13 +936,13 @@ const currentDate = new Date();
 
         const card = creditCards.find(
           c =>
-            (c.card_holder_name || "")
+            (c.crcd_holder_name || "")
               .toString()
               .trim()
               .toUpperCase() === paidBy
         );
 
-        return card?.card_brand || card?.card_brand || "";
+        return card?.crcd_type || card?.crcd_type || "";
       })()}
       </td>
 
@@ -958,7 +956,7 @@ const currentDate = new Date();
       </td>
 
       <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {selectedCostCenter?.dv_name || header.cost_center || " - "}
+        {selectedCostCenter?.dv_name || header.dv_code || " - "}
       </td>
 
       {/* PAYMENT METHOD */}
@@ -1016,15 +1014,15 @@ const currentDate = new Date();
       </th>
 
       <th className="border border-gray-800 px-1 py-1 w-[8%] text-right">
-        AMOUNT ({selectedCurrency?.currency || header.currency})
+        AMOUNT ({selectedCurrency?.curr_name || header.curr_code})
       </th>
 
       <th className="border border-gray-800 px-1 py-1 w-[8%] text-right">
-        VAT AMOUNT ({selectedCurrency?.currency || header.currency})
+        VAT AMOUNT ({selectedCurrency?.curr_name || header.curr_code})
       </th>
 
       <th className="border border-gray-800 px-1 py-1 w-[8%] text-right">
-        TOTAL AMOUNT ({selectedCurrency?.currency || header.currency})
+        TOTAL AMOUNT ({selectedCurrency?.curr_name || header.curr_code})
       </th>
 
       
@@ -1035,14 +1033,14 @@ const currentDate = new Date();
 
 <tbody>
   {(() => {
-    const rowHeight = "min-h-[38px]";
+    const rowHeight = "min-h-[36px]";
 
     return (
       <>
-        <tr className="text-center align-top h-[230px] bg-[#f8fafc] border border-black-800">
+        <tr className="text-center align-top h-[210px] bg-[#f8fafc] border border-black-800">
 
           {/* S/N */}
-          <td className="border border-gray-800 p-2 align-top ">
+          <td className="border border-gray-800 p-1 align-top ">
             {headers?.map((_, i) => (
               <div
                 key={i}
@@ -1054,7 +1052,7 @@ const currentDate = new Date();
           </td>
 
           {/* DATE */}
-          <td className="border border-gray-800 p-2 align-top">
+          <td className="border border-gray-800 p-1 align-top">
             {headers?.map((item, i) => (
               <div
                 key={i}
@@ -1066,7 +1064,7 @@ const currentDate = new Date();
           </td>
 
           {/* INVOICE NUMBER */}
-          <td className="border border-gray-800 p-2 align-top ">
+          <td className="border border-gray-800 p-1 align-top ">
             {headers?.map((item, i) => (
               <div
                 key={i}
@@ -1078,22 +1076,22 @@ const currentDate = new Date();
           </td>
 
           {/* PRODUCT DESCRIPTION */}
-         <td className="border border-gray-800 p-2 align-top text-left">
+         <td className="border border-gray-800 p-1 align-top text-left">
   {headers?.map((item, i) => {
     const product = products?.find(
       p =>
         (p.prd_code || "").toUpperCase() ===
-        (item?.products || "").toUpperCase()
+        (item?.prd_code || "").toUpperCase()
     );
 
     return (
       <div key={i} className={`${rowHeight} flex flex-col py-1`}>
         <div>
-          {getProductName(item?.products)}
-          {item?.plan_provider &&
-            ` - ${getPlanName(item.plan_provider)}`}
-          {item?.product_types &&
-            ` - ${getServiceName(item.product_types)}`}
+          {getProductName(item?.prd_code)}
+          {item?.plan_code &&
+            ` - ${getPlanName(item.plan_code)}`}
+          {item?.prdtype_code &&
+            ` - ${getServiceName(item.prdtype_code)}`}
         </div>
       </div>
     );
@@ -1107,7 +1105,7 @@ const currentDate = new Date();
   )}
 </td>
 
-          <td className="border border-gray-800 p-2 align-top text-left">
+          <td className="border border-gray-800 p-1 align-top text-left">
   {headers?.map((item, i) => (
     <div
       key={i}
@@ -1125,7 +1123,7 @@ const currentDate = new Date();
 </td>
 
           {/* AMOUNT */}
-          <td className="border border-gray-800 p-2 align-top text-right">
+          <td className="border border-gray-800 p-1 align-top text-right">
             {headers?.map((item, i) => (
               <div
                 key={i}
@@ -1137,7 +1135,7 @@ const currentDate = new Date();
           </td>
 
           {/* VAT */}
-          <td className="border border-gray-800 p-2 align-top text-right">
+          <td className="border border-gray-800 p-1 align-top text-right">
             {headers?.map((item, i) => (
               <div
                 key={i}
@@ -1149,7 +1147,7 @@ const currentDate = new Date();
           </td>
 
           {/* TOTAL */}
-          <td className="border border-gray-800 p-2 align-top text-right">
+          <td className="border border-gray-800 p-1 align-top text-right">
             {headers?.map((item, i) => {
               const product = products?.find(
                 p =>
@@ -1266,8 +1264,8 @@ const currentDate = new Date();
 <td className="border border-gray-800 px-2 py-1 font-semibold">
   {remarks}{" "}
 
-  {(header.currency !== "CR001" &&
-    header.currency !== "AED" &&
+  {(header.curr_code !== "CR001" &&
+    header.curr_code !== "AED" &&
     header.total_amount_aed) && (
     <>
       {/* <br /> */}
@@ -1285,8 +1283,8 @@ const currentDate = new Date();
   )}
 
   {!remarks &&
-    !(header.currency !== "CR001" &&
-      header.currency !== "AED" &&
+    !(header.curr_code !== "CR001" &&
+      header.curr_code !== "AED" &&
       header.total_amount_aed) &&
     " - "}
 </td>

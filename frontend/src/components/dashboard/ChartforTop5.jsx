@@ -79,7 +79,7 @@ export default function ChartforTop5() {
     return data
       .filter((item) => item.module_display_name === selectedModule)
       .map((item) => {
-        const code = String(item.products || "").trim(); // e.g. PR010
+        const code = String(item.prd_code || "").trim(); // e.g. PR010
         return {
           name: productNameByCode.get(code) || code, // show product_name
           "total AED": Number(item.total_amount_aed) || 0
