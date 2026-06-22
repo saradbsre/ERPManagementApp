@@ -739,7 +739,7 @@ const applyTermMultiplier = (value, term) => {
 
 useEffect(() => {
   const amount = Number(newRow.total_amount);
-  console.log("starting currency calculation with amount:", amount);
+  //console.log("starting currency calculation with amount:", amount);
   const currency =
     typeof newRow.curr_code === "object"
       ? newRow.curr_code?.value
@@ -1726,7 +1726,7 @@ const matchedProviders = serviceProviders.filter((sp) => {
   if (col.master && masterDataMap?.[col.master]) {
     options = [...masterDataMap[col.master]];
   }
-  console.log("masterdatamap ", masterDataMap);
+  //console.log("masterdatamap ", masterDataMap);
   if (col.master1 && masterDataMap?.[col.master1]) {
     options = [...options, ...masterDataMap[col.master1]];
   }
@@ -1779,7 +1779,7 @@ if (searchText) {
 
   });
 }
-  console.log(`Options for column ${col.column_name} :`, options);
+  //console.log(`Options for column ${col.column_name} :`, options);
   return options;
 };
 
@@ -1817,7 +1817,7 @@ const getExchangeRate = (currencyCode) => {
 const calculateCost = (amount, currencyCode, term) => {
   if (!amount || !currencyCode) return null;
   const rate = getExchangeRate(currencyCode);
-  console.log(`Calculating cost: amount=${amount}, currency=${currencyCode}, term=${term}, rate=${rate}`);
+ // console.log(`Calculating cost: amount=${amount}, currency=${currencyCode}, term=${term}, rate=${rate}`);
   if (!rate || isNaN(rate)) return null;
   return Number(amount) * Number(rate);
 };
@@ -1848,7 +1848,7 @@ const handleNewRowChange = async (key, value, masterName) => {
   }
 
   if (key === "product_types") {
-  console.log("SETTING PRODUCT TYPE:", normalized);
+ // console.log("SETTING PRODUCT TYPE:", normalized);
 }
   // console.log("NEW ROW UPDATE", {
   //   key,
@@ -1867,11 +1867,7 @@ const handleNewRowChange = async (key, value, masterName) => {
       updated.billcycle_code = normalized;
     }
 
-    console.log({
-  key,
-  masterName,
-  normalized
-});
+ 
 
     return updated;
   });
@@ -1898,7 +1894,7 @@ useEffect(() => {
   // ✅ ONLY auto-select if user hasn't changed it
   if (!planManuallyChanged && mappedPlans.length > 0) {
     const firstPlan = mappedPlans[0];
-    console.log("Auto-selecting plan:", firstPlan);
+    //console.log("Auto-selecting plan:", firstPlan);
     setNewRow(prev => ({
       ...prev,
      // plan_provider: firstPlan.value
@@ -1912,8 +1908,7 @@ useEffect(() => {
        setLoading(true);
         // Clone the newRow to avoid mutating state directly
         const payload = { ...newRow };
-        console.log("NEW ROW AT SAVE:", newRow);
-        console.log("Original payload before processing:", payload);
+
         // Set fcamt and currency from the form values
         if (payload.amount && payload.currency) {
            // payload.fc_amount = payload.total_amount_aed;
@@ -2861,7 +2856,7 @@ ${groupedRows.map(group => `
 
 function calculateRowTotals({ amount, currency, service_provider_id }) {
   const provider = serviceProviders.find(p => p.id === service_provider_id);
-  console.log("Calculating totals for amount:", amount, "currency:", currency, "provider ID:", service_provider_id, "provider:", provider);
+ // console.log("Calculating totals for amount:", amount, "currency:", currency, "provider ID:", service_provider_id, "provider:", provider);
   const isVat = provider?.prd_is_vat;
   const amt = Number(amount) || 0;
   const vat = isVat ? (amt * vatPercent) / 100 : 0;
@@ -2869,10 +2864,9 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
 
   // Find currency value (exchange rate)
   const currencyObj = currencies.find(c => c.curr_code === currency);
-  console.log("Currency object found:", currencyObj);
-  console.log("currencies list:", currencies);
+
   const currencyValue = currencyObj ? Number(currencyObj.curr_exchange_rate) : 1;
-  console.log("total:", total, "currencyValue:", currencyValue);
+
   const totalAed = total * currencyValue;
  // console.log("VAT:", vat, "Total:", total, "Total in AED:", totalAed, "Currency value:", currencyValue);
 
@@ -4130,7 +4124,8 @@ onDrop={() => handleDrop(col.column_name)}
                           currency: newRow.currency || newRow.curr_code,
                           service_provider_id: serviceProviders.find(sp => {
                             //console.log("sp", sp.prd_code)
-                            const matched = sp.prd_code === (newRow.products?.value || newRow.products);
+                            //console.log("newRow.products", newRow)
+                            const matched = sp.prd_code === (newRow.prd_code?.value || newRow.prd_code);
                             // console.log("Matched name for amount change:", serviceProviders.product, "with new row product:", newRow.products  );
                             if (matched) {
                             }
@@ -4312,7 +4307,7 @@ onDrop={() => handleDrop(col.column_name)}
 
                                                     // ✅ 3. DB state
                                                   if (col.column_name === "product_types") {
-                                                    console.log("PRODUCT TYPE SELECTED", option);
+                                                   
                                                   }
                                                     handleNewRowChange(col.column_name, value, col.master);
 
@@ -4666,8 +4661,8 @@ onDrop={() => handleDrop(col.column_name)}
 
                                       const triggerColumns = [
                                         "amount",
-                                        "vendors",
-                                        "products"
+                                        "vend_code",
+                                        "prd_code"
                                       ];
 
                                       if (triggerColumns.includes(col.column_name)) {
@@ -4677,31 +4672,33 @@ onDrop={() => handleDrop(col.column_name)}
                                         // =========================
                                         // FIRST CHECK VENDOR
                                         // =========================
-                                        if (updatedRow.vendors) {
+                                        console.log("Checking for matched provider based on vend_code:", updatedRow.vend_code);
+                                        if (updatedRow.vend_code) {
 
                                           matchedProvider = serviceProviders.find(
                                             sp =>
-                                              String(sp.vendor || "")
+                                              String(sp.vend_code || "")
                                                 .trim()
                                                 .toLowerCase() ===
-                                              String(updatedRow.vendors || "")
+                                              String(updatedRow.vend_code || "")
                                                 .trim()
                                                 .toLowerCase()
                                           );
+                                          
                                         }
 
                                         // =========================
                                         // IF NO VENDOR MATCH
                                         // CHECK PRODUCT
                                         // =========================
-                                        if (!matchedProvider && updatedRow.products) {
+                                        if (!matchedProvider && updatedRow.prd_code) {
 
                                           matchedProvider = serviceProviders.find(
                                             sp =>
-                                              String(sp.prd_name || "")
+                                              String(sp.prd_code || "")
                                                 .trim()
                                                 .toLowerCase() ===
-                                              String(updatedRow.products || "")
+                                              String(updatedRow.prd_code || "")
                                                 .trim()
                                                 .toLowerCase()
                                           );
@@ -4712,7 +4709,8 @@ onDrop={() => handleDrop(col.column_name)}
                                         // =========================
                                         // VAT ENABLED
                                         // =========================
-                                        if (matchedProvider?.is_vat) {
+                                        console.log("Matched Provider for VAT Calculation:", matchedProvider);
+                                        if (matchedProvider?.prd_is_vat) {
 
                                           const vat = (amount * Number(vatPercent || 0)) / 100;
 
@@ -4814,12 +4812,7 @@ onDrop={() => handleDrop(col.column_name)}
                                             currentValue,
                                             editRow
                                           ).slice(0, 20);
-                                          console.log("RAW OPTIONS:", {
-                                            col: col.column_name,
-                                            master: col.master,
-                                            currentValue,
-                                            rawOptions
-                                          });
+                                     
 
                                         const filteredOptions =
                                           rawOptions.filter((val) => {
@@ -5621,7 +5614,7 @@ onDrop={() => handleDrop(col.column_name)}
           </thead>
 
           <tbody>
-              {console.log("Rendering item:", modalItems)}
+            
             {modalItems.map((item, i) => (
              
               <tr

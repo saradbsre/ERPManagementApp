@@ -45,31 +45,31 @@ export default function EditRowPopup({
       };
 
       // Keep popup behavior aligned with CTable edit calculations.
-      const triggerColumns = ["amount", "vendors", "products"];
+      const triggerColumns = ["amount", "vend_code", "prd_code"];
 
       if (triggerColumns.includes(col.column_name)) {
         let matchedProvider = null;
 
-        if (updatedRow.vendors) {
+        if (updatedRow.vend_code) {
           matchedProvider = serviceProviders.find(
             (sp) =>
-              String(sp.vendor || "").trim().toLowerCase() ===
-              String(updatedRow.vendors || "").trim().toLowerCase()
+              String(sp.vend_code || "").trim().toLowerCase() ===
+              String(updatedRow.vend_code || "").trim().toLowerCase()
           );
         }
 
-        if (!matchedProvider && updatedRow.products) {
+        if (!matchedProvider && updatedRow.prd_code) {
           matchedProvider = serviceProviders.find(
             (sp) =>
               String(sp.prd_name || "").trim().toLowerCase() ===
-              String(updatedRow.products || "").trim().toLowerCase()
+              String(updatedRow.prd_code || "").trim().toLowerCase()
           );
         }
 
         const amount = parseFloat(updatedRow.amount || 0);
 
         if (!Number.isNaN(amount)) {
-          if (matchedProvider?.is_vat) {
+          if (matchedProvider?.prd_is_vat) {
             const vat = (amount * Number(vatPercent || 0)) / 100;
             updatedRow.vat_amount = vat.toFixed(2);
             updatedRow.total_amount = (amount + vat).toFixed(2);
@@ -100,7 +100,7 @@ export default function EditRowPopup({
       return String(opt ?? "");
     }
     return String(
-      opt.value ?? opt.name ?? opt.vendor_name ?? opt.prd_name ?? opt.prdtype_code ?? opt.label ?? ""
+      opt.value ?? opt.name ?? opt.vend_name ?? opt.prd_name ?? opt.prdtype_code ?? opt.label ?? ""
     );
   };
 
@@ -109,7 +109,7 @@ export default function EditRowPopup({
       return String(opt ?? "");
     }
     return String(
-      opt.key ?? opt.code ?? opt.vendor_code ?? opt.prd_code ?? opt.prdtype_code ?? opt.id ?? getOptionLabel(opt)
+      opt.key ?? opt.code ?? opt.vend_code ?? opt.prd_code ?? opt.prdtype_code ?? opt.id ?? getOptionLabel(opt)
     );
   };
 
@@ -141,7 +141,7 @@ export default function EditRowPopup({
                 col.column_name === "total_amount_aed" ||
                 col.column_name === "vat_amount" ||
                 col.column_name === "total_amount" ||
-                col.column_name === "prf_generate";
+                col.column_name === "prf_num";
 
               const currentValue = (() => {
                 const raw = editRow[col.column_name];
@@ -160,7 +160,7 @@ export default function EditRowPopup({
                 }
 
                 if (typeof raw === "object") {
-                  return raw?.value ?? raw?.name ?? raw?.vendor_name ?? raw?.label ?? "";
+                  return raw?.value ?? raw?.name ?? raw?.vend_name ?? raw?.label ?? "";
                 }
 
                 return raw ?? "";
