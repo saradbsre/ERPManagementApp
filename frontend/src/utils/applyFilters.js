@@ -1,6 +1,6 @@
 export const applyFilters = (rows, filters, columns = []) => {
   if (!filters.length) return rows;
-
+  console.log("Applying Filters:", filters);
   return rows.filter(row => {
 
     return filters.every(filter => {
@@ -47,9 +47,10 @@ export const applyFilters = (rows, filters, columns = []) => {
 
       return filter.values.length === 0
         ? true
-        : filter.values.some(val =>
-            cellValue.includes(val.toLowerCase().trim())
-          );
+        :filter.values.some(val => {
+          const v = typeof val === "string" ? val : val?.value;
+          return cellValue.includes(String(v || "").toLowerCase().trim());
+        });
     });
 
   });

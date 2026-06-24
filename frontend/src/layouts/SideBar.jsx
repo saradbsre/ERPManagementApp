@@ -141,17 +141,17 @@ export default function Sidebar({ collapsed, setCollapsed }) {
         path: `/reports/${report.report_id}`,
       })),
     },
-    {
-      name: "Views",
-      icon: <FileBarChart2 size={18} />,
-      children: views.map((view) => ({
-        key: `${view.id}_${view.filter_name}`,
-        id: view.id,
-        name: view.filter_name,
-        view,
-        path: `/views/${view.id}`,
-      })),
-    },
+    // {
+    //   name: "Views",
+    //   icon: <FileBarChart2 size={18} />,
+    //   children: views.map((view) => ({
+    //     key: `${view.id}_${view.filter_name}`,
+    //     id: view.id,
+    //     name: view.filter_name,
+    //     view,
+    //     path: `/views/${view.id}`,
+    //   })),
+    // },
   ].filter(Boolean);
 
   const closeMobile = () => {

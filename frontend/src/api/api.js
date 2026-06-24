@@ -431,11 +431,7 @@ export const getReportMenu = ( ) => {
   return API.get("/reports/menu");
 }
 
-export const getReportData = (
-  reportId,
-  activeUserEmail,
-  payload = {}
-) => {
+export const getReportData = ( reportId, activeUserEmail, payload = {} ) => {
   return API.get(`/reports/${reportId}`, {
     params: {
       activeUserEmail,

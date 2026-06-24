@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import JsBarcode from "jsbarcode";
 import { getMasterData, createPaymentRequest, incrementPRFExportCount  } from "../../api/api";
 export default function PaymentRequestPreview({ data, onBack, disablePrint = false }) {
- // console.log("PaymentRequestPreview data:", data);
+  console.log("PaymentRequestPreview data:", data);
   if (!data) {
     return (
       <div className="p-10 text-center text-gray-500">
@@ -19,7 +19,7 @@ export default function PaymentRequestPreview({ data, onBack, disablePrint = fal
 const headers = Array.isArray(data?.header)
   ? data.header
   : [];
-// console.log("Headers array:", headers);
+ console.log("Headers array:", headers);
 const header = headers[0] || {};
 // console.log("Using header:", header);
 const details = data?.details || {};
@@ -31,7 +31,7 @@ const isAdvertisingEnabled =
   String(details?.is_advertising || "").toLowerCase() === "true";
 
 const paid_by = data?.paid_by || "";
-
+ 
 const remarksList = headers
   .map(h => h.remarks)
   .filter(Boolean);
@@ -411,12 +411,32 @@ const getPlanName = (planCode) => {
   return plan?.plan_name || planCode;
 };
 
+function getFormattedDateTime(date = new Date()) {
+
+  const pad = (n) => n.toString().padStart(2, "0");
+
+  let day = pad(date.getDate());
+  let month = pad(date.getMonth() + 1);
+  let year = date.getFullYear();
+
+  let hours = date.getHours();
+  let minutes = pad(date.getMinutes());
+
+  let ampm = hours >= 12 ? "PM" : "AM";
+
+  hours = hours % 12;
+  hours = hours ? hours : 12; // 0 becomes 12
+
+  return `${day}/${month}/${year} ${hours} ${minutes} ${ampm}`;
+}
+
 function handlePrint() {
   // ================= BARCODE FIX =================
   const svgElement = barcodeRef.current;
 
   let barcodeImage = "";
-
+  const formattedTime = getFormattedDateTime();
+  //console.log(formattedTime);
   if (svgElement) {
     const svgString = new XMLSerializer().serializeToString(svgElement);
 
@@ -498,10 +518,11 @@ function handlePrint() {
           @media print {
             @page {
               @bottom-left {
-                content: "User: ${activeUser?.name || ""} | Printed: ${new Date().toLocaleString()}";
+                content: "Designed by Bin Shabib Group LLC • User: ${activeUser?.name || ""} • Printed: ${formattedTime}";
                 font-size: 9px;
                 font-family: "Times New Roman", serif;
               }
+                
 
               @bottom-right {
                 content: "Page " counter(page) " of " counter(pages);
@@ -543,6 +564,7 @@ function handlePrint() {
           </div>
 
         </div>
+        
       </body>
     </html>
   `);
@@ -782,22 +804,45 @@ const currentDate = new Date();
         </div>
 
         <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px", lineHeight: "1" }}>
-          {selectedTransactionType?.trntype_code === "TT003"
-            ? header.prdtype_code === "S52"
-              ? "This payment request is for a new purchase."
-              : "This payment request is for a new subscription."
-            : ""}
+         {
+  (
+    selectedTransactionType?.trntype_code === "TT003" ||
+    header?.trntype_code === "New"
+  )
+  ? (
+      header?.prdtype_code === "S52" ||
+      selectedProductType?.prdtype_code === "IT Accessories"
+        ? "This payment request is for a new purchase."
+        : "This payment request is for a new subscription."
+    )
+  : ""
+}
 
-          {selectedTransactionType?.trntype_code === "TT001" &&
-            "This payment request is for the renewal of a subscription."}
+         {
+            (
+              selectedTransactionType?.trntype_code?.toUpperCase() === "TT001" ||
+              header?.trntype_code?.toLowerCase() === "renewal"
+            ) &&
+            "This payment request is for the renewal of a subscription."
+          }
 
-          {selectedTransactionType?.trntype_code === "TT004" &&
+          {(
+            selectedTransactionType?.trntype_code?.toUpperCase() === "TT004" ||
+            header?.trntype_code?.toLowerCase() === "cancellation"
+          ) &&
             "This payment request is related to the cancellation of a subscription service."}
 
-          {selectedTransactionType?.trntype_code === "TT005" &&
-            "This payment request is related to the transfer of a service."}
+          {(
+            selectedTransactionType?.trntype_code?.toUpperCase() === "TT005" ||
+            header?.trntype_code?.toLowerCase() === "transfer"
+          ) &&
+            "This payment request is related to the transfer of a service."
+          }
 
-          {selectedTransactionType?.trntype_code === "TT006" &&
+          {(
+            selectedTransactionType?.trntype_code?.toUpperCase() === "TT006" ||
+            header?.trntype_code?.toLowerCase() === "bill payment"
+          ) &&
             "This payment request is related to the bill payment of a service."}
         </div>
 
@@ -994,7 +1039,7 @@ const currentDate = new Date();
     {/* COLUMN HEADERS */}
     <tr className="bg-gray-200 text-black text-[9px]">
 
-      <th className="border border-gray-800 px-2 py-1 w-[5%]">
+      <th className="border border-gray-800 px-2 py-1 w-[3%]">
         S/N
       </th>
 
@@ -1002,7 +1047,7 @@ const currentDate = new Date();
         INVOICE / PO DOC DATE
       </th>
 
-      <th className="border border-gray-800 px-2 py-1 w-[11%]">
+      <th className="border border-gray-800 px-2 py-1 w-[14%]">
         INVOICE / PO DOC NO
       </th>
 

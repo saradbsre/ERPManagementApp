@@ -1,6 +1,6 @@
 import React,{ useEffect, useState, useRef, useLayoutEffect, act, use, useMemo } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import {  getModuleData, getMasterValues, getReportData, fetchMasters   } from "../../api/api";
+import {  getModuleData, getMasterValues, getReportData   } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -15,7 +15,6 @@ import PrintableTable from "../PrintableTable";
 import { getDateRange } from "../../utils/dateRanges";
 import { formatAmount } from "../../utils/formatAmount";
 import CustomizeDrawer from "../tables/CustomizeDrawer";
-import TableFiltersDrawer from "../filters/TableFiltersDrawer";
 
 export default function ReportTable() {
     const { id } = useParams();
@@ -25,7 +24,6 @@ export default function ReportTable() {
     const [report, setReport] = useState(location.state?.report || null);
     const [showCustomizeDrawer, setShowCustomizeDrawer] = useState(false);
     const [columns, setColumns] = useState([]);
-
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
     const [showImportExport, setShowImportExport] = useState(false);
@@ -66,8 +64,7 @@ export default function ReportTable() {
     const [creditCardMap, setCreditCardMap] = useState({});
     const [productMap, setProductMap] = useState({});
     const [reportType, setReportType] = useState("summary");
-    const isSummary = report?.is_detailed === true;
-    const [masters, setMasters] = useState([]);  
+    const isSummary = report?.is_detailed === true;  
     const groupBy = report?.group_by || null;
     useEffect(() => {
       const handleResize = () => {
@@ -102,25 +99,7 @@ const getCurrentMonth = () => {
   };
 };
 
-  const Masters = async () => {
-    try {
-      const res = await fetchMasters();
-      setMasters(res.data || []);
-    
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
-    useEffect(() => {
-    Masters();
-  }, []);
-
-console.log("Masters in ReportTable:", masters);
-const masterList = (masters || []).map(item => ({
-  master: item.master_name,
-  display_name: item.display_name
-}));
 
 const [dateFilters, setDateFilters] = useState(getCurrentMonth());
 
@@ -153,7 +132,35 @@ const getCurrentMonthRange = () => {
 
 
 
+const applyDateFilter = async () => {
+  try {
+    setLoading(true);
 
+    const payload = {
+      search,
+      filters: JSON.stringify(filters || []),
+      dateFilters: JSON.stringify({
+        date: {
+          startDate: dateFilters.startDate || dateFilters.start,
+          endDate: dateFilters.endDate || dateFilters.end,
+        },
+      }),
+      reportType,
+    };
+
+    // console.log("Applying date filter:", payload);
+
+    const res = await getModuleData(id, activeUserEmail, payload, userRole);
+
+    setRows(res.data || []);
+
+  } catch (err) {
+    console.error(err);
+    setRows([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
 
 
@@ -226,79 +233,7 @@ useEffect(() => {
 }, [id]);
 
 
-const handleSearch = async (appliedFilters) => {
-  console.log("Search triggered with filters:", appliedFilters);
-  try {
-    setLoading(true);
-    setPage(1);
 
-    const reportId = report?.report_id || id;
-
-    // temporarily override filters BEFORE API call
-    const payloadFilters = appliedFilters || filters;
-
-    const payload = {
-      filters: JSON.stringify(payloadFilters || []),
-      dateFilters: JSON.stringify({
-        date: {
-          startDate: dateFilters.startDate,
-          endDate: dateFilters.endDate,
-        },
-      }),
-      reportType,
-    };
-
-    const res = await getReportData(reportId, activeUserEmail, payload);
-
-    const data = res.data || [];
-
-    const { currencyMap, termMap, companyMap, vendorMap, creditCardMap, productMap } =
-      await loadMasters();
-
-    const normalize = (v) => String(v || "").trim().toUpperCase();
-
-    const mappedRows = data.map((row) => {
-      const newRow = { ...row };
-
-      if ("company" in row) {
-        newRow.company =
-          companyMap?.[normalize(row.company)] || row.company;
-      }
-
-      if ("vendor" in row) {
-        newRow.vendor =
-          vendorMap?.[normalize(row.vendor)] || row.vendor;
-      }
-
-      if ("PaymentMethod" in row) {
-        newRow.PaymentMethod =
-          creditCardMap?.[normalize(row.PaymentMethod)] || row.PaymentMethod;
-      }
-
-      if ("term" in row) {
-        newRow.term =
-          termMap?.[normalize(row.term)] || row.term;
-      }
-
-      if ("product" in row) {
-        newRow.product =
-          productMap?.[normalize(row.product)] || row.product;
-      }
-
-      return newRow;
-    });
-
-    setRows(mappedRows);
-
-    const dynamicCols = buildDynamicColumns(mappedRows, currencyMap, termMap);
-    setColumns(dynamicCols);
-
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setLoading(false);
-  }
-};
 
 
 
@@ -358,94 +293,58 @@ return hit ? (hit.key ?? hit.id ?? hit.value) : rawVal;
 const handleClear = async () => {
   const defaults = getCurrentMonth();
 
+  // ================= RESET SEARCH =================
+  setSearch("");
+  setSearchColumnKey(null);
+
+  // ================= RESET FILTERS =================
+  setFilters([]);
+
+  // ================= RESET DATE =================
+  setDateFilters(defaults);
+  setActiveDateFilter("");
+
+  // ================= RESET SORT + GROUP =================
+  setSortConfig([]);
+  setSortKey(null);
+  setSortOrder(null);
+  setGroupBy("");
+
+  // ================= RESET CHIPS =================
+  setColumnChips([]);
+
+  // 🔥 IMPORTANT: RESET DERIVED CHIPS
+  setGroupedChips({
+    search: [],
+    sort: [],
+    group: []
+  });
+
+  
+
+  // ================= API =================
+  const payload = {
+    search: "",
+    filters: JSON.stringify([]),
+    dateFilters: JSON.stringify(buildDatePayload(defaults)),
+    sort: JSON.stringify([]),
+    groupBy: ""
+  };
+
   try {
     setLoading(true);
 
-    // ================= RESET UI STATE =================
-    setSearch("");
-    setSearchColumnKey(null);
-    setFilters([]);
-    setPage(1);
-    setActiveDateFilter("");
-
-    const reportId = report?.report_id || id;
-
-    // ================= RESET DATE =================
-    setDateFilters(defaults);
-
-    // ================= API CALL (IMPORTANT) =================
-    const payload = {
-      search: "",
-      filters: JSON.stringify([]),
-      dateFilters: JSON.stringify({
-        date: {
-          startDate: defaults.startDate,
-          endDate: defaults.endDate,
-        },
-      }),
-      reportType,
-    };
-
-    const res = await getReportData(reportId, activeUserEmail, payload);
-
-    const data = res.data || [];
-
-    // reload masters + mapping again
-    const {
-      currencyMap,
-      termMap,
-      companyMap,
-      vendorMap,
-      creditCardMap,
-      productMap,
-    } = await loadMasters();
-
-    const normalize = (v) =>
-      String(v || "").trim().toUpperCase();
-
-    const mappedRows = data.map((row) => {
-      const newRow = { ...row };
-
-      if ("company" in row) {
-        newRow.company =
-          companyMap?.[normalize(row.company)] || row.company;
-      }
-
-      if ("vendor" in row) {
-        newRow.vendor =
-          vendorMap?.[normalize(row.vendor)] || row.vendor;
-      }
-
-      if ("PaymentMethod" in row) {
-        newRow.PaymentMethod =
-          creditCardMap?.[normalize(row.PaymentMethod)] ||
-          row.PaymentMethod;
-      }
-
-      if ("term" in row) {
-        newRow.term =
-          termMap?.[normalize(row.term)] || row.term;
-      }
-
-      if ("product" in row) {
-        newRow.product =
-          productMap?.[normalize(row.product)] || row.product;
-      }
-
-      return newRow;
-    });
-
-    setRows(mappedRows);
-
-    const dynamicCols = buildDynamicColumns(
-      mappedRows,
-      currencyMap,
-      termMap
+    const res = await getModuleData(
+      id,
+      activeUserEmail,
+      payload,
+      userRole
     );
 
-    setColumns(dynamicCols);
+    setRows(res.data || []);
   } catch (err) {
     console.error(err);
+    setRows([]);
   } finally {
     setLoading(false);
   }
@@ -502,26 +401,11 @@ const buildTotalRow = (cols, rows) => {
   return totalRow;
 };
 
-const formatPrintDate = (dateStr) => {
-  if (!dateStr) return "";
-
-  return new Date(dateStr).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-};
-
 const handlePrint = () => {
   const printWindow = window.open("", "", "width=1200,height=900");
 
   const moduleName = report?.description || "Report";
   const formattedTime = getFormattedDateTime();
-
-  const fromDate = formatPrintDate(dateFilters.startDate);
-const toDate = formatPrintDate(dateFilters.endDate);
-
-const reportTitle = `${moduleName} (${fromDate} to ${toDate})`;
 
   const isDetailed =
     reportType === "detailed" && report?.is_detailed === true;
@@ -702,8 +586,6 @@ const reportTitle = `${moduleName} (${fromDate} to ${toDate})`;
     `;
   }
 
-  
-
   // ================= PRINT WINDOW =================
   printWindow.document.write(`
     <html>
@@ -711,7 +593,7 @@ const reportTitle = `${moduleName} (${fromDate} to ${toDate})`;
        
         <style>
           @page {
-            size: A4 portrait;
+            size: A4 landscape;
             margin: 15mm 10mm 20mm 10mm;
           }
 
@@ -722,16 +604,14 @@ const reportTitle = `${moduleName} (${fromDate} to ${toDate})`;
           }
 
           table {
-  width: auto;
-  min-width: 400px;
-  border-collapse: collapse;
-  margin: 0 auto;
-}
+            width: 100%;
+            border-collapse: collapse;
+          }
 
           th, td {
             border: 1px solid #ccc;
             padding: 3px;
-            font-size: 12px;
+            font-size: 9px;
           }
 
           th {
@@ -749,7 +629,7 @@ const reportTitle = `${moduleName} (${fromDate} to ${toDate})`;
           @media print {
             @page {
               @bottom-left {
-                content: "AbdulWahed BinShabib Investment Group LLC • User: ${
+                content: "Designed by Bin Shabib Group LLC • User: ${
                   activeUser?.name || ""
                 } • Printed: ${formattedTime}";
                 font-size: 9px;
@@ -765,7 +645,7 @@ const reportTitle = `${moduleName} (${fromDate} to ${toDate})`;
       </head>
 
       <body>
-        <h3>${reportTitle} </h3>
+        <h3>${moduleName}</h3>
         ${tableHtml}
       </body>
     </html>
@@ -1047,13 +927,6 @@ const buildDynamicColumns = (data, currencyMap, termMap) => {
       };
     }
 
-     if (key === "total_amount_aed") {
-      return {
-        column_name: key,
-        display_name: "Total Amount (AED)",
-      };
-    }
-
     if (key.startsWith("CR")) {
       return {
         column_name: key,
@@ -1065,13 +938,6 @@ const buildDynamicColumns = (data, currencyMap, termMap) => {
       return {
         column_name: key,
         display_name: `Total Cost (${termMap?.[key.toUpperCase()] || key})`,
-      };
-    }
-
-     if (key.includes('Total_Amount')) {
-      return {
-        column_name: key,
-        display_name: "Total Amount (AED)",
       };
     }
 
@@ -1117,7 +983,7 @@ const getCellValue = (row, col, isTotalRow = false) => {
   if (col.column_name.toLowerCase().includes("paymentmethod")) {
     return "**** " + (value || "").slice(-4);
   }
-  
+
   return value ?? "-";
 };
 
@@ -1204,39 +1070,7 @@ const loadReport = async (reportId, overrideDateFilters = dateFilters, type = re
   }
 };
 
-const applyDateFilter = async () => {
-  try {
-    setLoading(true);
-    setPage(1);
-
-    const reportId = report?.report_id || id;
-
-    await loadReport(
-      reportId,
-      dateFilters,
-      reportType
-    );
-
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setLoading(false);
-  }
-};
-
-const filteredRows = useMemo(() => {
-  if (!search) return rows;
-
-  const keyword = search.toLowerCase();
-
-  return rows.filter((row) =>
-    Object.values(row).some((val) =>
-      String(val || "").toLowerCase().includes(keyword)
-    )
-  );
-}, [rows, search]);
-
-const summaryRows = filteredRows;
+const summaryRows = rows;
 
 const groupedRows = useMemo(() => {
   if (!report?.is_detailed || !groupBy) return [];
@@ -1266,13 +1100,13 @@ const visibleDetailedColumns = useMemo(() => {
 const detailedFlatRows = useMemo(() => {
   if (reportType !== "detailed") return [];
 
-  return filteredRows.map((row) => ({
+  return rows.map((row) => ({
     ...row,
     _group: row[groupBy] || "Unknown",
   }));
-}, [filteredRows, groupBy, reportType]);
+}, [rows, groupBy, reportType]);
 
-const paginatedRows = filteredRows.slice(
+const paginatedRows = rows.slice(
   (page - 1) * pageSize,
   page * pageSize
 );
@@ -1303,7 +1137,7 @@ const fullGroupedRows = useMemo(() => {
   if (reportType !== "detailed") return [];
 
   return Object.entries(
-    filteredRows.reduce((acc, row) => {
+    rows.reduce((acc, row) => {
       const key = row[groupBy] || "Unknown";
 
       if (!acc[key]) acc[key] = [];
@@ -1312,7 +1146,7 @@ const fullGroupedRows = useMemo(() => {
       return acc;
     }, {})
   );
-}, [filteredRows, groupBy, reportType]);
+}, [rows, groupBy, reportType]);
 
 
  const isRightAligned = (col) => {
@@ -1814,19 +1648,6 @@ const fullGroupedRows = useMemo(() => {
   printModuleName={printModuleName}
   setPrintModuleName={setPrintModuleName}
 /> */}
- {console.log("filters from tablefilterdrayer:",filters)}
- <TableFiltersDrawer
-  open={showFilters}
-  onClose={() => setShowFilters(false)}
-  onSearch={handleSearch}
-  masterList={masterList}
-  filters={filters}
-  setFilters={setFilters}
-  currencies={currencies}
-  masterDataMap={masterDataMap}
-  setMasterDataMap={setMasterDataMap}
-
-/>
 
 
 

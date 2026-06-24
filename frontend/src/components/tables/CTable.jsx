@@ -1,6 +1,6 @@
 import React,{ useEffect, useState, useRef, useLayoutEffect, act, use, useMemo } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import { fetchSections, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow, getPreviewPRF, unpostPRFTransaction, postPRFTransaction  } from "../../api/api";
+import { fetchSections,fetchMasters, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow, getPreviewPRF, unpostPRFTransaction, postPRFTransaction  } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -160,6 +160,7 @@ export default function DynamicTablePage() {
     const [providerPlans, setProviderPlans] = useState([]);
     const [autoFilledFields, setAutoFilledFields] = useState({});
     const [planManuallyChanged, setPlanManuallyChanged] = useState(false);
+    const [masters, setMasters] = useState([]);
     const [groupBy, setGroupBy] = useState({
       key: null,
       direction: "asc"
@@ -238,6 +239,8 @@ export default function DynamicTablePage() {
     const [showHidePopup, setShowHidePopup] = useState(false);
     const [hidePopupColumn, setHidePopupColumn] = useState(null);
     const [tempHideColumns, setTempHideColumns] = useState([]);
+    const [appliedFilters, setAppliedFilters] = useState([]);
+    
     useEffect(() => {
       const handleResize = () => {
         setIsMobile(window.innerWidth < 768);
@@ -350,7 +353,7 @@ const handleDragEnd = (event) => {
 
 const [dateFilters, setDateFilters] = useState(getCurrentMonth());
 
-const isFilterActive = search || filters?.length > 0 
+const isFilterActive = search || appliedFilters?.length > 0 
 
 const openColumnSelector = () => {
   const defaultCols = columns.map(c => c.column_name);
@@ -667,59 +670,59 @@ useEffect(() => {
   workflowAuth();
 }, []);
 
-const toFilterKey = (masterName, rawVal) => {
-  const input = String(rawVal ?? "").trim().toLowerCase();
-  if (!input) return rawVal;
+// const toFilterKey = (masterName, rawVal) => {
+//   const input = String(rawVal ?? "").trim().toLowerCase();
+//   if (!input) return rawVal;
 
-  if (masterName === "currency") {
-    const hit = currencies.find((c) => {
-      const code = String(c.currency_code ?? "").trim().toLowerCase();
-      const name = String(c.currency ?? "").trim().toLowerCase();
-      return code === input || name === input;
-    });
+//   if (masterName === "currency") {
+//     const hit = currencies.find((c) => {
+//       const code = String(c.currency_code ?? "").trim().toLowerCase();
+//       const name = String(c.currency ?? "").trim().toLowerCase();
+//       return code === input || name === input;
+//     });
 
-    return hit?.currency_code ?? rawVal;
-  }
+//     return hit?.currency_code ?? rawVal;
+//   }
 
-  const options = masterDataMap?.[masterName] || [];
-  const hit = options.find((o) => {
-    const key = String(o?.key ?? o?.id ?? o?.value ?? "").trim().toLowerCase();
-    const val = String(o?.value ?? o ?? "").trim().toLowerCase();
-    return input === key || input === val;
-  });
+//   const options = masterDataMap?.[masterName] || [];
+//   const hit = options.find((o) => {
+//     const key = String(o?.key ?? o?.id ?? o?.value ?? "").trim().toLowerCase();
+//     const val = String(o?.value ?? o ?? "").trim().toLowerCase();
+//     return input === key || input === val;
+//   });
 
-  return hit ? (hit.key ?? hit.id ?? hit.value) : rawVal;
-};
+//   return hit ? (hit.key ?? hit.id ?? hit.value) : rawVal;
+// };
 
-const saveFiltersAsKeys = filters.map((filter) => ({
-  ...filter,
-  values: (filter.values || []).map((val) => toFilterKey(filter.master, normalize(val))),
-}));
-const handleSaveFilter = async () => {
-  if (!saveFilterName.trim()) {
-    alert("Filter name is required");
-    return;
-  }
+// const saveFiltersAsKeys = filters.map((filter) => ({
+//   ...filter,
+//   values: (filter.values || []).map((val) => toFilterKey(filter.master, normalize(val))),
+// }));
+// const handleSaveFilter = async () => {
+//   if (!saveFilterName.trim()) {
+//     alert("Filter name is required");
+//     return;
+//   }
 
- const payload = {
-  filterName: saveFilterName.trim(),
-  userId: activeUser?.email,
-  module_id: currentModule?.module_id,
-  filterData: {
-    search,
-    filters: saveFiltersAsKeys,
-    dateFilters
-  }
-};
+//  const payload = {
+//   filterName: saveFilterName.trim(),
+//   userId: activeUser?.email,
+//   module_id: currentModule?.module_id,
+//   filterData: {
+//     search,
+//     filters: saveFiltersAsKeys,
+//     dateFilters
+//   }
+// };
 
-  //console.log("Saving filter:", payload);
+//   //console.log("Saving filter:", payload);
 
-  await upsertSavedFilter(payload);
+//   await upsertSavedFilter(payload);
 
-  setSaveFilterName("");
-  setShowSaveFilter(false);
-  loadSavedFilters();
-};
+//   setSaveFilterName("");
+//   setShowSaveFilter(false);
+//   loadSavedFilters();
+// };
 
 useEffect(() => {
   if (isFilterActive) {
@@ -790,7 +793,7 @@ useEffect(() => {
     // ];
    // console.log("Columns for master list:", columns);
     const masterMap = {};
-
+console.log("Columns for master list:", columns);
 columns.forEach((c) => {
   if (c.master) {
     masterMap[c.master] = {
@@ -800,7 +803,25 @@ columns.forEach((c) => {
   }
 });
 
-const masterList = Object.values(masterMap);
+  const Masters = async () => {
+    try {
+      const res = await fetchMasters();
+      setMasters(res.data || []);
+    
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+    useEffect(() => {
+    Masters();
+  }, []);
+
+console.log("Masters in ReportTable:", masters);
+const masterList = (masters || []).map(item => ({
+  master: item.master_name,
+  display_name: item.display_name
+}));
 
 //console.log("Master List for Filters:", masterList);
     const [showTableColumnModal, setShowTableColumnModal] = useState(false);
@@ -1248,9 +1269,9 @@ const handleDraftPreviewFromModal = () => {
   const paidByName =
   creditCards.find(
     c =>
-      String(c.card_4number || "").trim() ===
-      String(headers?.[0]?.credit_card || "").trim()
-  )?.card_holder_name || "";
+      String(c.crcd_last4num || "").trim() ===
+      String(headers?.[0]?.crcd_code || "").trim()
+  )?.crcd_holder_name || "";
 
 setPreviewData({
   header: headers,
@@ -1546,53 +1567,41 @@ const transformColumns = (mod, dataRows = []) => {
 
     // ================= LOAD MODULE =================
 const loadModule = async (
-  overrideDateFilters = dateFilters
+  overrideDateFilters = dateFilters,
+  appliedFilters = filters
 ) => {
-  try {
-    setLoading(true);
-    const res = await fetchSections();
-    const mod = res.data.find(
-      (m) => m.module_id == id
+  setLoading(true);
+
+  const res = await fetchSections();
+  const mod = res.data.find(m => m.module_id == id);
+
+  if (mod) {
+    setModule(mod);
+
+    const payload = {
+      filters: JSON.stringify(appliedFilters || []),
+      dateFilters: JSON.stringify({
+        date: {
+          startDate: overrideDateFilters.startDate,
+          endDate: overrideDateFilters.endDate,
+        },
+      }),
+    };
+
+    const dataRes = await getModuleData(
+      id,
+      activeUserEmail,
+      payload,
+      userRole
     );
 
-    if (mod) {
-      setModule(mod);
-
-      const payload = {
-        // search,
-        filters: JSON.stringify(filters || []),
-        dateFilters: JSON.stringify({
-          date: {
-            startDate:
-              overrideDateFilters.startDate,
-            endDate:
-              overrideDateFilters.endDate,
-          },
-        }),
-      };
-
-      const dataRes = await getModuleData(
-        id,
-        activeUserEmail,
-        payload,
-        userRole
-      );
-      console.log("userRole:", userRole);
-      setRows(dataRes.data || []);
-
-      setColumns(
-        orderColumnsByConfig(
-          (mod?.columns || []).filter(
-            (c) => c.is_active !== false
-          )
-        )
-      );
-    }
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setLoading(false);
+    setRows(dataRes.data || []);
+    setColumns(orderColumnsByConfig(
+      (mod?.columns || []).filter(c => c.is_active !== false)
+    ));
   }
+
+  setLoading(false);
 };
 
 const isGenerated = rows.some(r => !!r.prf_num);
@@ -1600,7 +1609,7 @@ const isGenerated = rows.some(r => !!r.prf_num);
 
 useEffect(() => {
   loadModule();
-}, [ filters, search]);
+}, [ search]);
 
     const loadCurrencies = async () => {
         try {
@@ -2466,28 +2475,21 @@ const isPrfBlockedProductType = (productTypeValue) => {
 };
 
 
-const filteredRows = rows.filter((row, rowIndex) => {
+const filteredRows = rows.filter((row) => {
 
-
-
-  // =========================
-  // 1. FILTER CHIPS
-  // =========================
-
-  const passesFilters = filters.every((filter) => {
+  const passesFilters = appliedFilters.every((filter) => {
 
     const selectedValues =
       (filter.values || []).map(normalize);
 
     if (selectedValues.length === 0) return true;
 
-    // ✅ MASTER → COLUMN_NAME
-const fieldKey =
-  columns.find(
-    (c) =>
-      c.master === filter.master ||
-      c.master1 === filter.master
-  )?.column_name || filter.master;
+    const fieldKey =
+      columns.find(
+        (c) =>
+          c.master === filter.master ||
+          c.master1 === filter.master
+      )?.column_name || filter.master;
 
     const rawValue = row?.[fieldKey];
 
@@ -2497,23 +2499,10 @@ const fieldKey =
         : rawValue
     );
 
-
-
     return selectedValues.includes(rowValue);
   });
 
-
-
-  if (!passesFilters) {
-
-
-
-    return false;
-  }
-
-  // =========================
-  // 2. SEARCH FILTER
-  // =========================
+  if (!passesFilters) return false;
 
   return rowMatchesSearch(row);
 });
@@ -2922,7 +2911,7 @@ const handleSearch = (key) => {
   searchInputRef.current?.focus();
   searchInputRef.current?.select();
   setOpenMenu(null);
-
+  setPage(1);
   setColumnChips(prev => {
     const filtered = prev.filter(
       c => !(c.type === "search" && c.column === key)
@@ -3378,19 +3367,23 @@ useEffect(() => {
                hover:bg-orange-50 hover:border-orange-400 hover:text-orange-600 transition">
         Filters
    </button>
- 
+ {console.log("filters from tablefilterdrayer:",filters)}
  <TableFiltersDrawer
   open={showFilters}
   onClose={() => setShowFilters(false)}
+  onSearch={(cleanedFilters) => {
+    setFilters(cleanedFilters);   // IMPORTANT
+    loadModule(dateFilters, cleanedFilters);
+  }}
   masterList={masterList}
   filters={filters}
   setFilters={setFilters}
   currencies={currencies}
   masterDataMap={masterDataMap}
   setMasterDataMap={setMasterDataMap}
-  saveFilterName={saveFilterName}
-  setSaveFilterName={setSaveFilterName}
-  handleSaveFilter={handleSaveFilter}
+  // saveFilterName={saveFilterName}
+  // setSaveFilterName={setSaveFilterName}
+  // handleSaveFilter={handleSaveFilter}
 />
  <button
   className="
@@ -3481,6 +3474,7 @@ useEffect(() => {
       onChange={(e) => {
         const value = e.target.value;
         setSearch(value);
+        setPage(1);
         if (value === "") {
           setSearchColumnKey(null);
         }
@@ -3665,15 +3659,16 @@ useEffect(() => {
             {/* ACTIVE FILTER CHIPS */}
             <div className="flex items-start justify-between flex-wrap gap-3">
             <div className="flex flex-wrap gap-2 mt-0 mb-4">
-
-  {filters.map((f, i) => {
-
+  {console.log("Rendering filter chips:", filters)}
+  {/* {filters.map((f, i) => {
+    
     const masterName = normalize(f.master);
 
-    const options =
-      masterName === "currency"
-        ? currencies.map(c => c.currency_code)
-        : (masterDataMap?.[masterName] || []).map(normalize);
+    const rawOptions = masterDataMap?.[masterName];
+
+const options = Array.isArray(rawOptions)
+  ? rawOptions.map(normalize)
+  : [];
 
     const selectedValues = (f.values || []).map(normalize);
 
@@ -3683,14 +3678,15 @@ useEffect(() => {
         className="relative flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-3 py-1 shadow-sm"
       >
 
-        {/* MASTER NAME */}
+     
         <span className="text-sm font-medium text-gray-700">
           {masterName}
         </span>
 
-        {/* SELECTED VALUES */}
+      
         <div className="flex gap-1 flex-wrap">
           {selectedValues.map((val, idx) => (
+            console.log("selected value:", val),
             <span
               key={idx}
               className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
@@ -3721,7 +3717,7 @@ useEffect(() => {
 
        
 
-        {/* REMOVE FILTER */}
+    
         <button
           onClick={() =>
             setFilters(filters.filter((_, index) => index !== i))
@@ -3733,7 +3729,7 @@ useEffect(() => {
 
       </div>
     );
-  })}
+  })} */}
 
 <div className="flex flex-col gap-3 mb-3">
 
@@ -5667,7 +5663,7 @@ onDrop={() => handleDrop(col.column_name)}
 
                 {/* PRODUCT */}
                 <td className="p-3 border-b min-w-[220px]">
-{console.log("Rendering product input for item:", item)}
+
                  <input
                 
                   value={item.product || ""}
@@ -5926,7 +5922,7 @@ onDrop={() => handleDrop(col.column_name)}
             setShowGenerateModal(true);
             return;
           }
-          loadModule(); // <-- refresh table data after closing preview
+         // loadModule(); // <-- refresh table data after closing preview
         }}
       />
 

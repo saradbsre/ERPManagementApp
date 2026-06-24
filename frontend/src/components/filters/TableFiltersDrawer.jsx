@@ -5,6 +5,7 @@ import { getMasterValues } from "../../api/api";
 export default function TableFiltersDrawer({
   open,
   onClose,
+  onSearch,
   masterList = [],
   filters,
   setFilters,
@@ -16,7 +17,8 @@ export default function TableFiltersDrawer({
   handleSaveFilter,
 }) {
   const masterList1 = [...(masterList || [])];
-
+   console.log("Master List in Drawer:", masterList1);
+   console.log("filters send to main table:", filters);
   // ================= LOAD MASTER DATA =================
   useEffect(() => {
     if (!open) return;
@@ -29,20 +31,26 @@ export default function TableFiltersDrawer({
 
         try {
           const res = await getMasterValues(master);
-
+          console.log(`Master Data for ${master}:`, res);
+          const pk = res?.data?.pk || "key";
+          console.log(`Primary Key for ${master}:`, pk);
           setMasterDataMap((prev) => ({
-            ...prev,
-            [master]: res?.data?.data || [],
-          }));
+          ...prev,
+          [master]: {
+            pk: res?.data?.pk,
+            data: res?.data?.data || [],
+          },
+        }));
         } catch (err) {
           console.error(err);
         }
       }
     };
-
+  
     loadMasters();
   }, [open]);
-
+ 
+  console.log("Master Data Map in Drawer:", masterDataMap);
   // ================= ADD FILTER =================
   const addFilter = (master) => {
     if (!master) return;
@@ -75,19 +83,43 @@ export default function TableFiltersDrawer({
   };
 
   // ================= OPTIONS =================
-  const getOptions = (master) => {
-    if (master === "currency") {
-      return currencies.map((c) => c.currency_code);
-    }
-
-    return (masterDataMap?.[master] || []).map((x) => x.value);
-  };
+const getOptions = (master) => {
+  return (masterDataMap?.[master]?.data || []).map((x) => ({
+    key: x.key,
+    value: x.value,
+  }));
+};
 
   // available filters (not selected yet)
   const availableFilters = masterList1.filter(
     (item) =>
       !filters.some((f) => f.master === item.master)
   );
+
+const cleanedFilters = filters.map(f => ({
+  master: f.master,
+
+  pk: masterDataMap?.[f.master]?.pk,
+
+  values: f.values.map(v => v.key)
+}));
+
+ const handleSearch = () => {
+  if (!onSearch) return;
+
+  // 1. build cleaned filters
+  const cleanedFilters = filters.map(f => ({
+    master: f.master,
+    pk: masterDataMap?.[f.master]?.pk,
+    values: (f.values || []).map(v => v.key)
+  }));
+
+  // 2. send to parent
+  onSearch(cleanedFilters);
+
+  // 3. optionally close drawer
+  onClose?.();
+};
 
   return (
     <>
@@ -110,23 +142,27 @@ export default function TableFiltersDrawer({
       >
 
         {/* HEADER */}
-        <div className="px-6 py-5 border-b flex justify-between items-center">
-          <div>
-            <h2 className="text-lg font-semibold">
-              Filters
-            </h2>
-            <p className="text-xs text-gray-500">
-              Select filters dynamically
-            </p>
-          </div>
+<div className="px-6 py-5 border-b flex justify-between items-center">
+  <div>
+    <h2 className="text-lg font-semibold">Filters</h2>
+  </div>
 
-          <button
-            onClick={() => setFilters([])}
-            className="text-sm px-3 py-1 border rounded-lg hover:bg-gray-50"
-          >
-            Clear
-          </button>
-        </div>
+  <div className="flex gap-2">
+    <button
+      onClick={() => setFilters([])}
+      className="text-sm px-3 py-1 border rounded-lg hover:bg-gray-50"
+    >
+      Clear
+    </button>
+
+    <button
+      onClick={handleSearch}
+      className="text-sm px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+    >
+      Search
+    </button>
+  </div>
+</div>
 
         {/* BODY */}
         <div className="p-6 space-y-4 overflow-y-auto h-[calc(100%-160px)]">
@@ -185,17 +221,20 @@ export default function TableFiltersDrawer({
                     closeMenuOnSelect={false}
                     placeholder="Select..."
                     options={options.map((opt) => ({
-                      value: opt,
-                      label: opt,
+                       value: opt.key,     // backend key
+                       label: opt.value,   // UI label
                     }))}
                     value={(filter.values || []).map((v) => ({
-                      value: v,
-                      label: v,
+                       value: v.key,
+                       label: v.value,
                     }))}
                     onChange={(selected) =>
                       updateValues(
                         index,
-                        selected?.map((x) => x.value) || []
+                        selected?.map((x) => ({
+                          key: x.value,
+                          value: x.label,
+                        })) || []
                       )
                     }
                     styles={{
@@ -227,7 +266,7 @@ export default function TableFiltersDrawer({
           })}
 
           {/* SAVE VIEW */}
-          <div className="mt-8 border-t pt-6">
+          {/* <div className="mt-8 border-t pt-6">
 
             <div className="text-sm font-semibold mb-2">
               Save View
@@ -263,7 +302,7 @@ export default function TableFiltersDrawer({
               Save View
             </button>
 
-          </div>
+          </div> */}
 
         </div>
 

@@ -587,7 +587,10 @@ const getLabel = (key, value) => {
     placeholder="Search records..."
     className="border px-3 py-2 rounded-lg w-64"
     value={search}
-    onChange={(e) => setSearch(e.target.value)}
+    onChange={(e) => {
+      setSearch(e.target.value);
+      setPage(1);
+    }}
   />
 
   {/* RIGHT SIDE */}
