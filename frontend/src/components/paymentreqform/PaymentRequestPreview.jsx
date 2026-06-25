@@ -476,7 +476,7 @@ function handlePrint() {
         <style>
           @page {
             size: A4;
-            margin: 10mm 10mm 20mm 10mm;
+            margin: 10mm 10mm 15mm 10mm;
           }
 
           html,
@@ -518,7 +518,7 @@ function handlePrint() {
           @media print {
             @page {
               @bottom-left {
-                content: "Designed by Bin Shabib Group LLC • User: ${activeUser?.name || ""} • Printed: ${formattedTime}";
+                content: "User: ${activeUser?.name || ""} • Printed: ${formattedTime}";
                 font-size: 9px;
                 font-family: "Times New Roman", serif;
               }
