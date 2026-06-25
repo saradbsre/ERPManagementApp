@@ -69,6 +69,7 @@ export default function ReportTable() {
     const isSummary = report?.is_detailed === true;
     const [masters, setMasters] = useState([]);  
     const groupBy = report?.group_by || null;
+    const IsEquivalent = report?.is_equivalent === true;
     useEffect(() => {
       const handleResize = () => {
         setIsMobile(window.innerWidth < 768);
@@ -132,10 +133,30 @@ const isFilterActive = search || filters?.length > 0
 const onInputChange = (e) => {
   const { name, value } = e.target;
 
-  setDateFilters((prev) => ({
-    ...prev,
-    [name]: value,
-  }));
+  if (IsEquivalent) {
+    if (name === "endDate") {
+      const [year, month] = value.split("-");
+
+      const lastDay = new Date(year, month, 0)
+        .toISOString()
+        .split("T")[0];
+
+      setDateFilters((prev) => ({
+        ...prev,
+        [name]: lastDay,
+      }));
+    } else {
+      setDateFilters((prev) => ({
+        ...prev,
+        [name]: `${value}-01`,
+      }));
+    }
+  } else {
+    setDateFilters((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  }
 };
 
 
@@ -1453,9 +1474,13 @@ const fullGroupedRows = useMemo(() => {
 
               {/* Start Date */}
               <input
-                type="date"
+                type={IsEquivalent ? "month" : "date"}
                 name="startDate"
-                value={dateFilters.startDate}
+                value={
+                  IsEquivalent
+                    ? (dateFilters.startDate || "").slice(0, 7) // YYYY-MM
+                    : dateFilters.startDate
+                }
                 onChange={onInputChange}
                 className="
                   h-9 w-[130px]
@@ -1476,9 +1501,13 @@ const fullGroupedRows = useMemo(() => {
 
               {/* End Date */}
               <input
-                type="date"
+                type={IsEquivalent ? "month" : "date"}
                 name="endDate"
-                value={dateFilters.endDate}
+                value={
+                  IsEquivalent
+                    ? (dateFilters.endDate || "").slice(0, 7) // YYYY-MM
+                    : dateFilters.endDate
+                }
                 onChange={onInputChange}
                 className="
                   h-9 w-[130px]
