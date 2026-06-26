@@ -1398,7 +1398,7 @@ const currentDate = new Date();
       <td className="border border-gray-800 px-2 py-1 font-semibold">
 
         <div className="text-[8px]">
-          {details?.prepared_by}
+          {details?.prepared_by.toUpperCase()}
         </div>
 
         <div className="mt-2 text-[8px] ">
