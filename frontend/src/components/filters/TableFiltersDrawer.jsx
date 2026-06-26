@@ -17,8 +17,8 @@ export default function TableFiltersDrawer({
   handleSaveFilter,
 }) {
   const masterList1 = [...(masterList || [])];
-   console.log("Master List in Drawer:", masterList1);
-   console.log("filters send to main table:", filters);
+   // console.log("Master List in Drawer:", masterList1);
+    console.log("filters send to main table:", filters);
   // ================= LOAD MASTER DATA =================
   useEffect(() => {
     if (!open) return;
@@ -31,9 +31,9 @@ export default function TableFiltersDrawer({
 
         try {
           const res = await getMasterValues(master);
-          console.log(`Master Data for ${master}:`, res);
+          // console.log(`Master Data for ${master}:`, res);
           const pk = res?.data?.pk || "key";
-          console.log(`Primary Key for ${master}:`, pk);
+          // console.log(`Primary Key for ${master}:`, pk);
           setMasterDataMap((prev) => ({
           ...prev,
           [master]: {
@@ -42,7 +42,7 @@ export default function TableFiltersDrawer({
           },
         }));
         } catch (err) {
-          console.error(err);
+           console.error(err);
         }
       }
     };
@@ -50,7 +50,7 @@ export default function TableFiltersDrawer({
     loadMasters();
   }, [open]);
  
-  console.log("Master Data Map in Drawer:", masterDataMap);
+  // // console.log("Master Data Map in Drawer:", masterDataMap);
   // ================= ADD FILTER =================
   const addFilter = (master) => {
     if (!master) return;
@@ -72,15 +72,36 @@ export default function TableFiltersDrawer({
   };
 
   // ================= UPDATE VALUES =================
-  const updateValues = (index, values) => {
-    setFilters((prev) =>
-      prev.map((f, i) =>
-        i === index
-          ? { ...f, values }
-          : f
-      )
-    );
-  };
+
+
+  const normalizeValues = (values = []) =>
+  values.map(v =>
+    typeof v === "string"
+      ? { key: v, value: v }
+      : v
+  );
+
+const updateValues = (index, values) => {
+  setFilters((prev) =>
+    prev.map((f, i) =>
+      i === index
+        ? { ...f, values: normalizeValues(values) }
+        : f
+    )
+  );
+};
+
+  // const updateValues = (index, values) => {
+  //   setFilters((prev) =>
+  //     prev.map((f, i) =>
+  //       i === index
+  //         ? { ...f, values }
+  //         : f
+  //     )
+  //   );
+  // };
+
+  console.log("updated values:", filters);
 
   // ================= OPTIONS =================
 const getOptions = (master) => {
@@ -104,20 +125,24 @@ const cleanedFilters = filters.map(f => ({
   values: f.values.map(v => v.key)
 }));
 
- const handleSearch = () => {
+const handleSearch = (overrideFilters) => {
   if (!onSearch) return;
 
-  // 1. build cleaned filters
-  const cleanedFilters = filters.map(f => ({
+  const sourceFilters = Array.isArray(overrideFilters)
+  ? overrideFilters
+  : Array.isArray(filters)
+    ? filters
+    : [];
+
+  const cleanedFilters = sourceFilters.map(f => ({
     master: f.master,
     pk: masterDataMap?.[f.master]?.pk,
-    values: (f.values || []).map(v => v.key)
+    values: (f.values || []).map(v =>
+  typeof v === "string" ? v : v.key
+)
   }));
 
-  // 2. send to parent
   onSearch(cleanedFilters);
-
-  // 3. optionally close drawer
   onClose?.();
 };
 
@@ -148,12 +173,16 @@ const cleanedFilters = filters.map(f => ({
   </div>
 
   <div className="flex gap-2">
-    <button
-      onClick={() => setFilters([])}
-      className="text-sm px-3 py-1 border rounded-lg hover:bg-gray-50"
-    >
-      Clear
-    </button>
+   <button
+  onClick={() => {
+    const clearedFilters = [];
+    setFilters(clearedFilters);
+    handleSearch(clearedFilters);
+  }}
+  className="text-sm px-3 py-1 border rounded-lg hover:bg-gray-50"
+>
+  Clear
+</button>
 
     <button
       onClick={handleSearch}
@@ -224,10 +253,16 @@ const cleanedFilters = filters.map(f => ({
                        value: opt.key,     // backend key
                        label: opt.value,   // UI label
                     }))}
-                    value={(filter.values || []).map((v) => ({
-                       value: v.key,
-                       label: v.value,
-                    }))}
+                   value={(filter.values || []).map(v => {
+  const key = typeof v === "string" ? v : v.key;
+
+  const option = options.find(o => o.key === key);
+
+  return {
+    value: key,
+    label: option?.value || (typeof v === "string" ? v : v.value),
+  };
+})}
                     onChange={(selected) =>
                       updateValues(
                         index,

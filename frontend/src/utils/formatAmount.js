@@ -3,7 +3,7 @@ export const formatAmount = (value) => {
 
   const num = Number(value);
 
-  if (isNaN(num)) return value;
+  if (!isFinite(num) || num === 0) return "-";
 
   return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,

@@ -644,6 +644,8 @@ const periodDisplay =
     : "-";
 const currentDate = new Date();
 
+const covertedExchangeRate = 1 / (details?.exchange_rate || 1);
+
   return (
     <div className="bg-gray-200 min-h-screen py-10 px-4 overflow-auto">
 
@@ -1319,7 +1321,7 @@ const currentDate = new Date();
   {details?.exchange_rate && (
     <>
       {" "}
-      (Converted at an exchange rate of {details.exchange_rate} when this PRF was generated on{" "}
+      (Converted at an exchange rate of {formatDecimal(covertedExchangeRate)} when this PRF was generated on{" "}
       {formatDate(details.prf_date)})
     </>
   )}

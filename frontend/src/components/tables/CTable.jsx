@@ -817,7 +817,7 @@ columns.forEach((c) => {
     Masters();
   }, []);
 
-console.log("Masters in ReportTable:", masters);
+
 const masterList = (masters || []).map(item => ({
   master: item.master_name,
   display_name: item.display_name
@@ -1085,8 +1085,8 @@ useEffect(() => {
 
 const rowCurrency = (
   Array.isArray(selectedRow)
-    ? selectedRow[0]?.currency
-    : selectedRow?.currency
+    ? selectedRow[0]?.curr_code
+    : selectedRow?.curr_code
 )
   ?.toString()
   .trim()
@@ -1099,22 +1099,22 @@ const selectedCurrency = currencies.find((c) => {
     .toString()
     .trim()
     .toUpperCase();
-
+  console.log("Checking currency:", currencyCode, "against row currency:", rowCurrency);
   const currencyName = (c.curr_name || "")
     .toString()
     .trim()
     .toUpperCase();
-
+  console.log("Checking currency name:", currencyName, "against row currency:", rowCurrency);
   return (
     currencyCode === rowCurrency ||
     currencyName === rowCurrency
   );
 });
-
+console.log("currencies:", currencies);
 // console.log("Selected Currency:", selectedCurrency);
 // console.log("Selected currency for PRF generation:", selectedCurrency);
 const exchange_rate = selectedCurrency?.curr_exchange_rate || 1;
-//console.log("exchange_rate:", exchange_rate, "for currency:", selectedCurrency);
+console.log("exchange_rate:", exchange_rate, "for currency:", selectedCurrency);
 const loadPreviewData = async (prfNum) => {
   const res = await getPreviewPRF(prfNum);
   const previewObj = Array.isArray(res.data)
@@ -1144,6 +1144,8 @@ const handleGenerate = async () => {
     0
   );
 
+  const covertedExchangeRate = 1 / exchange_rate;
+
   const payload = {
     prf_num: prfNumber,
 
@@ -1159,7 +1161,7 @@ const handleGenerate = async () => {
     verified_by: form.verified_by,
     signed_by: form.signed_by,
     approved_by: form.approved_by,
-    exchange_rate,
+    exchange_rate: formatNumber(covertedExchangeRate),
     userid: activeUserEmail,
     is_advertising: isAdvertising ? 1 : 0,
     remarks: form.remarks
@@ -1830,7 +1832,7 @@ const calculateCost = (amount, currencyCode, term) => {
   if (!rate || isNaN(rate)) return null;
   return Number(amount) * Number(rate);
 };
-
+console.log("Column chips for grouping:", columnChips);
 const groupedChips = columnChips.reduce((acc, chip) => {
   if (!acc[chip.type]) acc[chip.type] = [];
   acc[chip.type].push(chip);
@@ -2928,20 +2930,22 @@ const handleSearch = (key) => {
   });
 };
 
-const handleGroup = (key, direction) => {
+const handleGroup = (key, direction, displayName) => {
   setGroupBy({ key, direction });
 
   setColumnChips(prev => {
+    
     const filtered = prev.filter(
       c => !(c.type === "group" && c.column === key)
     );
-
+    console.log("Adding group chip:", { type: "group", column: key, value: direction });
     return [
       ...filtered,
       {
         type: "group",
         column: key,
-        value: direction
+        value: direction,
+        displayName: displayName 
       }
     ];
   });
@@ -3367,11 +3371,12 @@ useEffect(() => {
                hover:bg-orange-50 hover:border-orange-400 hover:text-orange-600 transition">
         Filters
    </button>
- {console.log("filters from tablefilterdrayer:",filters)}
+ {console.log("Filters state:", filters)}
  <TableFiltersDrawer
   open={showFilters}
   onClose={() => setShowFilters(false)}
   onSearch={(cleanedFilters) => {
+    console.log("Filters applied:", cleanedFilters);
     setFilters(cleanedFilters);   // IMPORTANT
     loadModule(dateFilters, cleanedFilters);
   }}
@@ -3739,7 +3744,7 @@ const options = Array.isArray(rawOptions)
       <span className="text-xs font-bold text-gray-600 mr-2">
         SEARCHING:
       </span>
-
+      {console.log("Rendering search chips:", groupedChips)}
       {groupedChips.search.map((chip, i) => (
         <div
           key={i}
@@ -3795,7 +3800,7 @@ const options = Array.isArray(rawOptions)
       <span className="text-xs font-bold text-gray-600 mr-2">
         GROUPING:
       </span>
-
+      {console.log("Rendering group chips:", groupedChips)}
       {groupedChips.group.map((chip, i) => (
        <div
   key={i}
@@ -3966,9 +3971,10 @@ onDrop={() => handleDrop(col.column_name)}
         </button>
 
         <button
-          onClick={() =>
-            handleGroup(col.column_name, "asc")
-          }
+          onClick={() => {
+            console.log("Grouping by column:", col, "with direction: asc");
+            handleGroup(col.column_name, "asc", col.display_name);
+          }}
           className="w-full text-left px-3 py-2 hover:bg-gray-100"
         >
           Group by Ascending
@@ -3976,7 +3982,7 @@ onDrop={() => handleDrop(col.column_name)}
 
         <button
           onClick={() =>
-            handleGroup(col.column_name, "desc")
+            handleGroup(col.column_name, "desc", col.display_name)
           }
           className="w-full text-left px-3 py-2 hover:bg-gray-100"
         >
@@ -4405,6 +4411,10 @@ onDrop={() => handleDrop(col.column_name)}
         key={row.id ?? i}
         className="group hover:bg-gray-50 transition-colors cursor-pointer"
         onDoubleClick={() => {
+          if (row.prf_num && !isRowUnposted(row)) {
+            handlePreview(encodeURIComponent(row.prf_num));
+            return;
+          }
           if (!row.prf_num || isRowUnposted(row)) {
             setEditRowId(row.id);
             setEditRow({ ...row });

@@ -196,6 +196,13 @@ export const exportPdf = (data) => {
   });
 };
 
+export const reportPdf = (reportId, activeUserEmail, data) => {
+  return API.post(`/report-pdf`, data, {
+    responseType: "blob",
+    params: { reportId, activeUserEmail }
+  });
+};
+
 export const createMasterData = (masterName, data, activeUserEmail) => {
   return API.post(`/masters/${masterName}`, data, {
     params: { activeUserEmail }
@@ -439,3 +446,7 @@ export const getReportData = ( reportId, activeUserEmail, payload = {} ) => {
     }
   });
 };
+
+export const getDisplayName = () => {
+  return API.get(`/displayname`);
+}

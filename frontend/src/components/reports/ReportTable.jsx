@@ -1,6 +1,6 @@
 import React,{ useEffect, useState, useRef, useLayoutEffect, act, use, useMemo } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import {  getModuleData, getMasterValues, getReportData, fetchMasters   } from "../../api/api";
+import {  getModuleData, getMasterValues, getReportData, fetchMasters, getDisplayName, reportPdf   } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -67,8 +67,10 @@ export default function ReportTable() {
     const [productMap, setProductMap] = useState({});
     const [reportType, setReportType] = useState("summary");
     const isSummary = report?.is_detailed === true;
-    const [masters, setMasters] = useState([]);  
+    const [masters, setMasters] = useState([]);
+    const [displayNames, setDisplayNames] = useState({});
     const groupBy = report?.group_by || null;
+  
     const IsEquivalent = report?.is_equivalent === true;
     useEffect(() => {
       const handleResize = () => {
@@ -78,11 +80,39 @@ export default function ReportTable() {
       window.addEventListener("resize", handleResize);
       return () => window.removeEventListener("resize", handleResize);
     }, []);
-    useEffect(() => {
-      setReport(location.state?.report || null);
-    }, [id, location.state]);
-   
-   
+useEffect(() => {
+  setReport(location.state?.report || null);
+
+  resetFiltersState(); // ✅ clear filters when new report loads
+}, [id, location.state]);
+
+useEffect(() => {
+  if (report) {
+    const displaynames = async () => {
+      const res = await getDisplayName();
+
+      const map = {};
+      (res.data || []).forEach(item => {
+        map[item.column_name] = item.display_name;
+      });
+
+      setDisplayNames(map);
+    };
+
+    displaynames();
+  }
+}, [report]);
+
+useEffect(() => {
+  if (!rows?.length) return;
+
+  const dynamicCols = buildDynamicColumns(rows);
+  setColumns(dynamicCols);
+
+}, [displayNames, rows]);
+
+
+
 const getCurrentMonth = () => {
   const now = new Date();
 
@@ -112,12 +142,29 @@ const getCurrentMonth = () => {
       console.error(err);
     }
   };
+const compapny = async () => {
+  try {
+    const res = await getMasterValues("company");
+
+    const companyData = res.data?.data || [];
+
+    const formatted = companyData.map((item) => item.value);
+
+    setCompany(formatted);
+  } catch (err) {
+    console.error(err);
+  }
+};
+
 
     useEffect(() => {
     Masters();
+    compapny();
   }, []);
 
-console.log("Masters in ReportTable:", masters);
+
+
+
 const masterList = (masters || []).map(item => ({
   master: item.master_name,
   display_name: item.display_name
@@ -133,30 +180,10 @@ const isFilterActive = search || filters?.length > 0
 const onInputChange = (e) => {
   const { name, value } = e.target;
 
-  if (IsEquivalent) {
-    if (name === "endDate") {
-      const [year, month] = value.split("-");
-
-      const lastDay = new Date(year, month, 0)
-        .toISOString()
-        .split("T")[0];
-
-      setDateFilters((prev) => ({
-        ...prev,
-        [name]: lastDay,
-      }));
-    } else {
-      setDateFilters((prev) => ({
-        ...prev,
-        [name]: `${value}-01`,
-      }));
-    }
-  } else {
-    setDateFilters((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  }
+  setDateFilters((prev) => ({
+    ...prev,
+    [name]: value,
+  }));
 };
 
 
@@ -248,15 +275,13 @@ useEffect(() => {
 
 
 const handleSearch = async (appliedFilters) => {
-  console.log("Search triggered with filters:", appliedFilters);
   try {
     setLoading(true);
     setPage(1);
 
     const reportId = report?.report_id || id;
 
-    // temporarily override filters BEFORE API call
-    const payloadFilters = appliedFilters || filters;
+    const payloadFilters = appliedFilters ?? filters ?? [];
 
     const payload = {
       filters: JSON.stringify(payloadFilters || []),
@@ -271,47 +296,19 @@ const handleSearch = async (appliedFilters) => {
 
     const res = await getReportData(reportId, activeUserEmail, payload);
 
-    const data = res.data || [];
+    let data = res.data || [];
 
-    const { currencyMap, termMap, companyMap, vendorMap, creditCardMap, productMap } =
-      await loadMasters();
+    // ✅ 1. normalize keys (IMPORTANT)
+    data = data.map(normalizeKeys);
 
-    const normalize = (v) => String(v || "").trim().toUpperCase();
+    // ❗ 2. currency transformation (THIS WAS MISSING)
+    data = transformCurrencyRows(data);
 
-    const mappedRows = data.map((row) => {
-      const newRow = { ...row };
+    // ✅ 3. set rows
+    setRows(data);
 
-      if ("company" in row) {
-        newRow.company =
-          companyMap?.[normalize(row.company)] || row.company;
-      }
-
-      if ("vendor" in row) {
-        newRow.vendor =
-          vendorMap?.[normalize(row.vendor)] || row.vendor;
-      }
-
-      if ("PaymentMethod" in row) {
-        newRow.PaymentMethod =
-          creditCardMap?.[normalize(row.PaymentMethod)] || row.PaymentMethod;
-      }
-
-      if ("term" in row) {
-        newRow.term =
-          termMap?.[normalize(row.term)] || row.term;
-      }
-
-      if ("product" in row) {
-        newRow.product =
-          productMap?.[normalize(row.product)] || row.product;
-      }
-
-      return newRow;
-    });
-
-    setRows(mappedRows);
-
-    const dynamicCols = buildDynamicColumns(mappedRows, currencyMap, termMap);
+    // ✅ 4. rebuild columns
+    const dynamicCols = buildDynamicColumns(data);
     setColumns(dynamicCols);
 
   } catch (err) {
@@ -322,31 +319,6 @@ const handleSearch = async (appliedFilters) => {
 };
 
 
-
-
-
-
-
-
-
-
-    const toMasterKey = (columnName, rawVal) => {
-if (rawVal === null || rawVal === undefined || rawVal === "") return rawVal;
-
-const col = columns.find(c => c.column_name === columnName);
-if (!col?.master) return rawVal;
-
-const options = getMasterOptions(col, "");
-const input = String(rawVal).trim().toLowerCase();
-
-const hit = options.find(o => {
-const key = String(o?.key ?? o?.id ?? o?.value ?? "").trim().toLowerCase();
-const val = String(o?.value ?? o ?? "").trim().toLowerCase();
-return input === key || input === val;
-});
-
-return hit ? (hit.key ?? hit.id ?? hit.value) : rawVal;
-};
 
 
 
@@ -394,7 +366,7 @@ const handleClear = async () => {
     // ================= RESET DATE =================
     setDateFilters(defaults);
 
-    // ================= API CALL (IMPORTANT) =================
+    // ================= API CALL =================
     const payload = {
       search: "",
       filters: JSON.stringify([]),
@@ -409,64 +381,25 @@ const handleClear = async () => {
 
     const res = await getReportData(reportId, activeUserEmail, payload);
 
-    const data = res.data || [];
+    let data = res.data || [];
 
-    // reload masters + mapping again
-    const {
-      currencyMap,
-      termMap,
-      companyMap,
-      vendorMap,
-      creditCardMap,
-      productMap,
-    } = await loadMasters();
+    // ================= IMPORTANT PIPELINE =================
 
-    const normalize = (v) =>
-      String(v || "").trim().toUpperCase();
+    // 1. normalize keys (fix case issues like Total_Amount_AED)
+    data = data.map(normalizeKeys);
 
-    const mappedRows = data.map((row) => {
-      const newRow = { ...row };
+    // 2. transform currency columns (creates amount_AED, amount_USD, etc.)
+    data = transformCurrencyRows(data);
 
-      if ("company" in row) {
-        newRow.company =
-          companyMap?.[normalize(row.company)] || row.company;
-      }
+    // ================= SET ROWS =================
+    setRows(data);
 
-      if ("vendor" in row) {
-        newRow.vendor =
-          vendorMap?.[normalize(row.vendor)] || row.vendor;
-      }
-
-      if ("PaymentMethod" in row) {
-        newRow.PaymentMethod =
-          creditCardMap?.[normalize(row.PaymentMethod)] ||
-          row.PaymentMethod;
-      }
-
-      if ("term" in row) {
-        newRow.term =
-          termMap?.[normalize(row.term)] || row.term;
-      }
-
-      if ("product" in row) {
-        newRow.product =
-          productMap?.[normalize(row.product)] || row.product;
-      }
-
-      return newRow;
-    });
-
-    setRows(mappedRows);
-
-    const dynamicCols = buildDynamicColumns(
-      mappedRows,
-      currencyMap,
-      termMap
-    );
-
+    // ================= REBUILD COLUMNS =================
+    const dynamicCols = buildDynamicColumns(data);
     setColumns(dynamicCols);
+
   } catch (err) {
-    console.error(err);
+    console.error("handleClear failed:", err);
   } finally {
     setLoading(false);
   }
@@ -498,29 +431,21 @@ function getFormattedDateTime(date = new Date()) {
   return `${day}/${month}/${year} ${hours} ${minutes} ${ampm}`;
 }
 
-const buildTotalRow = (cols, rows) => {
-  const totalRow = {};
+const buildTotalRow = (rows, cols) => {
+  const total = {};
 
   cols.forEach((col) => {
-    const key = col.column_name;
-
-    const isNumeric =
-      key.toLowerCase().includes("cr") ||
-      key.toLowerCase().includes("bc") ||
-      key.toLowerCase().includes("cost") ||
-      key.toLowerCase().includes("total");
-
-    if (isNumeric) {
-      totalRow[key] = rows.reduce((sum, r) => {
-        const val = Number(r[key]) || 0;
-        return sum + val;
-      }, 0);
+    if (isNumericColumn(col)) {
+      total[col.column_name] = rows.reduce(
+        (sum, row) => sum + parseNum(row[col.column_name]),
+        0
+      );
     } else {
-      totalRow[key] = "";
+      total[col.column_name] = "";
     }
   });
 
-  return totalRow;
+  return total;
 };
 
 const formatPrintDate = (dateStr) => {
@@ -535,51 +460,80 @@ const formatPrintDate = (dateStr) => {
 
 const handlePrint = () => {
   const printWindow = window.open("", "", "width=1200,height=900");
-
+  const printCompany =  localStorage.getItem("print-company") || "";
+  
   const moduleName = report?.description || "Report";
   const formattedTime = getFormattedDateTime();
 
   const fromDate = formatPrintDate(dateFilters.startDate);
-const toDate = formatPrintDate(dateFilters.endDate);
+  const toDate = formatPrintDate(dateFilters.endDate);
+  
 
-const reportTitle = `${moduleName} (${fromDate} to ${toDate})`;
+  
+  const isDetailed = reportType === "detailed" && report?.is_detailed === true;
 
-  const isDetailed =
-    reportType === "detailed" && report?.is_detailed === true;
+  const reportTypeLabel = isDetailed ? "Detailed" : "Summary";
 
-  // ================= TOTAL ROW BUILDER =================
-  const buildTotalRow = (cols, rows) => {
+  const reportTitle = `${moduleName} ${reportTypeLabel} (${fromDate} to ${toDate})`;
+
+
+  console.log("filters applied for print:", filters);
+ 
+  // ================= TOTAL HELPERS =================
+  const isNumeric = (key) =>
+    key?.toLowerCase().includes("cr") ||
+    key?.toLowerCase().includes("bc") ||
+    key?.toLowerCase().includes("cost") ||
+    key?.toLowerCase().includes("total") ||
+    key?.toLowerCase().includes("amount");
+
+  const dataRows = rows || [];
+
+const grandTotal = buildTotalRow(
+  dataRows,
+  visibleDetailedColumns
+);
+
+    const buildGroupTotal = (rows, cols) => {
     const total = {};
-
     cols.forEach((col) => {
       const key = col.column_name;
-
-      const isNumeric =
-        key.toLowerCase().includes("cr") ||
-        key.toLowerCase().includes("bc") ||
-        key.toLowerCase().includes("cost") ||
-        key.toLowerCase().includes("total");
-
-      if (isNumeric) {
-        total[key] = rows.reduce((sum, r) => sum + (Number(r[key]) || 0), 0);
+      if (isNumeric(key)) {
+        total[key] = rows.reduce(
+          (sum, r) => sum + (Number(r[key]) || 0),
+          0
+        );
       } else {
         total[key] = "";
       }
     });
-
     return total;
   };
 
-  // ================= DATA PREP =================
-  const dataRows = rows || [];
-  const totalRow = buildTotalRow(columns, dataRows);
-
-  const pageRows = dataRows;
+  const buildGrandTotal = (groups, cols) => {
+    const total = {};
+    cols.forEach((col) => {
+      const key = col.column_name;
+      if (isNumeric(key)) {
+        total[key] = groups.reduce((acc, g) => {
+          return (
+            acc +
+            g.rows.reduce((s, r) => s + (Number(r[key]) || 0), 0)
+          );
+        }, 0);
+      } else {
+        total[key] = "";
+      }
+    });
+    return total;
+  };
 
   let tableHtml = "";
 
   // ================= SUMMARY =================
-  if (!isDetailed) {
+   if (!isDetailed) {
+    const totalRow = buildGroupTotal(rows, columns);
+
     tableHtml = `
       <table>
         <thead>
@@ -587,52 +541,58 @@ const reportTitle = `${moduleName} (${fromDate} to ${toDate})`;
             <th>S/N</th>
             ${columns
               .map(
-                (col) => `
-                  <th class="${isRightAligned(col) ? "text-right" : "text-left"}">
-                    ${col.display_name}
-                  </th>
-                `
+                (c) => `<th class="${
+                  isRightAligned(c) ? "text-right" : "text-left"
+                }">${c.display_name}</th>`
               )
               .join("")}
           </tr>
         </thead>
 
         <tbody>
-          ${pageRows
+          ${rows
             .map(
               (row, i) => `
-                <tr>
-                  <td style="text-align:center">${(page - 1) * pageSize + i + 1}</td>
-
-                  ${columns
-                    .map((col) => `
-                      <td class="${
-                        isRightAligned(col) ? "text-right" : "text-left"
-                      }">
-                        ${getCellValue(row, col)}
-                      </td>
-                    `)
-                    .join("")}
-                </tr>
+            <tr>
+              <td style="text-align:center">${i + 1}</td>
+              ${columns
+                .map(
+                  (c) => `
+                <td class="${
+                  isRightAligned(c) ? "text-right" : "text-left"
+                }">
+                  ${getCellValue(row, c)}
+                </td>
               `
+                )
+                .join("")}
+            </tr>`
             )
             .join("")}
 
-          <!-- ================= TOTAL ROW ================= -->
+          <!-- TOTAL ROW -->
           <tr style="font-weight:bold;background:#e5e7eb;">
-            <td>TOTAL</td>
+            <td></td>
 
             ${columns
-              .map((col) => `
-                <td class="${
-                  isRightAligned(col) ? "text-right" : "text-left"
-                }">
-                  ${getCellValue(totalRow, col, true)}
-                </td>
-              `)
+              .map((c, i) => {
+                const total = totalRow[c.column_name];
+
+                // ✅ LABEL BEFORE AMOUNT COLUMN
+                const isLabel =
+                  i ===
+                  columns.findIndex((x) =>
+                    x.column_name.toLowerCase().includes("amount")
+                  ) - 1;
+
+                return `
+                  <td class="text-right">
+                    ${isLabel ? "TOTAL" : isNumeric(c.column_name) ? formatAmount(total) : ""}
+                  </td>
+                `;
+              })
               .join("")}
           </tr>
-
         </tbody>
       </table>
     `;
@@ -640,6 +600,14 @@ const reportTitle = `${moduleName} (${fromDate} to ${toDate})`;
 
   // ================= DETAILED =================
   else {
+    const firstAmountIndex =
+      visibleDetailedColumns.findIndex((c) =>
+        c.column_name?.toLowerCase().startsWith("amount_")
+      );
+
+    const totalLabelIndex =
+      firstAmountIndex > 0 ? firstAmountIndex - 1 : 0;
+
     tableHtml = `
       <table>
         <thead>
@@ -648,7 +616,11 @@ const reportTitle = `${moduleName} (${fromDate} to ${toDate})`;
             ${visibleDetailedColumns
               .map(
                 (col) => `
-                  <th class="${isRightAligned(col) ? "text-right" : "text-left"}">
+                  <th class="${
+                    isRightAligned(col)
+                      ? "text-right"
+                      : "text-left"
+                  }">
                     ${col.display_name}
                   </th>
                 `
@@ -658,17 +630,26 @@ const reportTitle = `${moduleName} (${fromDate} to ${toDate})`;
         </thead>
 
         <tbody>
-          ${fullGroupedRows   
-            .map(
-              ([groupName, groupRows]) => `
+          ${fullGroupedRows
+            .map(([groupName, groupRows]) => {
+             const groupTotal = buildTotalRow(
+  groupRows,
+  visibleDetailedColumns
+);
+
+              return `
+                <!-- GROUP HEADER -->
                 <tr>
                   <td colspan="${
                     visibleDetailedColumns.length + 1
-                  }" style="background:#e5e7eb;font-weight:bold;">
-                    ${(report?.group_by || "GROUP").toUpperCase()} : ${groupName}
+                  }"
+                    style="background:#e5e7eb;font-weight:bold;">
+                    ${(displayNames[report?.group_by] || report?.group_by || "GROUP").toUpperCase()} :
+                    ${groupName}
                   </td>
                 </tr>
 
+                <!-- GROUP ROWS -->
                 ${groupRows
                   .map(
                     (row, i) => `
@@ -692,30 +673,59 @@ const reportTitle = `${moduleName} (${fromDate} to ${toDate})`;
                     `
                   )
                   .join("")}
-              `
-            )
+
+                <!-- GROUP TOTAL -->
+                <tr style="font-weight:bold;background:#f1f5f9;">
+                  <td></td>
+
+                  ${visibleDetailedColumns
+                    .map((col, index) => {
+                      const isLabel =
+                        index === totalLabelIndex;
+
+                      return `
+                        <td class="text-right">
+                          ${
+                            isLabel
+                              ? "TOTAL"
+                              : isNumericColumn(col)
+                              ? formatAmount(
+                                  groupTotal[col.column_name]
+                                )
+                              : ""
+                          }
+                        </td>
+                      `;
+                    })
+                    .join("")}
+                </tr>
+              `;
+            })
             .join("")}
 
-          <!-- ================= TOTAL ROW ================= -->
+          <!-- ================= GRAND TOTAL ================= -->
           <tr style="font-weight:bold;background:#e5e7eb;">
-            <td colspan="${
-              visibleDetailedColumns.length + 1
-            }">TOTAL</td>
-          </tr>
-
-          <tr style="font-weight:bold;background:#f3f4f6;">
-            <td>TOTAL</td>
+            <td></td>
 
             ${visibleDetailedColumns
-              .map(
-                (col) => `
-                <td class="${
-                  isRightAligned(col) ? "text-right" : "text-left"
-                }">
-                  ${getCellValue(totalRow, col, true)}
-                </td>
-              `
-              )
+              .map((col, index) => {
+                const isLabel =
+                  index === totalLabelIndex;
+
+                return `
+                  <td class="text-right">
+                    ${
+                      isLabel
+                        ? "GRAND TOTAL"
+                        : isNumericColumn(col)
+                        ? formatAmount(
+                            grandTotal[col.column_name]
+                          )
+                        : ""
+                    }
+                  </td>
+                `;
+              })
               .join("")}
           </tr>
         </tbody>
@@ -723,56 +733,88 @@ const reportTitle = `${moduleName} (${fromDate} to ${toDate})`;
     `;
   }
 
-  
+const hasFilters =
+  Array.isArray(filters) &&
+  filters.some(
+    (f) => f?.values && f.values.length > 0
+  );
 
-  // ================= PRINT WINDOW =================
+const filterHtml = hasFilters
+  ? `
+  <div style="margin-top:20px;">
+    <h4 style="margin-bottom:8px; font-size:11px;">Applied Filters</h4>
+
+    <table style="width:100%; border-collapse:collapse; font-size:10px;">
+      <tbody>
+        ${filters
+          .filter(f => f?.master !== "dateFilters") // 👈 extra safety
+          .map((filter) => `
+            <tr>
+              <td style="border:1px solid #ccc;padding:5px;font-weight:bold;">
+                ${filter.master.charAt(0).toUpperCase() + filter.master.slice(1)}
+              </td>
+
+              <td style="border:1px solid #ccc;padding:5px;">
+                ${(filter.values || [])
+                  .map(v => v.value)
+                  .join(", ")}
+              </td>
+            </tr>
+          `)
+          .join("")}
+      </tbody>
+    </table>
+  </div>
+`
+  : "";
+
+    const pageStyle = isDetailed
+    ? "size:A4 landscape; margin:10mm 10mm 20mm 10mm;"
+    : "size:A4 portrait; margin:10mm 10mm 20mm 10mm;";
+  // ================= PRINT STYLES =================
   printWindow.document.write(`
     <html>
       <head>
-       
         <style>
           @page {
-            size: A4 portrait;
-            margin: 15mm 10mm 20mm 10mm;
+            ${pageStyle}
           }
 
-          html, body {
-            margin: 0;
-            padding: 0;
+          body {
             font-family: "Times New Roman", serif;
+            margin: 0;
           }
 
           table {
-  width: auto;
-  min-width: 400px;
-  border-collapse: collapse;
-  margin: 0 auto;
-}
+            width: auto;
+            min-width: 100%;
+            border-collapse: collapse;
+            margin: 0 auto;
+          }
 
           th, td {
             border: 1px solid #ccc;
             padding: 3px;
-            font-size: 12px;
+            font-size: 9px;
           }
 
           th {
             background: #f3f4f6;
           }
 
+          .text-right { text-align: right; }
+          .text-left { text-align: left; }
+
           h3 {
             text-align: center;
             margin-bottom: 10px;
+            font-size: 13px;
           }
-
-          .text-right { text-align: right; }
-          .text-left { text-align: left; }
 
           @media print {
             @page {
               @bottom-left {
-                content: "AbdulWahed BinShabib Investment Group LLC • User: ${
-                  activeUser?.name || ""
-                } • Printed: ${formattedTime}";
+                content: "User: ${activeUser?.name || ""} • Printed: ${formattedTime}";
                 font-size: 9px;
               }
 
@@ -786,8 +828,10 @@ const reportTitle = `${moduleName} (${fromDate} to ${toDate})`;
       </head>
 
       <body>
-        <h3>${reportTitle} </h3>
+        <h3> ${printCompany}</h3>
+        <h3>${reportTitle}</h3>
         ${tableHtml}
+        ${filterHtml}
       </body>
     </html>
   `);
@@ -801,99 +845,78 @@ const reportTitle = `${moduleName} (${fromDate} to ${toDate})`;
   };
 };
 
-
-const generateGroupedTableHTML = (columns, groups, groupBy) => {
-  return `
-    <table border="1" style="width:100%; border-collapse:collapse; font-size:12px;">
-      <thead>
-        <tr>
-          <th>S/N</th>
-          ${columns.map(c => `<th>${c.display_name}</th>`).join("")}
-        </tr>
-      </thead>
-      <tbody>
-        ${groups
-          .map(
-            ([groupName, rows]) => `
-            <tr>
-              <td colspan="${columns.length + 1}" style="background:#eee;font-weight:bold;">
-                ${groupBy.toUpperCase()} : ${groupName}
-              </td>
-            </tr>
-            ${rows
-              .map(
-                (row, i) => `
-                <tr>
-                  <td>${i + 1}</td>
-                  ${columns
-                    .map(col => {
-                      const val = row[col.column_name] ?? "-";
-                      return `<td>${val}</td>`;
-                    })
-                    .join("")}
-                </tr>
-              `
-              )
-              .join("")}
-          `
-          )
-          .join("")}
-      </tbody>
-    </table>
-  `;
-};
-   
-    // ================= PAGINATION =================
-  const totalPages = Math.ceil(rows.length / pageSize);
-
-  
-
-  const handlePdf = async (
-  mode,
-  customCols = null,
-  groupBy = "service",
-  pdfColumns = orderedVisibleColumns,
-  pdfRows = printableGroupedRows
-) => {
-
-  let cols;
-
-  if (customCols && Array.isArray(customCols)) {
-    cols = pdfColumns.filter(col =>
-      customCols.includes(col.column_name)
-    );
-  } else {
-    cols = pdfColumns;
-  }
-
-  const company = selectedCompany || localStorage.getItem("print_company") || "";
-
-  const moduleTitle = printModuleName || module?.display_name;
-
+const handlePdf = async () => {
   try {
-    const res = await exportPdf({
-      rows: pdfRows,        // ✅ PRINT DATA USED HERE
-      columns: cols,        // ✅ PRINT COLUMNS USED HERE
-      userName: activeUser?.name || "User",
+    const reportId = report?.report_id || id;
 
-      moduleName: moduleTitle,
-      companyName: company,
-      groupBy
-    });
+    const isDetailed =
+      reportType === "detailed" && report?.is_detailed === true;
 
-    const url = window.URL.createObjectURL(new Blob([res.data]));
+    const moduleName = report?.description || "Report";
+
+    // ================= BASE DATA =================
+    const rowsData = filteredRows.map(normalizeKeys);
+    const transformedRows = transformCurrencyRows(rowsData);
+    const cols = isDetailed ? visibleDetailedColumns : columns;
+
+    let payload;
+
+    // ================= SUMMARY =================
+    if (!isDetailed) {
+      payload = {
+        rows: transformedRows,
+        columns: cols,
+        userName: activeUser?.name || "User",
+        moduleName,
+        reportType: "summary",
+      };
+    }
+
+    // ================= DETAILED =================
+    else {
+      const grouped = Object.entries(
+        transformedRows.reduce((acc, row) => {
+          const key = row[groupBy] || "Unknown";
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(row);
+          return acc;
+        }, {})
+      ).map(([groupName, rows]) => ({
+        groupName,
+        rows: rows.map((r, idx) => ({
+          ...r,
+          _sn: idx + 1
+        }))
+      }));
+
+      payload = {
+        rows: grouped,
+        columns: cols,
+        userName: activeUser?.name || "User",
+        moduleName,
+        reportType: "detailed",
+        groupBy
+      };
+    }
+
+    const res = await reportPdf(
+      reportId,
+      activeUserEmail,
+      payload
+    );
+
+     const url = window.URL.createObjectURL(new Blob([res.data]));
+
 
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${moduleTitle || "report"}.pdf`;
+    link.download = `${moduleName}.pdf`;
 
     document.body.appendChild(link);
     link.click();
     link.remove();
 
     window.URL.revokeObjectURL(url);
-
-    setShowPdfModal(false);
 
   } catch (err) {
     console.error("PDF export failed:", err);
@@ -915,191 +938,89 @@ const handleQuickDateChange = (value) => {
   }
 };
 
+const normalizeKeys = (row) => {
+  const newRow = {};
 
-
-const loadMasters = async () => {
-  const currencyRes = await getMasterValues("currency");
-  const termRes = await getMasterValues("billing_cycle");
-  const companyRes = await getMasterValues("company");
-  const vendorRes = await getMasterValues("vendors");
-  const creditCardRes = await getMasterValues("credit_card");
-  const productRes = await getMasterValues("products");
-
-  const currencyData = currencyRes?.data?.data || [];
-  const termData = termRes?.data?.data || [];
-
-  // ✅ COMPANY FIX (handles object OR array)
-  const rawCompany = companyRes?.data?.data || companyRes?.data || {};
-  const rawVendors = vendorRes?.data?.data || vendorRes?.data || {};
-  const rawCreditCards = creditCardRes?.data?.data || creditCardRes?.data || {};
-  const rawProducts = productRes?.data?.data || productRes?.data || {};
-
-  const companyData = Array.isArray(rawCompany)
-    ? rawCompany
-    : Object.entries(rawCompany).map(([key, value]) => ({
-        key,
-        value,
-      }));
-
-  const vendorData = Array.isArray(rawVendors)
-    ? rawVendors
-    : Object.entries(rawVendors).map(([key, value]) => ({
-        key,
-        value,
-      }));
-
-  const creditCardData = Array.isArray(rawCreditCards)
-    ? rawCreditCards
-    : Object.entries(rawCreditCards).map(([key, value]) => ({
-        key,
-        value,
-      }));
-
-  const productData = Array.isArray(rawProducts)
-    ? rawProducts
-    : Object.entries(rawProducts).map(([key, value]) => ({
-        key,
-        value,
-      }));
-
-  // =========================
-  // CURRENCY MAP
-  // =========================
-  const currencyMap = {};
-  currencyData.forEach(c => {
-    if (c?.key) {
-      currencyMap[String(c.key).trim().toUpperCase()] = c.value;
-    }
+  Object.keys(row).forEach((k) => {
+    newRow[k.toLowerCase()] = row[k];
   });
 
-  // =========================
-  // TERM MAP
-  // =========================
-  const termMap = {};
-  termData.forEach(t => {
-    if (t?.key) {
-      termMap[String(t.key).trim().toUpperCase()] = t.value;
-    }
-  });
-
-  // =========================
-  // COMPANY MAP (FIXED)
-  // =========================
-  const companyMap = {};
-  companyData.forEach(c => {
-    if (c?.key) {
-      companyMap[String(c.key).trim().toUpperCase()] = c.value;
-    }
-  });
-
-  const vendorMap = {};
-  vendorData.forEach(v => {
-    if (v?.key) {
-      vendorMap[String(v.key).trim().toUpperCase()] = v.value;
-    }
-  });
-
-  const creditCardMap = {};
-  creditCardData.forEach(cc => {
-    if (cc?.key) {
-      creditCardMap[String(cc.key).trim().toUpperCase()] = cc.value;
-    }
-  });
-
-  const productMap = {};
-  productData.forEach(p => {
-    if (p?.key) {
-      productMap[String(p.key).trim().toUpperCase()] = p.value;
-    }
-  });
-
-  setCurrencies(currencyData);
-  setTerm(termData);
-  setCurrencyMap(currencyMap);
-  setTermMap(termMap);
-  setCompanyMap(companyMap);
-  setVendorMap(vendorMap);
-  setCreditCardMap(creditCardMap);
-  setProductMap(productMap);
-
-  return { currencyMap, termMap, companyMap, vendorMap, creditCardMap, productMap };
+  return newRow;
 };
 
-useEffect(() => {
-  loadMasters();
-}, []);
 
-const buildDynamicColumns = (data, currencyMap, termMap) => {
-  if (!data?.length) return [];
+const buildDynamicColumns = (data = []) => {
+  if (!data.length) return [];
 
-  const keys = Object.keys(data[0]).filter(
+  const firstRow = data[0];
+
+  const baseKeys = Object.keys(firstRow).filter(
     key =>
       key !== "curr_code" &&
-      key !== "billcycle_code" &&
-      data.some(row => row[key] !== undefined)
+      key !== "total_amount" &&          // ❌ REMOVE
+      key !== "total_amount_aed" &&
+      key !== "total_amount_aed".toLowerCase() &&
+      !key.toLowerCase().includes("total_amount") &&
+      !key.startsWith("amount_")
   );
 
-  return keys.map((key) => {
-    if (key === "company") {
-      return {
-        column_name: key,
-        display_name: "Company",
-      };
-    }
+  const normalCols = baseKeys.map((key) => ({
+    column_name: key,
+    display_name: displayNames?.[key] || key
+  }));
 
-    if (key === "vendor") {
-      return {
-        column_name: key,
-        display_name: "Vendor",
-      };
-    }
+  const currencies = Array.from(
+    new Set(
+      data
+        .map(r => r.curr_code?.trim().toUpperCase())
+        .filter(Boolean)
+    )
+  );
 
-    if (key === "PaymentMethod") {
-      return {
-        column_name: key,
-        display_name: "Payment Method",
-      };
-    }
+  const currencyCols = currencies.map(curr => ({
+    column_name: `amount_${curr}`,
+    display_name: `Amount (${curr})`
+  }));
 
-    if (key === "product") {
-      return {
-        column_name: key,
-        display_name: "Product",
-      };
-    }
+  // ✅ ONLY AED TOTAL
+  const totalCols = [];
 
-     if (key === "total_amount_aed") {
-      return {
-        column_name: key,
-        display_name: "Total Amount (AED)",
-      };
-    }
+  if (
+    firstRow.hasOwnProperty("total_amount_aed") ||
+    firstRow.hasOwnProperty("Total_Amount_AED")
+  ) {
+    totalCols.push({
+      column_name: "total_amount_aed",
+      display_name: displayNames?.total_amount_aed || "Total Amount (AED)"
+    });
+  }
 
-    if (key.startsWith("CR")) {
-      return {
-        column_name: key,
-        display_name: `Cost (${currencyMap?.[key.toUpperCase()] || key})`,
-      };
-    }
+  return [...normalCols, ...currencyCols, ...totalCols];
+};
 
-    if (key.startsWith("BC")) {
-      return {
-        column_name: key,
-        display_name: `Total Cost (${termMap?.[key.toUpperCase()] || key})`,
-      };
-    }
+const transformCurrencyRows = (data = []) => {
+  const currencies = Array.from(
+    new Set(
+      data
+        .map(r => r.curr_code?.trim().toUpperCase())
+        .filter(Boolean)
+    )
+  );
 
-     if (key.includes('Total_Amount')) {
-      return {
-        column_name: key,
-        display_name: "Total Amount (AED)",
-      };
-    }
+  return data.map(row => {
+    const newRow = { ...row };
 
-    return {
-      column_name: key,
-      display_name: key,
-    };
+    // ❌ remove unwanted column completely
+    delete newRow.total_amount;
+
+    const rowCurr = row.curr_code?.trim().toUpperCase();
+
+    currencies.forEach(curr => {
+      newRow[`amount_${curr}`] =
+        rowCurr === curr ? (row.total_amount ?? 0) : "-";
+    });
+
+    return newRow;
   });
 };
 
@@ -1122,6 +1043,10 @@ const getCellValue = (row, col, isTotalRow = false) => {
     return value ?? "-";
   }
 
+  if(col.column_name.includes("date")) {
+    return formatDate(value) ?? "-";
+  }
+
   // ================= NORMAL ROW LOGIC =================
   if (col.column_name.startsWith("CR")) {
     return formatAmount(value) ?? "-";
@@ -1142,16 +1067,16 @@ const getCellValue = (row, col, isTotalRow = false) => {
   return value ?? "-";
 };
 
+
+
 const handleReportTypeChange = async (type) => {
   if (type === reportType) return;
 
+  resetFiltersState(); // ✅ ADD THIS
+
   setReportType(type);
 
-  await loadReport(
-    id,
-    dateFilters,
-    type
-  );
+  await loadReport(id, dateFilters, type);
 };
 
 const loadReport = async (reportId, overrideDateFilters = dateFilters, type = reportType) => {
@@ -1170,52 +1095,17 @@ const loadReport = async (reportId, overrideDateFilters = dateFilters, type = re
     };
 
     const res = await getReportData(reportId, activeUserEmail, payload);
-    const data = res.data || [];
-    //console.log("Raw report data:", data);
-    // 1️⃣ LOAD MASTERS FIRST
-    const { currencyMap, termMap, companyMap, vendorMap, creditCardMap, productMap } = await loadMasters();
 
-    // helper
-    const normalize = (v) => String(v || "").trim().toUpperCase();
+    const data = (res.data || []).map(normalizeKeys);
 
-    // 2️⃣ MAP ROWS
-    const mappedRows = data.map(row => {
-     
-      const newRow = { ...row };
+    // ❗ NO MASTER MAPPING ANYMORE
 
-      if ("company" in row) {
-        newRow.company =
-          companyMap?.[normalize(row.company)] || row.company;
-      }
+    const transformed = transformCurrencyRows(data);
 
-      if ("vendor" in row) {
-        newRow.vendor =
-          vendorMap?.[normalize(row.vendor)] || row.vendor;
-      }
-      
-      if ("PaymentMethod" in row) {
-        newRow["PaymentMethod"] =
-          creditCardMap?.[normalize(row.PaymentMethod)] || row.PaymentMethod;
-      }
+    setRows(transformed);
 
-      if ("term" in row) {
-        newRow.term = 
-           termMap?.[normalize(row.term)] || row.term;
-      }
-
-      if ("product" in row) {
-        newRow.product =
-          productMap?.[normalize(row.product)] || row.product;
-      }
-
-      return newRow;
-    });
-
-    // 3️⃣ SET FINAL ROWS (IMPORTANT)
-    setRows(mappedRows);
-
-    // 4️⃣ COLUMNS
-    const dynamicCols = buildDynamicColumns(mappedRows, currencyMap, termMap);
+    const dynamicCols = buildDynamicColumns(transformed);
+    setColumns(dynamicCols);
     setColumns(dynamicCols);
 
   } catch (err) {
@@ -1257,20 +1147,29 @@ const filteredRows = useMemo(() => {
   );
 }, [rows, search]);
 
+
 const summaryRows = filteredRows;
+
+const indexedRows = useMemo(() => {
+  return filteredRows.map((row, index) => ({
+    ...row,
+    _globalSn: index + 1,
+    _group: row[groupBy] || "Unknown"
+  }));
+}, [filteredRows, groupBy]);
 
 const groupedRows = useMemo(() => {
   if (!report?.is_detailed || !groupBy) return [];
 
   return Object.entries(
-    rows.reduce((acc, row) => {
+    indexedRows.reduce((acc, row) => {
       const key = row[groupBy] || "Unknown";
       if (!acc[key]) acc[key] = [];
       acc[key].push(row);
       return acc;
     }, {})
   );
-}, [rows, groupBy, report]);
+}, [indexedRows, groupBy, report]);
 
 const visibleDetailedColumns = useMemo(() => {
   if (!columns?.length) return [];
@@ -1299,26 +1198,11 @@ const paginatedRows = filteredRows.slice(
 );
 
 const paginatedDetailedRows = useMemo(() => {
-  return detailedFlatRows.slice(
+  return indexedRows.slice(
     (page - 1) * pageSize,
     page * pageSize
   );
-}, [detailedFlatRows, page]);
-
-const paginatedGroupedRows = useMemo(() => {
-  if (reportType !== "detailed") return [];
-
-  return Object.entries(
-    paginatedDetailedRows.reduce((acc, row) => {
-      const key = row._group;
-
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(row);
-
-      return acc;
-    }, {})
-  );
-}, [paginatedDetailedRows, reportType]);
+}, [indexedRows, page]);
 
 const fullGroupedRows = useMemo(() => {
   if (reportType !== "detailed") return [];
@@ -1335,20 +1219,179 @@ const fullGroupedRows = useMemo(() => {
   );
 }, [filteredRows, groupBy, reportType]);
 
+// const paginatedGroupedRows = useMemo(() => {
+//   if (reportType !== "detailed") return [];
 
+//   const group = fullGroupedRows[page - 1];
+
+//   if (!group) return [];
+
+//   const [groupName, rows] = group;
+
+//   return [[
+//     groupName,
+//     rows.map((row, idx) => ({
+//       ...row,
+//       _sn: idx + 1
+//     }))
+//   ]];
+// }, [fullGroupedRows, page, reportType]);
+
+// const totalPages =
+//   reportType === "detailed"
+//     ? fullGroupedRows.length
+//     : Math.ceil(filteredRows.length / pageSize);
  const isRightAligned = (col) => {
       const name = (col.column_name || "").toLowerCase();
-      return name.includes("bc") || name.includes("cr") || name.includes("cost") || name.includes("total");
+      return name.includes("bc") || name.includes("cr") || name.includes("cost") || name.includes("total") || name.includes("amount");
     };
 
+    const groupSerialMap = useMemo(() => {
+  const map = {};
 
-  
+  if (reportType !== "detailed") return map;
+
+  const grouped = filteredRows.reduce((acc, row) => {
+    const key = row[groupBy] || "Unknown";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(row);
+    return acc;
+  }, {});
+
+  Object.keys(grouped).forEach(group => {
+    map[group] = grouped[group].map((_, idx) => idx + 1);
+  });
+
+  return map;
+}, [filteredRows, groupBy, reportType]);
+
+const enrichedRows = useMemo(() => {
+  if (reportType !== "detailed") return [];
+
+  const grouped = filteredRows.reduce((acc, row) => {
+    const key = row[groupBy] || "Unknown";
+
+    if (!acc[key]) acc[key] = [];
+
+    acc[key].push(row);
+
+    return acc;
+  }, {});
+
+  Object.keys(grouped).forEach(group => {
+    grouped[group] = grouped[group].map((row, idx) => ({
+      ...row,
+      _sn: idx + 1
+    }));
+  });
+
+  return grouped;
+}, [filteredRows, groupBy, reportType]);
+
+const isNumericColumn = (col) =>
+  col.column_name?.toLowerCase().includes("cr") ||
+  col.column_name?.toLowerCase().includes("bc") ||
+  col.column_name?.toLowerCase().includes("cost") ||
+  col.column_name?.toLowerCase().includes("total") ||
+  col.column_name?.toLowerCase().includes("amount");
+
+const parseNum = (val) =>
+  isNaN(parseFloat((val ?? "0").toString().replace(/,/g, "")))
+    ? 0
+    : parseFloat((val ?? "0").toString().replace(/,/g, ""));
     
+const totalColIndex = columns.findIndex(col =>
+  col.column_name?.toLowerCase().includes("total_amount_aed")
+);
 
+const groupedPages = useMemo(() => {
+  if (reportType !== "detailed") return [];
 
+  const pages = [];
+  const maxRows = 10;
 
+  let currentPage = [];
+  let currentCount = 0;
 
+  fullGroupedRows.forEach(([groupName, groupRows]) => {
+    const groupCount = groupRows.length;
 
+    // Large group (>10) gets its own page
+    if (groupCount > maxRows) {
+      // Save current page first
+      if (currentPage.length) {
+        pages.push(currentPage);
+        currentPage = [];
+        currentCount = 0;
+      }
+
+      pages.push([
+        [
+          groupName,
+          groupRows.map((row, idx) => ({
+            ...row,
+            _sn: idx + 1,
+          })),
+        ],
+      ]);
+
+      return;
+    }
+
+    // Doesn't fit in current page -> start a new page
+    if (currentCount + groupCount > maxRows) {
+      pages.push(currentPage);
+      currentPage = [];
+      currentCount = 0;
+    }
+
+    currentPage.push([
+      groupName,
+      groupRows.map((row, idx) => ({
+        ...row,
+        _sn: idx + 1,
+      })),
+    ]);
+
+    currentCount += groupCount;
+  });
+
+  if (currentPage.length) {
+    pages.push(currentPage);
+  }
+
+  return pages;
+}, [fullGroupedRows, reportType]);
+
+const paginatedGroupedRows =
+  groupedPages[page - 1] || [];
+
+const totalPages =
+  reportType === "detailed"
+    ? groupedPages.length
+    : Math.ceil(filteredRows.length / pageSize);
+
+const grandTotalRow = useMemo(() => {
+  return buildTotalRow(filteredRows, visibleDetailedColumns);
+}, [filteredRows, visibleDetailedColumns]);
+
+const firstAmountIndex = visibleDetailedColumns.findIndex(col =>
+  col.column_name?.toLowerCase().startsWith("amount_")
+);
+
+const totalLabelIndex =
+  firstAmountIndex > 0 ? firstAmountIndex - 1 : 0;
+
+const resetFiltersState = () => {
+  setFilters([]);
+  setSearch("");
+  setSearchColumnKey(null);
+  setPage(1);
+  setActiveDateFilter(null);
+
+  const defaults = getCurrentMonth();
+  setDateFilters(defaults);
+};
 
 
 
@@ -1360,7 +1403,7 @@ const fullGroupedRows = useMemo(() => {
             <div className="flex justify-between items-center mb-4">
 
                 <h1 className="text-xl font-semibold text-gray-800 truncate">
-                    {report?.description || "Loading..."}
+                    {report?.description || "Loading..."} {reportType === "detailed" ? "(Detailed)" : "(Summary)"}
                 </h1>
 
                {/* ================= ACTIONS ================= */}
@@ -1474,13 +1517,9 @@ const fullGroupedRows = useMemo(() => {
 
               {/* Start Date */}
               <input
-                type={IsEquivalent ? "month" : "date"}
+                type="date"
                 name="startDate"
-                value={
-                  IsEquivalent
-                    ? (dateFilters.startDate || "").slice(0, 7) // YYYY-MM
-                    : dateFilters.startDate
-                }
+                value={dateFilters.startDate}
                 onChange={onInputChange}
                 className="
                   h-9 w-[130px]
@@ -1501,13 +1540,9 @@ const fullGroupedRows = useMemo(() => {
 
               {/* End Date */}
               <input
-                type={IsEquivalent ? "month" : "date"}
+                type="date"
                 name="endDate"
-                value={
-                  IsEquivalent
-                    ? (dateFilters.endDate || "").slice(0, 7) // YYYY-MM
-                    : dateFilters.endDate
-                }
+                value={dateFilters.endDate}
                 onChange={onInputChange}
                 className="
                   h-9 w-[130px]
@@ -1717,42 +1752,101 @@ const fullGroupedRows = useMemo(() => {
         </thead>
 
         <tbody>
-         {paginatedGroupedRows.map(([groupName, groupRows]) => (
-  <React.Fragment key={groupName}>
+  {paginatedGroupedRows.map(([groupName, groupRows]) => {
+    const groupTotal = buildTotalRow(groupRows, visibleDetailedColumns);
 
-    {/* GROUP HEADER */}
-    <tr>
-      <td
-        colSpan={visibleDetailedColumns.length + 1}
-        className="bg-gray-200 font-bold px-4 py-3"
-      >
-        {(report?.group_by || "GROUP").toUpperCase()} : {groupName}
-      </td>
-    </tr>
-
-    {/* ROWS */}
-    {groupRows.map((row, i) => (
-      <tr key={i}>
-        <td className="px-4 py-3 border-b">
-          {(page - 1) * pageSize + i + 1}
-        </td>
-
-        {visibleDetailedColumns.map((col) => (
+    return (
+      <React.Fragment key={groupName}>
+        {/* GROUP HEADER */}
+        <tr>
           <td
-            key={col.column_name}
-            className={`px-4 py-3 border-b ${
-              isRightAligned(col) ? "text-right" : "text-left"
-            }`}
+            colSpan={visibleDetailedColumns.length + 1}
+            className="bg-gray-200 font-bold px-4 py-3"
           >
-            {getCellValue(row, col)}
+            {(displayNames?.[report?.group_by] ||
+              report?.group_by ||
+              "GROUP"
+            ).toUpperCase()}
+            {" : "}
+            {groupName}
           </td>
-        ))}
-      </tr>
-    ))}
+        </tr>
 
-  </React.Fragment>
-))}
-        </tbody>
+        {/* GROUP ROWS */}
+        {groupRows.map((row, i) => (
+          <tr key={i}>
+            <td className="px-4 py-3 border-b">
+              {row._sn}
+            </td>
+
+            {visibleDetailedColumns.map((col) => (
+              <td
+                key={col.column_name}
+                className={`px-4 py-3 border-b ${
+                  isRightAligned(col)
+                    ? "text-right"
+                    : "text-left"
+                }`}
+              >
+                {getCellValue(row, col)}
+              </td>
+            ))}
+          </tr>
+        ))}
+
+        {/* GROUP TOTAL */}
+    <tr className="bg-gray-100 font-bold">
+  <td></td>
+
+  {visibleDetailedColumns.map((col, index) => {
+    const isLabelColumn = index === firstAmountIndex - 1;
+
+    return (
+      <td
+        key={col.column_name}
+        className={`px-4 py-3 ${
+          isRightAligned(col) ? "text-right" : "text-left"
+        } ${isLabelColumn ? "font-bold" : ""}`}
+      >
+        {isLabelColumn
+          ? "TOTAL"
+          : isNumericColumn(col)
+          ? formatAmount(groupTotal[col.column_name])
+          : ""}
+      </td>
+    );
+  })}
+</tr>
+      </React.Fragment>
+    );
+  })}
+
+  {/* GRAND TOTAL - ONLY LAST PAGE */}
+  {page === totalPages && (
+    <tr className="bg-gray-100 font-bold">
+  <td></td>
+
+  {visibleDetailedColumns.map((col, index) => {
+    const isLabelColumn = index === totalLabelIndex;
+
+    return (
+      <td
+        key={col.column_name}
+        className={`px-4 py-3 ${
+          isRightAligned(col) ? "text-right" : "text-left"
+        } ${isLabelColumn ? "font-bold" : ""}`}
+      >
+        {isLabelColumn
+          ? "GRAND TOTAL"
+          : isNumericColumn(col)
+          ? formatAmount(grandTotalRow[col.column_name])
+          : ""}
+      </td>
+    );
+  })}
+</tr>
+  )}
+</tbody>
       </table>
     </div>
 
@@ -1761,54 +1855,88 @@ const fullGroupedRows = useMemo(() => {
     <div className="overflow-x-auto">
       <table className="min-w-max w-full text-sm border-separate border-spacing-0">
 
-        {/* ✅ THIS WAS MISSING IN YOUR SCREENSHOT */}
-        <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
-          <tr>
-            <th className="px-4 py-3 border-b text-left">S/N</th>
+  <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
+    <tr>
+      <th className="px-4 py-3 border-b text-left">S/N</th>
+
+      {columns.map((col) => (
+        <th
+          key={col.column_name}
+          className={`px-4 py-3 border-b text-left ${
+            isRightAligned(col) ? "text-right" : "text-left"
+          }`}
+        >
+          {col.display_name}
+        </th>
+      ))}
+    </tr>
+  </thead>
+
+  <tbody>
+    {paginatedRows.length ? (
+      <>
+        {/* ROWS */}
+        {paginatedRows.map((row, i) => (
+          <tr key={i}>
+            <td className="px-4 py-3 border-b">
+              {(page - 1) * pageSize + i + 1}
+            </td>
 
             {columns.map((col) => (
-              <th
+              <td
                 key={col.column_name}
-                className={`px-4 py-3 border-b text-left ${
+                className={`px-4 py-3 border-b ${
                   isRightAligned(col) ? "text-right" : "text-left"
                 }`}
               >
-                {col.display_name}
-              </th>
+                {getCellValue(row, col)}
+              </td>
             ))}
           </tr>
-        </thead>
+        ))}
 
-        <tbody>
-          {paginatedRows.length ? (
-            paginatedRows.map((row, i) => (
-              <tr key={i}>
-                <td className="px-4 py-3 border-b">
-                  {(page - 1) * pageSize + i + 1}
-                </td>
+        {/* ================= TOTAL ROW ================= */}
+   <tr className="bg-gray-200 font-bold">
 
-                {columns.map((col) => (
-                  <td
-                    key={col.column_name}
-                    className={`px-4 py-3 border-b ${
-                      isRightAligned(col) ? "text-right" : "text-left"
-                    }`}
-                  >
-                    {getCellValue(row, col)}
-                  </td>
-                ))}
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan={columns.length + 1} className="text-center py-10">
-                No records found
-              </td>
-            </tr>
-          )}
-        </tbody>
+  {/* SN column */}
+  <td className="px-4 py-3 text-center"></td>
 
-      </table>
+  {columns.map((col, i) => {
+    const total = filteredRows.reduce(
+  (sum, r) => sum + parseNum(r?.[col.column_name]),
+  0
+);
+
+    const isTotalLabelColumn = i === totalColIndex - 1;
+
+    return (
+      <td
+        key={col.column_name}
+        className={`px-4 py-3 ${
+          isRightAligned(col) ? "text-right" : "text-left"
+        } ${isTotalLabelColumn ? "text-right font-bold" : ""}`}
+      >
+        {isTotalLabelColumn
+          ? "TOTAL"
+          : isNumericColumn(col)
+            ? formatAmount(total)
+            : ""}
+      </td>
+    );
+  })}
+
+</tr>
+      </>
+    ) : (
+      <tr>
+        <td colSpan={columns.length + 1} className="text-center py-10">
+          No records found
+        </td>
+      </tr>
+    )}
+  </tbody>
+
+</table>
     </div>
   )}
 </div>
@@ -1825,8 +1953,8 @@ const fullGroupedRows = useMemo(() => {
   />
 
 </div>
-
-{/* <CustomizeDrawer
+{console.log("company sening to customize drawer", company)}
+<CustomizeDrawer
   open={showCustomizeDrawer}
   onClose={() => setShowCustomizeDrawer(false)}
 
@@ -1842,8 +1970,8 @@ const fullGroupedRows = useMemo(() => {
   // Sub Header
   printModuleName={printModuleName}
   setPrintModuleName={setPrintModuleName}
-/> */}
- {console.log("filters from tablefilterdrayer:",filters)}
+/>
+
  <TableFiltersDrawer
   open={showFilters}
   onClose={() => setShowFilters(false)}
