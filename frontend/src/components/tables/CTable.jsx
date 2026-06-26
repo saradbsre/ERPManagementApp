@@ -297,7 +297,7 @@ export default function DynamicTablePage() {
     getMasterData("company", activeUserEmail).then(res => {
   const result = Array.isArray(res?.data) ? res.data : [];
 
-  const tradeNames = result.map(item => item.trade_name);
+  const tradeNames = result.map(item => item.com_name);
 
   setCompany(tradeNames);
 
@@ -2878,7 +2878,7 @@ const handleQuickDateChange = (value) => {
   }
 };
 
-const handleSort = (key, direction) => {
+const handleSort = (key, direction, displayName) => {
   setSortConfig(prev => {
     const safe = Array.isArray(prev) ? prev : [];
 
@@ -2898,7 +2898,8 @@ const handleSort = (key, direction) => {
       {
         type: "sort",
         column: key,
-        value: direction
+        value: direction,
+        displayName: displayName
       }
     ];
   });
@@ -2908,7 +2909,7 @@ const handleSort = (key, direction) => {
 
 
 
-const handleSearch = (key) => {
+const handleSearch = (key, displayName) => {
   setSearchColumnKey(key);
   searchInputRef.current?.focus();
   searchInputRef.current?.select();
@@ -2924,7 +2925,8 @@ const handleSearch = (key) => {
       {
         type: "search",
         column: key,
-        value: ""
+        value: "",
+        displayName: displayName
       }
     ];
   });
@@ -2980,11 +2982,11 @@ const toggleChipDirection = (chip) => {
   const newDirection = chip.value === "asc" ? "desc" : "asc";
 
   if (chip.type === "sort") {
-    handleSort(chip.column, newDirection);
+    handleSort(chip.column, newDirection, chip.displayName);
   }
 
   if (chip.type === "group") {
-    handleGroup(chip.column, newDirection);
+    handleGroup(chip.column, newDirection, chip.displayName);
   }
 };
 
@@ -3736,7 +3738,7 @@ const options = Array.isArray(rawOptions)
     );
   })} */}
 
-<div className="flex flex-col gap-3 mb-3">
+<div className="flex flex-wrap items-center gap-2 mb-3">
 
   {/* SEARCH */}
   {groupedChips.search?.length > 0 && (
@@ -3750,7 +3752,7 @@ const options = Array.isArray(rawOptions)
           key={i}
           className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded-full text-xs"
         >
-          <span>{chip.column}</span>
+          <span>{chip.displayName}</span>
 
           <button
             onClick={() => removeChip(chip)}
@@ -3769,7 +3771,7 @@ const options = Array.isArray(rawOptions)
       <span className="text-xs font-bold text-gray-600 mr-2">
         SORTING:
       </span>
-
+      {console.log("Rendering group chips:", groupedChips)}
       {groupedChips.sort.map((chip, i) => (
         <div
   key={i}
@@ -3777,7 +3779,7 @@ const options = Array.isArray(rawOptions)
   className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1 rounded-full text-xs cursor-pointer hover:bg-blue-100"
 >
   <span>
-    {chip.column} {chip.value === "asc" ? "↑" : "↓"}
+    {chip.displayName} {chip.value === "asc" ? "↑" : "↓"}
   </span>
 
   <button
@@ -3808,7 +3810,7 @@ const options = Array.isArray(rawOptions)
   className="flex items-center gap-2 bg-purple-50 border border-purple-200 text-purple-700 px-3 py-1 rounded-full text-xs cursor-pointer hover:bg-purple-100"
 >
   <span>
-    {chip.column} {chip.value === "asc" ? "↑" : "↓"}
+    {chip.displayName} {chip.value === "asc" ? "↑" : "↓"}
   </span>
 
   <button
@@ -3937,7 +3939,7 @@ onDrop={() => handleDrop(col.column_name)}
         onClick={(e) => e.stopPropagation()}
       >
         <button
-          onClick={() => handleSearch(col.column_name)}
+          onClick={() => handleSearch(col.column_name, col.display_name)}
           className="w-full text-left px-3 py-2 hover:bg-gray-100"
         >
           🔍 Search
@@ -3954,7 +3956,7 @@ onDrop={() => handleDrop(col.column_name)}
 
         <button
           onClick={() =>
-            handleSort(col.column_name, "asc")
+            handleSort(col.column_name, "asc", col.display_name)
           }
           className="w-full text-left px-3 py-2 hover:bg-gray-100"
         >
@@ -3962,9 +3964,10 @@ onDrop={() => handleDrop(col.column_name)}
         </button>
 
         <button
-          onClick={() =>
-            handleSort(col.column_name, "desc")
-          }
+          onClick={() => {
+            console.log("Sorting by column:", col, "with direction: desc");
+            handleSort(col.column_name, "desc", col.display_name);
+          }}
           className="w-full text-left px-3 py-2 hover:bg-gray-100"
         >
           Sort by Descending
