@@ -1270,7 +1270,7 @@ const currentDate = new Date();
           >
             {numberToWords(
               grandTotal,
-              selectedCurrency?.currency
+              selectedCurrency?.curr_name
             )}{" "}
             ONLY
           </td>
