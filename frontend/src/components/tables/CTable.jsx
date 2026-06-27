@@ -161,6 +161,7 @@ export default function DynamicTablePage() {
     const [autoFilledFields, setAutoFilledFields] = useState({});
     const [planManuallyChanged, setPlanManuallyChanged] = useState(false);
     const [masters, setMasters] = useState([]);
+    const [showTotals, setShowTotals] = useState(false);
     const [groupBy, setGroupBy] = useState({
       key: null,
       direction: "asc"
@@ -2659,6 +2660,8 @@ const groupedRows = Array.isArray(groupedData)
     return data_type.includes("date");
   };
 
+  const totalColSpan = firstTotalIndex + 1; // +1 for S.No column
+
   // =====================================================
   // HTML
   // =====================================================
@@ -2781,42 +2784,44 @@ ${groupedRows.map(group => `
 
 `).join("")}
 
+
+
+<tr style="font-weight:bold;background:#e5e5e5;">
+
+  <td colspan="${totalColSpan}" style="
+      text-align:right;
+      padding-right:10px;
+      font-weight:bold;
+  ">
+     TOTAL 
+  </td>
+
+  ${sortedCols
+    .slice(firstTotalIndex)
+    .map(col => {
+      if (!isTotalColumn(col)) {
+        return `<td></td>`;
+      }
+
+      return `
+        <td style="text-align:right;font-weight:bold;">
+          ${
+            grandTotals[col.column_name]
+              ? formatNumber(grandTotals[col.column_name])
+              : "-"
+          }
+        </td>
+      `;
+    })
+    .join("")}
+
+</tr>
+
 </tbody>
 
     </table>
 
-    <!-- ================= GRAND TOTAL ================= -->
-    <table border="1" cellspacing="0" cellpadding="5"
-      style="width:100%; margin-top:30px; border-collapse:collapse;">
-
-      <tbody>
-        <tr style="font-weight:bold; background:#ddd;">
-
-          <td></td>
-
-          <td colspan="${firstTotalIndex > 0 ? firstTotalIndex : 1}" style="text-align:right;">
-            GRAND TOTAL
-          </td>
-
-          ${sortedCols.slice(firstTotalIndex).map(col => {
-
-            if (!isTotalColumn(col)) {
-              return `<td></td>`;
-            }
-
-            return `
-              <td style="text-align:right;">
-                ${grandTotals[col.column_name] === 0
-                  ? "-"
-                  : formatNumber(grandTotals[col.column_name] || 0)}
-              </td>
-            `;
-          }).join("")}
-
-        </tr>
-      </tbody>
-
-    </table>
+   
   `;
 };
 
@@ -3258,6 +3263,33 @@ useEffect(() => {
   setColumnOrder(visibleColumns.map(c => c.column_name));
   // run only once when columns first arrive
 }, [visibleColumns?.length]);
+
+const toggleTotal = (columnName) => {
+  setShowTotals((prev) =>
+    prev.includes(columnName)
+      ? prev.filter((c) => c !== columnName)
+      : [...prev, columnName]
+  );
+};
+
+
+
+const grandTotal = useMemo(() => {
+  const totals = {};
+
+  orderedVisibleColumns.forEach((col) => {
+    if (
+      col.data_type?.toLowerCase().includes("decimal") ||
+      col.column_name.toLowerCase().includes("amount")
+    ) {
+      totals[col.column_name] = (rows || []).reduce((sum, row) => {
+        return sum + Number(row[col.column_name] || 0);
+      }, 0);
+    }
+  });
+
+  return totals;
+}, [rows, orderedVisibleColumns]);
 
     return (
         <div className="h-full flex flex-col">
@@ -5286,6 +5318,60 @@ onDrop={() => handleDrop(col.column_name)}
                         />
                       )}
                       </tbody>
+                     <tfoot className="sticky bottom-0 bg-gray-100 border-t-2 border-gray-300 z-30">
+  <tr>
+
+    {/* Serial No */}
+  
+
+    {orderedVisibleColumns.map((col) => {
+      const isNumeric =
+        col.data_type?.toLowerCase().includes("decimal") ||
+        col.column_name.toLowerCase().includes("amount");
+
+      const isFirstAmountColumn = col.column_name === "amount"; // change if needed
+
+      return (
+        <React.Fragment key={col.column_id}>
+
+          {/* Toggle BEFORE Amount column */}
+          {isFirstAmountColumn && (
+            <td className="px-4 py-3 text-center">
+              <button
+                onClick={() => setShowTotals(!showTotals)}
+                className="px-3 py-1 rounded bg-blue-600 text-white text-xs"
+              >
+                {showTotals ? "Hide Total" : "Show Total"}
+              </button>
+            </td>
+          )}
+
+          {/* Actual Column */}
+          <td
+            className={`px-4 py-3 font-semibold ${getAlignClass(
+              col.display_name
+            )}`}
+          >
+            {showTotals && isNumeric
+              ? Number(grandTotal[col.column_name] || 0).toLocaleString(
+                  undefined,
+                  {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  }
+                )
+              : ""}
+          </td>
+
+        </React.Fragment>
+      );
+    })}
+
+    {/* Action */}
+    <td className="px-4 py-3"></td>
+
+  </tr>
+</tfoot>
 
                     </table>
                     </div>
