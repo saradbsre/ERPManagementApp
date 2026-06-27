@@ -5,7 +5,7 @@ import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
 import { applyFilters } from "../../utils/applyFilters";
-import { exportToExcel } from "../../utils/export";
+import { reportToExcel } from "../../utils/export";
 import PermissionButton from "../PermissionButton";
 import { formatDateTime } from "../../utils/formatDateTime";
 import { formatDate } from "../../utils/formatDate";
@@ -70,8 +70,10 @@ export default function ReportTable() {
     const [masters, setMasters] = useState([]);
     const [displayNames, setDisplayNames] = useState({});
     const groupBy = report?.group_by || null;
-  
-    const IsEquivalent = report?.is_equivalent === true;
+    console.log("report",report);
+    const equivalentReportId = report?.eqnt_report;
+const showEquivalent = report?.is_equivalent === true && equivalentReportId;
+console.log("ReportTable equivalentReportId:", equivalentReportId, "showEquivalent:", showEquivalent);
     useEffect(() => {
       const handleResize = () => {
         setIsMobile(window.innerWidth < 768);
@@ -201,63 +203,78 @@ const getCurrentMonthRange = () => {
 
 
 
-
-
-
-
-const buildDatePayload = (df) => {
-  return {
-    date: {
-      startDate: df.startDate,
-      endDate: df.endDate,
-    },
-  };
-};
-
-
-
-
-
-
 const handleExcel = async () => {
-  const cols = orderedVisibleColumns;
+  console.log("Exporting to Excel...");
 
-  const moduleName =
-    printModuleName ||
-    localStorage.getItem("print_module_name") ||
-    module?.display_name;
+  const isDetailed =
+    reportType === "detailed" && report?.is_detailed === true;
 
-  const groups = printableGroupedRows; // ✅ already grouped correctly
+  const cols = isDetailed
+    ? visibleDetailedColumns
+    : columns;
 
-  const rows = [];
+  const moduleName = report?.description || "Report";
+
+  const groups = isDetailed ? fullGroupedRows || [] : null;
+
+  const exportRows = []; // ✅ NEW SAFE ARRAY
   let serialNo = 1;
 
-  groups.forEach(group => {
-    group.rows.forEach(row => {
+  // ================= SUMMARY =================
+  if (!isDetailed) {
+    (rows || []).forEach((row) => {
       const newRow = {
-        SNo: serialNo++,
-        Group: group.group // keep group name only for data rows
+        SNo: serialNo++
       };
 
-      cols.forEach(col => {
-        newRow[col.display_name] = getValue(row, col);
+      cols.forEach((col) => {
+        newRow[col.display_name] = getCellValue(row, col);
       });
 
-      rows.push(newRow);
+      exportRows.push(newRow); // ✅ FIXED
     });
-  });
+  }
 
-  exportToExcel(
-    printableGroupedRows,
-    cols.map(c => c.display_name),
+  // ================= DETAILED =================
+  else {
+    groups.forEach(([groupName, groupRows]) => {
+      exportRows.push({
+        SNo: "",
+        Group: groupName,
+        __type: "group_header"
+      });
+
+      groupRows.forEach((row) => {
+        const newRow = {
+          SNo: serialNo++,
+          Group: groupName
+        };
+
+        cols.forEach((col) => {
+          newRow[col.display_name] = getCellValue(row, col);
+        });
+
+        exportRows.push(newRow);
+      });
+
+      exportRows.push({
+        SNo: "",
+        Group: "",
+        __type: "group_footer"
+      });
+    });
+  }
+
+  console.log("Final Excel rows:", exportRows);
+
+  reportToExcel(
+    exportRows,
+    cols.map((c) => c.display_name),
     moduleName,
     groupBy,
     columns
   );
-
-  //console.log("Excel exported rows:", printableGroupedRows);
 };
-    
 
 
   
@@ -346,7 +363,28 @@ const handleSearch = async (appliedFilters) => {
         }
     };
 
-  
+const handleEquivalentReport = async () => {
+  if (!report?.eqnt_report) return;
+
+  try {
+    setLoading(true);
+
+    const reportId = report.eqnt_report;
+
+    await loadReport(
+      reportId,
+      dateFilters,
+      "equivalent"   // 👈 new mode
+    );
+
+    setReportType("equivalent");
+
+  } catch (err) {
+    console.error("Equivalent report load failed:", err);
+  } finally {
+    setLoading(false);
+  }
+};
      
 const handleClear = async () => {
   const defaults = getCurrentMonth();
@@ -470,11 +508,19 @@ const handlePrint = () => {
   
 
   
-  const isDetailed = reportType === "detailed" && report?.is_detailed === true;
+const isDetailed =
+  reportType === "detailed" && report?.is_detailed === true;
 
-  const reportTypeLabel = isDetailed ? "Detailed" : "Summary";
+const isEquivalent =
+  reportType === "equivalent" && report?.is_equivalent === true;
 
-  const reportTitle = `${moduleName} ${reportTypeLabel} (${fromDate} to ${toDate})`;
+const reportTypeLabel = isEquivalent
+  ? "Equivalent"
+  : isDetailed
+  ? "Detailed"
+  : "Summary";
+
+const reportTitle = `${moduleName} ${reportTypeLabel} (${fromDate} to ${toDate})`;
 
 
   console.log("filters applied for print:", filters);
@@ -847,8 +893,6 @@ const filterHtml = hasFilters
 
 const handlePdf = async () => {
   try {
-    const reportId = report?.report_id || id;
-
     const isDetailed =
       reportType === "detailed" && report?.is_detailed === true;
 
@@ -857,18 +901,33 @@ const handlePdf = async () => {
     // ================= BASE DATA =================
     const rowsData = filteredRows.map(normalizeKeys);
     const transformedRows = transformCurrencyRows(rowsData);
-    const cols = isDetailed ? visibleDetailedColumns : columns;
+
+    const cols = isDetailed
+      ? visibleDetailedColumns
+      : columns;
+
+    // ================= FILTERS =================
+    const pdfFilters = (filters || []).filter(
+      (f) => f?.master !== "dateFilters"
+    );
+
+    const pdfDateFilters = {
+      startDate: dateFilters.startDate,
+      endDate: dateFilters.endDate,
+    };
 
     let payload;
 
-    // ================= SUMMARY =================
+    // ================= SUMMARY / EQUIVALENT =================
     if (!isDetailed) {
       payload = {
         rows: transformedRows,
         columns: cols,
-        userName: activeUser?.name || "User",
         moduleName,
-        reportType: "summary",
+        reportType,
+        filters: pdfFilters,
+        dateFilters: pdfDateFilters,
+        userName : activeUserName || "",
       };
     }
 
@@ -877,36 +936,49 @@ const handlePdf = async () => {
       const grouped = Object.entries(
         transformedRows.reduce((acc, row) => {
           const key = row[groupBy] || "Unknown";
+
           if (!acc[key]) acc[key] = [];
+
           acc[key].push(row);
+
           return acc;
         }, {})
       ).map(([groupName, rows]) => ({
         groupName,
         rows: rows.map((r, idx) => ({
           ...r,
-          _sn: idx + 1
-        }))
+          _sn: idx + 1,
+        })),
       }));
 
       payload = {
         rows: grouped,
         columns: cols,
-        userName: activeUser?.name || "User",
         moduleName,
-        reportType: "detailed",
-        groupBy
+        reportType,
+        groupBy,
+        filters: pdfFilters,
+        dateFilters: pdfDateFilters,
       };
     }
 
+    // ================= REPORT ID =================
+    const reportId =
+      reportType === "equivalent" && report?.eqnt_report
+        ? report.eqnt_report
+        : report?.report_id || id;
+
+    // ================= API CALL =================
     const res = await reportPdf(
       reportId,
       activeUserEmail,
       payload
     );
 
-     const url = window.URL.createObjectURL(new Blob([res.data]));
-
+    // ================= DOWNLOAD =================
+    const url = window.URL.createObjectURL(
+      new Blob([res.data], { type: "application/pdf" })
+    );
 
     const link = document.createElement("a");
     link.href = url;
@@ -917,12 +989,10 @@ const handlePdf = async () => {
     link.remove();
 
     window.URL.revokeObjectURL(url);
-
   } catch (err) {
     console.error("PDF export failed:", err);
   }
 };
-
 
 
 
@@ -961,7 +1031,9 @@ const buildDynamicColumns = (data = []) => {
       key !== "total_amount_aed" &&
       key !== "total_amount_aed".toLowerCase() &&
       !key.toLowerCase().includes("total_amount") &&
-      !key.startsWith("amount_")
+      !key.startsWith("amount_") &&
+      key !== "monthly_amount_aed" &&
+      key !== "yearly_amount_aed"
   );
 
   const normalCols = baseKeys.map((key) => ({
@@ -992,6 +1064,26 @@ const buildDynamicColumns = (data = []) => {
     totalCols.push({
       column_name: "total_amount_aed",
       display_name: displayNames?.total_amount_aed || "Total Amount (AED)"
+    });
+  }
+
+  if (
+    firstRow.hasOwnProperty("monthly_amount_aed") ||
+    firstRow.hasOwnProperty("Monthly_Amount_AED")
+  ) {
+    totalCols.push({
+      column_name: "monthly_amount_aed",
+      display_name: displayNames?.monthly_amount_aed || "Monthly Amount (AED)"
+    });
+  }
+
+  if (
+    firstRow.hasOwnProperty("yearly_amount_aed") ||
+    firstRow.hasOwnProperty("Yearly_Amount_AED")
+  ) {
+    totalCols.push({
+      column_name: "yearly_amount_aed",
+      display_name: displayNames?.yearly_amount_aed || "Yearly Amount (AED)"
     });
   }
 
@@ -1056,14 +1148,22 @@ const getCellValue = (row, col, isTotalRow = false) => {
     return formatAmount(value) ?? "-";
   }
 
-  if (col.column_name.toLowerCase().includes("total")) {
+  if (col.column_name.toLowerCase().includes("aed")) {
     return formatAmount(value) ?? "-";
   }
 
   if (col.column_name.toLowerCase().includes("paymentmethod")) {
     return "**** " + (value || "").slice(-4);
   }
-  
+
+  if (col.column_name.toLowerCase().includes("monthly_amount_aed")) {
+    return "Monthly Amount (AED)";
+  }
+
+  if (col.column_name.toLowerCase().includes("yearly_amount_aed")) {
+    return "Yearly Amount (AED)";
+  }
+
   return value ?? "-";
 };
 
@@ -1403,7 +1503,12 @@ const resetFiltersState = () => {
             <div className="flex justify-between items-center mb-4">
 
                 <h1 className="text-xl font-semibold text-gray-800 truncate">
-                    {report?.description || "Loading..."} {reportType === "detailed" ? "(Detailed)" : "(Summary)"}
+                    {report?.description || "Loading..."}{" "}
+{reportType === "detailed"
+  ? "(Detailed)"
+  : reportType === "equivalent"
+  ? "(Equivalent)"
+  : "(Summary)"}
                 </h1>
 
                {/* ================= ACTIONS ================= */}
@@ -1632,40 +1737,55 @@ const resetFiltersState = () => {
 
             </div>
 
-            <div className="flex items-center border rounded-lg overflow-hidden shadow-sm">
+           <div className="inline-flex items-center bg-gray-100 p-1 rounded-xl shadow-sm">
 
   <button
     onClick={() => handleReportTypeChange("summary")}
-    disabled={report.is_detailed === false}
-    className={`px-4 py-1.5 text-sm font-medium transition ${
-      reportType === "summary"
-        ? "bg-blue-600 text-white"
-        : "bg-white text-gray-700 hover:bg-gray-100"
-    } ${
-      report.is_detailed === false
-        ? "opacity-50 cursor-not-allowed"
-        : ""
-    }`}
+    disabled={!report.is_detailed}
+    className={`
+      px-4 py-1.5 text-sm font-medium rounded-lg transition-all
+      ${
+        reportType === "summary"
+          ? "bg-white text-blue-600 shadow"
+          : "text-gray-600 hover:text-gray-900"
+      }
+      ${!report.is_detailed ? "opacity-40 cursor-not-allowed" : ""}
+    `}
   >
     Summary
   </button>
 
   <button
     onClick={() => handleReportTypeChange("detailed")}
-    disabled={report.is_detailed === false}
-    className={`px-4 py-1.5 text-sm font-medium transition ${
-      reportType === "detailed"
-        ? "bg-blue-600 text-white"
-        : "bg-white text-gray-700 hover:bg-gray-100"
-    } ${
-      report.is_detailed === false
-        ? "opacity-50 cursor-not-allowed"
-        : ""
-    }`}
+    disabled={!report.is_detailed}
+    className={`
+      px-4 py-1.5 text-sm font-medium rounded-lg transition-all
+      ${
+        reportType === "detailed"
+          ? "bg-white text-blue-600 shadow"
+          : "text-gray-600 hover:text-gray-900"
+      }
+      ${!report.is_detailed ? "opacity-40 cursor-not-allowed" : ""}
+    `}
   >
     Detailed
   </button>
 
+  {showEquivalent && (
+    <button
+      onClick={() => handleEquivalentReport()}
+      className={`
+        px-4 py-1.5 text-sm font-medium rounded-lg transition-all
+        ${
+          reportType === "equivalent"
+            ? "bg-white text-blue-600 shadow"
+            : "text-gray-600 hover:text-blue-600"
+        }
+      `}
+    >
+      Equivalent
+    </button>
+  )}
 </div>
 
               {/* Right side: Pagination + Total */}

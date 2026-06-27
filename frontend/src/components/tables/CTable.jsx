@@ -241,7 +241,7 @@ export default function DynamicTablePage() {
     const [hidePopupColumn, setHidePopupColumn] = useState(null);
     const [tempHideColumns, setTempHideColumns] = useState([]);
     const [appliedFilters, setAppliedFilters] = useState([]);
-    
+    const snoRef = useRef(null);
     useEffect(() => {
       const handleResize = () => {
         setIsMobile(window.innerWidth < 768);
@@ -3167,15 +3167,20 @@ const rowIndexMap = React.useMemo(() => {
   return map;
 }, [flatGroupedRows]);
 
-const orderedVisibleColumns = React.useMemo(() => {
-  if (!columnOrder?.length) return visibleColumns;
+const orderedVisibleColumns = useMemo(() => {
+  const pinned = [];
+  const unpinned = [];
 
-  const map = new Map(visibleColumns.map(c => [c.column_name, c]));
+  for (const col of visibleColumns) {
+    if (pinnedColumns.includes(col.column_name)) {
+      pinned.push(col);
+    } else {
+      unpinned.push(col);
+    }
+  }
 
-  return columnOrder
-    .map(name => map.get(name))
-    .filter(Boolean);
-}, [visibleColumns, columnOrder]);
+  return [...pinned, ...unpinned];
+}, [visibleColumns, pinnedColumns]);
 //console.log("Ordered visible columns:", orderedVisibleColumns.map(c => c.column_name));
 
 
@@ -3290,6 +3295,33 @@ const grandTotal = useMemo(() => {
 
   return totals;
 }, [rows, orderedVisibleColumns]);
+
+const handleHeaderSortToggle = (key, displayName) => {
+  const existing = sortConfig.find(s => s.key === key);
+
+  if (!existing) {
+    handleSort(key, "asc", displayName);
+  } else if (existing.direction === "asc") {
+    handleSort(key, "desc", displayName);
+  } else {
+    setSortConfig(prev => prev.filter(s => s.key !== key));
+  }
+};
+
+const openMenuEye = () => {
+  const rect = snoRef.current?.getBoundingClientRect();
+
+  if (!rect) return;
+
+  setMenuPosition({
+    top: rect.bottom + 5,
+    left: rect.left
+  });
+
+  setHidePopupColumn("__sno__");
+  setTempHideColumns(visibleColumns.map((c) => c.column_name));
+  setShowHidePopup(true);
+};
 
     return (
         <div className="h-full flex flex-col">
@@ -3878,24 +3910,10 @@ const options = Array.isArray(rawOptions)
                     <table className="min-w-max w-full text-sm border-separate border-spacing-0">
                         <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
                             <tr>
-                                <th
+                               <th
+  ref={snoRef}
   className="group relative px-4 py-3 border-b text-left sticky left-0 z-40 bg-gray-100 w-16 min-w-16 border-r border-gray-200 cursor-pointer"
-  onClick={(e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-
-    setMenuPosition({
-      top: rect.bottom + window.scrollY + 5,
-      left: rect.left + window.scrollX
-    });
-
-    setHidePopupColumn("__sno__");
-
-    setTempHideColumns(
-      visibleColumns.map((c) => c.column_name)
-    );
-
-    setShowHidePopup(true);
-  }}
+  onClick={openMenuEye}
 >
   {/* TEXT (hide on hover) */}
   <span className="group-hover:opacity-0 transition">
@@ -3907,33 +3925,7 @@ const options = Array.isArray(rawOptions)
   <EyeIcon className="w-6 h-6" />
 </span>
 </th>
-{showHidePopup &&
-  hidePopupColumn === "__sno__" && (
-    <div
-      style={{
-        position: "absolute",
-        top: menuPosition.top,
-        left: menuPosition.left,
-        zIndex: 9999
-      }}
-    >
-      <ShowHideColumnsPopup
-        columns={columns}
-        tempHideColumns={tempHideColumns}
-        setTempHideColumns={setTempHideColumns}
-        onCancel={() => {
-          setShowHidePopup(false);
-          setHidePopupColumn(null);
-        }}
-        onSave={async () => {
-          await saveColumnSelection(tempHideColumns);
-          setShowHidePopup(false);
-          setHidePopupColumn(null);
-          setOpenMenu(null);
-        }}
-      />
-    </div>
-  )}
+
                                {orderedVisibleColumns.map((col, index) => (
   <th
     key={col.column_id}
@@ -3955,13 +3947,29 @@ onDrop={() => handleDrop(col.column_name)}
     style={getPinnedLeft(col.column_name)}
   >
     {/* HEADER */}
-    <div
-      className="flex items-center gap-1 cursor-pointer hover:bg-gray-200 px-2 py-1 rounded"
-      onClick={(e) => handleHeaderMenuToggle(col.column_name, e)}
-    >
-      <span>{col.display_name}</span>
-      <span className="text-gray-400">▾</span>
-    </div>
+   <div className="flex items-center justify-between gap-1 px-2 py-1 rounded">
+  
+  {/* COLUMN NAME → SORT TOGGLE */}
+  <span
+    className="cursor-pointer flex-1 hover:bg-gray-200 px-1 py-1 rounded"
+    onClick={() => handleHeaderSortToggle(col.column_name, col.display_name)}
+  >
+    {col.display_name}
+  </span>
+  
+
+  {/* SMALL BUTTON → MENU */}
+  <button
+    className="text-gray-400 hover:text-gray-700 px-1"
+    onClick={(e) => {
+      e.stopPropagation();
+
+      handleHeaderMenuToggle(col.column_name, e);
+    }}
+  >
+    ▾
+  </button>
+</div>
 
     {/* DROPDOWN MENU */}
     {openMenu === col.column_name && createPortal(
@@ -5374,6 +5382,31 @@ onDrop={() => handleDrop(col.column_name)}
 </tfoot>
 
                     </table>
+                    {showHidePopup && hidePopupColumn === "__sno__" && (
+  <div
+    style={{
+      position: "fixed",
+      top: menuPosition.top,
+      left: menuPosition.left,
+      zIndex: 9999
+    }}
+  >
+    <ShowHideColumnsPopup
+      columns={columns}
+      tempHideColumns={tempHideColumns}
+      setTempHideColumns={setTempHideColumns}
+      onCancel={() => {
+        setShowHidePopup(false);
+        setHidePopupColumn(null);
+      }}
+      onSave={async () => {
+        await saveColumnSelection(tempHideColumns);
+        setShowHidePopup(false);
+        setHidePopupColumn(null);
+      }}
+    />
+  </div>
+)}
                     </div>
                     {/* ================= MOBILE VIEW ================= */}
 <div className="md:hidden space-y-4">
