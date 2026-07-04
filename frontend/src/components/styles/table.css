@@ -1,0 +1,30 @@
+@layer components {
+
+  .btn {
+    @apply flex items-center justify-center gap-2 px-4 py-2 rounded-lg 
+           text-sm font-medium transition-all duration-200 
+           shadow-sm hover:shadow-md active:scale-95;
+  }
+
+  .btn-blue {
+    @apply bg-blue-600 text-white hover:bg-blue-700;
+  }
+
+  .btn-green {
+    @apply bg-emerald-600 text-white hover:bg-emerald-700;
+  }
+
+  .btn-gray {
+    @apply bg-gray-700 text-white hover:bg-gray-800;
+  }
+
+  .btn-red {
+    @apply bg-red-500 text-white hover:bg-red-600;
+  }
+
+  .btn-outline {
+    @apply border border-gray-300 text-gray-700 bg-white 
+           hover:bg-gray-100;
+  }
+
+}

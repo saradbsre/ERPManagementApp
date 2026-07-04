@@ -1,0 +1,122 @@
+[33m4879966[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Merge branch 'main' of https://github.com/saradbsre/ERPManagementApp
+[33mf4532dd[m Fixed issue with report total
+[33m75d69e2[m NEW CHANGES
+[33med087cf[m loading time
+[33mfe1784e[m loading time
+[33mc83f9f2[m loading time
+[33m66d9122[m print prf
+[33m562701c[m print prf
+[33mf9dedfe[m print prf
+[33mb7b1189[m print prf
+[33me9ab366[m loading time
+[33m6f67462[m reports
+[33m0fd0f1d[m table naming changes
+[33m915d4e0[m new
+[33m1ed53c9[m print prf
+[33m46898d1[m print prf
+[33m232d8d0[m new
+[33mf2b1cd3[m currency code
+[33m5750886[m currency code
+[33m3a5c02e[m new
+[33me56e798[m new
+[33m0ad8a39[m currency code
+[33m12221ea[m currency code
+[33m3e01f2a[m new
+[33mc5296ab[m currency code
+[33m20c5b6f[m new
+[33m0a987fc[m new
+[33m37aa028[m new
+[33mf70af4b[m new
+[33md40276f[m new
+[33m2e0e2ca[m new
+[33m0be1f52[m new
+[33m7167d92[m currency code
+[33m9bc102a[m currency code
+[33m4a7f726[m currency code
+[33m8f07e2d[m master
+[33mdf22ea7[m master
+[33mf70507c[m new
+[33m263c819[m new
+[33me8c124a[m new
+[33m0531864[m new
+[33m0ffee33[m new
+[33mcb04e14[m new
+[33md49169b[m new
+[33m2e49f61[m new
+[33m76747b7[m new
+[33m2a9f051[m new
+[33m825f9d5[m new
+[33m78f63e2[m new
+[33m254abd8[m new
+[33m6ca32a9[m new
+[33mb3686ef[m new
+[33me192032[m new
+[33m73afe66[m new
+[33m188200f[m new
+[33m68a4c06[m new
+[33m7a5f337[m new
+[33me34d5f9[m new
+[33m8134fe9[m new
+[33mf8cb7eb[m new
+[33m9ae0df6[m new changes
+[33ma9579a2[m new changes
+[33mf57ef3e[m new changes
+[33m3de738f[m new changes
+[33maafb2a8[m new changes
+[33m732219b[m new changes
+[33mff73fe7[m new changes
+[33mbf38a80[m new changes
+[33mfb5e2cf[m new changes
+[33mab5bdbe[m new changes
+[33m89a2b47[m new changes on masters
+[33m2c156de[m new changes on masters
+[33m1faeab1[m new changes on masters
+[33m0858b6f[m new changes on masters
+[33m2ccbcde[m new changes on masters
+[33m1648a66[m new changes on dashboard
+[33m6243464[m new changes on dashboard
+[33mb84c61d[m new changes on dashboard
+[33m1de47d5[m new changes on dashboard
+[33m7a174b5[m new changes on dashboard
+[33m614dbb6[m new changes on dashboard
+[33m4dcf75f[m new changes on dashboard
+[33m935086b[m new changes on dashboard
+[33med74897[m new changes on dashboard
+[33mb7ed93d[m new changes on dashboard
+[33mc14bd93[m new changes on dashboard
+[33m4d2b718[m new changes on dashboard
+[33m48702ff[m new changes on dashboard
+[33mccc71bd[m new changes on dashboard
+[33m6756bd5[m new changes on dashboard
+[33m2a9b6e0[m new changes on dashboard
+[33m431c924[m new changes on dashboard
+[33mf4c94ca[m new changes on dashboard
+[33m685b818[m new
+[33mb4a808a[m new
+[33m59977f6[m new changes
+[33md7504a3[m new
+[33mf0b9cf0[m new
+[33mc46c262[m new
+[33m7a4bef4[m new
+[33mece90bb[m new
+[33m5eba5e1[m new
+[33m227df37[m new
+[33m88d011d[m loader
+[33m8472d9d[m payment req form
+[33m4e16568[m payment req form
+[33me755988[m design changes
+[33ma495ff2[m design changes
+[33mc436ff3[m design changes
+[33m43c2760[m design changes
+[33mc8ec8c6[m design changes
+[33m089ae61[m design changes
+[33m1432da0[m design changes
+[33m2803648[m design changes
+[33mf2ed8b9[m design changes
+[33m8ea6a4c[m design changes
+[33mfd6267c[m design changes
+[33m4b1ebce[m design changes
+[33ma4dc9e9[m add backend render url
+[33md8e38ac[m add backend render url
+[33m662e4e2[m add backend render url
+[33m5397873[m first commit
