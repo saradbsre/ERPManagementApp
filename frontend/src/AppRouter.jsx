@@ -29,15 +29,16 @@ function AppRouter() {
 useEffect(() => {
 
   const checkDb = async () => {
-
+    console.log("Checking database status...");
     // delay before showing loading
     const loadingTimer = setTimeout(() => {
       setDbStatus("loading");
     }, 1500); // 1.5 sec delay
 
     try {
+      console.log("Fetching database status...");
       const res = await getDbStatus();
-
+      console.log("DB Status Response:", res.data);
       // stop loading timer
       clearTimeout(loadingTimer);
 
@@ -48,7 +49,7 @@ useEffect(() => {
       }
 
     } catch (err) {
-
+      console.log(err.message);
       clearTimeout(loadingTimer);
 
       setDbStatus("error");

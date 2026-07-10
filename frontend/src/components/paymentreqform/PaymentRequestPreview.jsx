@@ -1339,7 +1339,7 @@ const covertedExchangeRate = 1 / (details?.exchange_rate || 1);
   {details?.exchange_rate && (
     <>
       {" "}
-      (Converted at an exchange rate of {formatDecimal(covertedExchangeRate)} when this PRF was generated on{" "}
+      (Converted at an exchange rate of {formatDecimal(1/covertedExchangeRate)} when this PRF was generated on{" "}
       {formatDate(details.prf_date)})
     </>
   )}
