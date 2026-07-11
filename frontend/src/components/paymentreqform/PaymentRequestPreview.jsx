@@ -864,6 +864,11 @@ const covertedExchangeRate = 1 / (details?.exchange_rate || 1);
             header?.trntype_code?.toLowerCase() === "bill payment"
           ) &&
             "This payment request is related to the bill payment of a service."}
+            {(
+            selectedTransactionType?.trntype_code?.toUpperCase() === "TT008" ||
+            header?.trntype_code?.toLowerCase() === "Repurchase"
+          ) &&
+            "This payment request is related to the Repurchase of a service."}
         </div>
 
         {expiryDate && (
@@ -1030,7 +1035,7 @@ const covertedExchangeRate = 1 / (details?.exchange_rate || 1);
       </td>
 
       <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {periodDisplay}
+       {periodDisplay}
       </td>
 
     </tr>
