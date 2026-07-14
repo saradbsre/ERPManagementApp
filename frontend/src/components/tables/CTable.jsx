@@ -1,5 +1,5 @@
 import React,{ useEffect, useState, useRef, useLayoutEffect, act, use, useMemo } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { fetchSections,fetchMasters, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow, getPreviewPRF, unpostPRFTransaction, postPRFTransaction  } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
@@ -118,6 +118,7 @@ function SortableColumnItem({ col, checked, toggleTempColumn}) {
 export default function DynamicTablePage() {
     const { id } = useParams();
     const location = useLocation();
+    const navigate = useNavigate();
     const [isCreating, setIsCreating] = useState(false);
     const [newRow, setNewRow] = useState({});
     const [editRowId, setEditRowId] = useState(null);
@@ -3387,8 +3388,16 @@ const openMenuEye = () => {
   </PermissionButton>
 
   <button
+    onClick={() => navigate(`/upload/${id}`)}
+    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white
+               hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
+  >
+    Upload
+  </button>
+
+  <button
     onClick={() => setShowCustomizeDrawer(true)}
-    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
+    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white
                hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
   >
     Customize

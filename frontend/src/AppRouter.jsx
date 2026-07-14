@@ -14,6 +14,7 @@ import ViewPage from "./components/views/ViewTable";
 import ReportTable from "./components/reports/ReportTable";
 import PaymentReqForm from "./pages/PaymentReqForm";
 import Profile from "./pages/Profile";
+import PDFUpload from "./pages/PDFUpload";
 import { useUser } from "./components/UserContext";
 import { sessionHeartbeat, logOut } from "./api/api";
 import DbStatusOverlay from "./components/DbStatusOverlay";
@@ -233,6 +234,7 @@ useEffect(() => {
             <Route path="/payment-req-form" element={<PaymentReqForm />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/reports/:id" element={<ReportTable />} />
+            <Route path="/upload/:moduleId" element={<PDFUpload />} />
           </Route>
         </Route>
       </Routes>

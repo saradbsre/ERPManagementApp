@@ -5,7 +5,7 @@ import {
   fetchSections,
   fetchMasters,
   getReportsName,
-  getReportMenu
+  getReportMenu,
 } from "../api/api";
 
 import {
@@ -18,24 +18,24 @@ import {
   FileBarChart2,
   Menu,
   X,
+  ChevronDown,
+  ChevronRight as ArrowRight,
 } from "lucide-react";
 
-export default function Sidebar({ collapsed, setCollapsed }) {
+export default function SideBar({ collapsed, setCollapsed }) {
   const location = useLocation();
-  const [hoverMenu, setHoverMenu] = useState(null);
-  const [mobileOpen, setMobileOpen] = useState(false);
 
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [sections, setSections] = useState([]);
   const [masters, setMasters] = useState([]);
   const [reports, setReports] = useState([]);
   const [views, setViews] = useState([]);
   const [openMain, setOpenMain] = useState(null);
+  const [hoverMenu, setHoverMenu] = useState(null);
+const [hoverTimeout, setHoverTimeout] = useState(null);
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
 
-  const User = JSON.parse(localStorage.getItem("user"));
-
-  const role = (User?.role || "user")
-    .toLowerCase()
-    .trim();
+  const role = (user?.role || "user").toLowerCase().trim();
 
   useEffect(() => {
     loadSections();
@@ -49,7 +49,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
       const res = await fetchSections();
       setSections(res.data || []);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load sections:", err);
     }
   };
 
@@ -58,58 +58,57 @@ export default function Sidebar({ collapsed, setCollapsed }) {
       const res = await fetchMasters();
       setMasters(res.data || []);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load masters:", err);
     }
   };
 
   const loadReportFilters = async () => {
     try {
-      const activeUserEmail = User?.email || "";
-
+      const activeUserEmail = user?.email || "";
       const res = await getReportsName(activeUserEmail);
-
       setViews(res.data || []);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load views:", err);
     }
   };
 
-   const loadReportMenu = async () => {
+  const loadReportMenu = async () => {
     try {
       const res = await getReportMenu();
       setReports(res.data || []);
-    }
-      catch (err) {
-      console.error(err);
+    } catch (err) {
+      console.error("Failed to load reports:", err);
     }
   };
 
-  const isActive = (path) =>
-    location.pathname === path;
+  const isActive = (path) => location.pathname === path;
 
-  const showAdmin =
-    role !== "user" &&
-    role !== "asst admin";
+  const isChildActive = (children = []) =>
+    children.some((child) => location.pathname === child.path);
 
-  const showMasters =
-    role !== "user";
+  const closeMobile = () => {
+    setMobileOpen(false);
+  };
+
+  const showAdmin = role !== "user" && role !== "asst admin";
+  const showMasters = role !== "user";
 
   const menuItems = [
     {
       name: "Dashboard",
-      icon: <LayoutDashboard size={18} />,
+      icon: <LayoutDashboard size={19} />,
       path: "/dashboard",
     },
 
     showAdmin && {
       name: "Admin",
-      icon: <Settings size={18} />,
+      icon: <Settings size={19} />,
       path: "/admin",
     },
 
     showMasters && {
       name: "Masters",
-      icon: <BookOpen size={18} />,
+      icon: <BookOpen size={19} />,
       children: masters.map((master) => ({
         key: master.master_name,
         id: master.master_name,
@@ -121,7 +120,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
 
     {
       name: "Workspace",
-      icon: <FolderKanban size={18} />,
+      icon: <FolderKanban size={19} />,
       children: sections.map((sec) => ({
         key: `${sec.module_id}_${sec.module_name}`,
         id: sec.module_id,
@@ -130,9 +129,10 @@ export default function Sidebar({ collapsed, setCollapsed }) {
         path: `/workspace/${sec.module_id}`,
       })),
     },
-     {
+
+    {
       name: "Reports",
-      icon: <FileBarChart2 size={18} />,
+      icon: <FileBarChart2 size={19} />,
       children: reports.map((report) => ({
         key: `${report.report_id}`,
         id: report.report_id,
@@ -141,294 +141,249 @@ export default function Sidebar({ collapsed, setCollapsed }) {
         path: `/reports/${report.report_id}`,
       })),
     },
-    // {
-    //   name: "Views",
-    //   icon: <FileBarChart2 size={18} />,
-    //   children: views.map((view) => ({
-    //     key: `${view.id}_${view.filter_name}`,
-    //     id: view.id,
-    //     name: view.filter_name,
-    //     view,
-    //     path: `/views/${view.id}`,
-    //   })),
-    // },
   ].filter(Boolean);
 
-  const closeMobile = () => {
-    setMobileOpen(false);
-  };
+  const sidebarWidth = collapsed ? "md:w-20" : "md:w-64";
+const openHoverMenu = (menuName) => {
+  if (hoverTimeout) {
+    clearTimeout(hoverTimeout);
+    setHoverTimeout(null);
+  }
 
+  setHoverMenu(menuName);
+};
+
+const closeHoverMenuWithDelay = () => {
+  const timeout = setTimeout(() => {
+    setHoverMenu(null);
+  }, 250);
+
+  setHoverTimeout(timeout);
+};
   return (
     <>
-      {/* MOBILE MENU BUTTON */}
-<button
-  onClick={() => setMobileOpen(true)}
-  className="
-    md:hidden
-    fixed
-    top-4
-    left-4
-    z-[60]
-    p-2
-    rounded-lg
-    bg-white
-    shadow
-    border
-  "
->
-  <Menu size={22} />
-</button>
+      {/* mobile menu button */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="md:hidden fixed top-4 left-4 z-[70] p-2 rounded-lg bg-white shadow border border-gray-200 text-gray-700"
+      >
+        <Menu size={22} />
+      </button>
 
-      {/* BACKDROP */}
+      {/* mobile overlay */}
       {mobileOpen && (
         <div
-          className="
-            md:hidden
-            fixed
-            inset-0
-            bg-black/40
-            z-40
-          "
+          className="md:hidden fixed inset-0 bg-black/40 z-40"
           onClick={closeMobile}
         />
       )}
 
-      {/* SIDEBAR */}
-      <div
-        className={`
-          fixed top-0 left-0 h-screen
-          bg-gray-100 text-gray-900
-          overflow-y-auto
-          overflow-x-visible
-          z-50
-          transition-all duration-300
-
-          ${
-            mobileOpen
-              ? "translate-x-0"
-              : "-translate-x-full md:translate-x-0"
-          }
-
-          ${
-            collapsed
-              ? "md:w-20"
-              : "md:w-64"
-          }
-
-          w-64
-        `}
+      {/* sidebar */}
+      <aside
+        className={`fixed top-0 left-0 h-screen bg-white border-r border-gray-200 shadow-sm z-50 transition-all duration-300
+        ${sidebarWidth}
+        w-64
+        ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+      `}
       >
-        {/* HEADER */}
-        <div className="flex items-center justify-between p-4">
-          {!collapsed && (
-            <h1 className="text-lg font-bold">
-              BINSHABIB GROUP
-            </h1>
-          )}
+        <div className="flex flex-col h-full">
+         
+        {/* logo/header */}
+{/* logo/header */}
+<div className="h-16 flex items-center justify-start px-3 border-b border-gray-200 relative">
+  {!collapsed ? (
+    <>
+      <div className="min-w-0 mr-10">
+          <h1 className="text-lg font-bold text-[#264d86] truncate">
+          BIN SHABIB
+        </h1>
+        <p className="text-xs text-gray-500 truncate">
+          ERP workspace
+        </p>
+      </div>
 
-          <div className="flex items-center gap-2">
-            {/* DESKTOP COLLAPSE */}
-            <button
-              onClick={() =>
-                setCollapsed(!collapsed)
-              }
-              className="
-                hidden md:block
-                p-1 rounded
-                hover:bg-gray-200
-              "
-            >
-              {collapsed ? (
-                <ChevronRight size={20} />
-              ) : (
-                <ChevronLeft size={20} />
-              )}
-            </button>
+      <button
+        onClick={() => setCollapsed(true)}
+        className="hidden md:flex absolute right-3 items-center justify-center w-9 h-9 rounded-lg hover:bg-gray-100 text-gray-600"
+        title="Collapse sidebar"
+      >
+        <ChevronLeft size={18} />
+      </button>
+    </>
+  ) : (
+    <>
+      <div className="w-10 h-10 rounded-xl bg-[#264d86] text-white flex items-center justify-center font-bold text-lg">
+        B
+      </div>
 
-            {/* MOBILE CLOSE */}
-            <button
-              onClick={closeMobile}
-              className="
-                md:hidden
-                p-1 rounded
-                hover:bg-gray-200
-              "
-            >
-              <X size={20} />
-            </button>
-          </div>
-        </div>
+      <button
+        onClick={() => setCollapsed(false)}
+        className="hidden md:flex absolute right-1 items-center justify-center w-7 h-7 rounded-lg hover:bg-gray-100 text-gray-600"
+        title="Expand sidebar"
+      >
+        <ChevronRight size={17} />
+      </button>
+    </>
+  )}
 
-        {/* MENU */}
-        <nav className="space-y-2 p-3">
-          {menuItems.map((item, i) => (
-            <div key={i}>
-              {/* NORMAL LINK */}
-              {item.path ? (
-                <Link
-                  to={item.path}
-                  onClick={closeMobile}
-                  className={`
-  flex items-center
-  ${collapsed ? "justify-center" : "gap-3"}
-  px-3 py-2 rounded
-  ${
-    isActive(item.path)
-      ? "bg-gray-300"
-      : "hover:bg-gray-200"
-  }
-`}
+  <button
+    onClick={closeMobile}
+    className="md:hidden absolute right-3 flex items-center justify-center w-9 h-9 rounded-lg hover:bg-gray-100 text-gray-600"
+  >
+    <X size={18} />
+  </button>
+</div>
+
+          {/* menu */}
+          <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+            {menuItems.map((item) => {
+              const activeParent = item.path
+                ? isActive(item.path)
+                : isChildActive(item.children);
+
+              const isOpen = openMain === item.name;
+
+              return (
+               <div
+                  key={item.name}
+                  className="relative"
+                  onMouseEnter={() => collapsed && openHoverMenu(item.name)}
+                  onMouseLeave={() => collapsed && closeHoverMenuWithDelay()}
                 >
-                  <span>{item.icon}</span>
+                  {item.path ? (
+                    <Link
+                      to={item.path}
+                      onClick={closeMobile}
+                      className={`group flex items-center rounded-xl transition-all duration-200
+                        ${
+                          collapsed
+                            ? "justify-center px-2 py-3"
+                            : "gap-3 px-3 py-2.5"
+                        }
+                        ${
+                          activeParent
+                            ? "bg-blue-50 text-blue-700 font-semibold"
+                            : "text-gray-700 hover:bg-gray-100"
+                        }
+                      `}
+                    >
+                      <span
+                        className={`shrink-0 ${
+                          activeParent ? "text-blue-700" : "text-gray-500"
+                        }`}
+                      >
+                        {item.icon}
+                      </span>
 
-                  {!collapsed && (
-                    <span>{item.name}</span>
+                      {!collapsed && (
+                        <span className="text-sm truncate">{item.name}</span>
+                      )}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!collapsed) {
+                          setOpenMain(isOpen ? null : item.name);
+                        }
+                      }}
+                      className={`w-full flex items-center rounded-xl transition-all duration-200
+                        ${
+                          collapsed
+                            ? "justify-center px-2 py-3"
+                            : "justify-between gap-3 px-3 py-2.5"
+                        }
+                        ${
+                          activeParent
+                            ? "bg-blue-50 text-blue-700 font-semibold"
+                            : "text-gray-700 hover:bg-gray-100"
+                        }
+                      `}
+                    >
+                      <span
+                        className={`flex items-center ${
+                          collapsed ? "justify-center" : "gap-3"
+                        } min-w-0`}
+                      >
+                        <span
+                          className={`shrink-0 ${
+                            activeParent ? "text-blue-700" : "text-gray-500"
+                          }`}
+                        >
+                          {item.icon}
+                        </span>
+
+                        {!collapsed && (
+                          <span className="text-sm truncate">{item.name}</span>
+                        )}
+                      </span>
+
+                      {!collapsed && (
+                        <span className="text-gray-400">
+                          {isOpen ? (
+                            <ChevronDown size={16} />
+                          ) : (
+                            <ArrowRight size={16} />
+                          )}
+                        </span>
+                      )}
+                    </button>
                   )}
-                </Link>
-              ) : (
-                <div
-  className="
-    relative
-    flex justify-between
-    items-center
-    px-3 py-2
-    rounded
-    cursor-pointer
-    hover:bg-gray-200
-  "
-  onClick={() => {
-    if (!collapsed) {
-      setOpenMain(
-        openMain === item.name
-          ? null
-          : item.name
-      );
-    }
-  }}
-  onMouseEnter={() => {
-    if (collapsed) {
-      setHoverMenu(item.name);
-    }
-  }}
-  onMouseLeave={() => {
-    if (collapsed) {
-      setHoverMenu(null);
-    }
-  }}
->
-                  <div
-  className={`flex items-center ${
-    collapsed
-      ? "justify-center w-full"
-      : "gap-3"
-  }`}
->
-                    <span>{item.icon}</span>
 
-                    {!collapsed && (
-                      <span>{item.name}</span>
-                    )}
-                  </div>
-
-                  {!collapsed && (
-                    <span>
-                      {openMain === item.name
-                        ? "▾"
-                        : "▸"}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* CHILDREN */}
-              {item.children &&
-                openMain === item.name &&
-                !collapsed && (
-                  <div className="ml-6 mt-2 space-y-1">
-                    {item.children.map(
-                      (child) => (
+                  {/* expanded submenu */}
+                  {!collapsed && item.children && isOpen && (
+                    <div className="mt-1 ml-8 pl-2 border-l border-gray-200 space-y-1">
+                      {item.children.map((child) => (
                         <Link
                           key={child.key}
                           to={child.path}
                           onClick={closeMobile}
                           state={
                             child.master
-                              ? {
-                                  master:
-                                    child.master,
-                                }
+                              ? { master: child.master }
                               : child.report
-                              ? {
-                                  report:
-                                    child.report,
-                                }
-                              : {
-                                  module:
-                                    child.module,
-                                }
+                              ? { report: child.report }
+                              : { module: child.module }
                           }
-                          className={`
-                            block
-                            px-3 py-2
-                            rounded
-                            text-sm
-
+                          className={`block rounded-lg px-3 py-2 text-sm transition
                             ${
-                              isActive(
-                                child.path
-                              )
-                                ? "bg-gray-300"
-                                : "hover:bg-gray-200"
+                              isActive(child.path)
+                                ? "bg-blue-100 text-blue-700 font-medium"
+                                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                             }
                           `}
                         >
-                          {child.name}
+                          <span className="line-clamp-1">{child.name}</span>
                         </Link>
-                      )
-                    )}
-                  </div>
-                )}
-                {collapsed &&
-  item.children &&
-  hoverMenu === item.name && (
-    <div
-      className="
-        absolute
-        left-full
-        top-0
-        ml-2
-        min-w-[260px]
-        bg-white
-        border
-        rounded-lg
-        shadow-xl
-        z-[9999]
-        py-2
-      "
-      onMouseEnter={() =>
-        setHoverMenu(item.name)
-      }
-      onMouseLeave={() =>
-        setHoverMenu(null)
-      }
-    >
-      <div
-        className="
-          px-3
-          py-2
-          font-semibold
-          border-b
-          bg-gray-50
-        "
-      >
-        {item.name}
-      </div>
+                      ))}
+                    </div>
+                  )}
 
+                  {/* collapsed hover submenu */}
+                  {collapsed && item.children && hoverMenu === item.name && (
+  <div
+    className="fixed left-20 min-w-[280px] max-w-[360px] max-h-[70vh] overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] py-2"
+    style={{
+      top: `${Math.max(70, 85 + menuItems.findIndex((m) => m.name === item.name) * 52)}px`,
+    }}
+    onMouseEnter={() => openHoverMenu(item.name)}
+    onMouseLeave={closeHoverMenuWithDelay}
+  >
+    <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 rounded-t-xl">
+      <p className="text-sm font-semibold text-gray-900">
+        {item.name}
+      </p>
+    </div>
+
+    <div className="p-2 space-y-1">
       {item.children.map((child) => (
         <Link
           key={child.key}
           to={child.path}
-          onClick={closeMobile}
+          onClick={() => {
+            closeMobile();
+            setHoverMenu(null);
+          }}
           state={
             child.master
               ? { master: child.master }
@@ -436,23 +391,56 @@ export default function Sidebar({ collapsed, setCollapsed }) {
               ? { report: child.report }
               : { module: child.module }
           }
-          className="
-            block
-            px-3
-            py-2
-            text-sm
-            hover:bg-gray-100
-          "
+          className={`block rounded-lg px-3 py-2 text-sm transition
+            ${
+              isActive(child.path)
+                ? "bg-blue-100 text-blue-700 font-medium"
+                : "text-gray-700 hover:bg-gray-100"
+            }
+          `}
         >
           {child.name}
         </Link>
       ))}
     </div>
+  </div>
 )}
-            </div>
-          ))}
-        </nav>
+                </div>
+              );
+            })}
+          </nav>
+
+          {/* footer */}
+        {/* footer */}
+<div className="p-3 border-t border-gray-200">
+  {!collapsed ? (
+    <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50">
+      <div className="w-9 h-9 rounded-full bg-[#264d86] text-white flex items-center justify-center font-semibold">
+        {(user?.name || user?.username || "U").charAt(0).toUpperCase()}
       </div>
+
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-gray-900 truncate">
+          {user?.name || user?.username || "User"}
+        </p>
+        <p className="text-xs text-gray-500 truncate">
+          {user?.role || "User"}
+        </p>
+      </div>
+    </div>
+  ) : (
+    <div className="flex justify-center">
+      <div
+        className="w-10 h-10 rounded-full bg-[#264d86] text-white flex items-center justify-center font-semibold"
+        title={user?.name || user?.username || "User"}
+      >
+        {(user?.name || user?.username || "U").charAt(0).toUpperCase()}
+      </div>
+    </div>
+  )}
+</div>
+        </div>
+      </aside>
     </>
   );
 }

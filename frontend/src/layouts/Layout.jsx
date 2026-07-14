@@ -4,44 +4,23 @@ import Navbar from "./Header";
 import { Outlet } from "react-router-dom";
 
 export default function Layout() {
-
-  // ✅ SIDEBAR STATE
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
+    <div className="min-h-screen bg-gray-100">
+      <SideBar collapsed={collapsed} setCollapsed={setCollapsed} />
 
-    <div className="flex">
-
-      {/* SIDEBAR */}
-      <SideBar
-        collapsed={collapsed}
-        setCollapsed={setCollapsed}
-      />
-
-      {/* MAIN CONTENT */}
-<div
-  className={`flex flex-col min-w-0 transition-all duration-300 ${
-    collapsed
-      ? "md:ml-20 ml-0"
-      : "md:ml-64 ml-0"
-  }`}
-  style={{
-    width: "100%",
-    minHeight: "100vh",
-    background: "#f3f4f6",
-  }}
->
-
-        {/* HEADER */}
+      <div
+        className={`min-h-screen transition-all duration-300 ${
+          collapsed ? "md:pl-20" : "md:pl-64"
+        }`}
+      >
         <Navbar />
 
-        {/* PAGE */}
-        <div className="p-6 min-w-0 overflow-x-hidden flex-1">
+        <main className="p-4 md:p-6 min-w-0">
           <Outlet />
-        </div>
-
+        </main>
       </div>
-
     </div>
   );
 }

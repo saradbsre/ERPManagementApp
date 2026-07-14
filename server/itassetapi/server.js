@@ -12,6 +12,7 @@ const logsRoutes = require("./routes/logs");
 const reportRoutes = require("./routes/reports");
 const paymentReqRoutes = require("./routes/paymentReq");
 const profileRoutes = require("./routes/profile");
+const pdfRoutes = require("./routes/pdf");
 const fs = require("fs");
 const path = require("path");
 const PdfPrinter = require("pdfmake/src/printer");
@@ -68,6 +69,8 @@ router.use(reportRoutes);
 router.use(paymentReqRoutes);
 
 router.use(profileRoutes);
+
+router.use("/pdf", pdfRoutes);
 
 //router.use( require("./datainsert"));
 
