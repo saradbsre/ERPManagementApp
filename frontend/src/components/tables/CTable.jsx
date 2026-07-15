@@ -1,6 +1,10 @@
 import React,{ useEffect, useState, useRef, useLayoutEffect, act, use, useMemo } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
-import { fetchSections,fetchMasters, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow, getPreviewPRF, unpostPRFTransaction, postPRFTransaction  } from "../../api/api";
+import { fetchSections,fetchMasters, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow, getPreviewPRF, unpostPRFTransaction, postPRFTransaction,getModuleViews,
+createModuleView,
+updateModuleView,
+deleteModuleView,
+setDefaultModuleView,  } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -29,7 +33,8 @@ import { createPortal } from "react-dom";
 import EditRowPopup from "./EditRowPopup";
 import CustomizeDrawer from "./CustomizeDrawer";
 import { EyeIcon } from "@heroicons/react/24/outline";
-
+import BoardViewsBar from "./BoardViewsBar";
+import CreateViewModal from "./CreateViewModal";
 import {
   arrayMove,
   SortableContext,
@@ -242,6 +247,43 @@ export default function DynamicTablePage() {
     const [hidePopupColumn, setHidePopupColumn] = useState(null);
     const [tempHideColumns, setTempHideColumns] = useState([]);
     const [appliedFilters, setAppliedFilters] = useState([]);
+
+const [dateFilters, setDateFilters] = useState(() => getCurrentMonth());
+// ================= BOARD VIEW STATES =================
+const [views, setViews] = useState([]);
+const [activeViewId, setActiveViewId] = useState("main");
+
+const [showViewDropdown, setShowViewDropdown] = useState(false);
+const [showCreateViewModal, setShowCreateViewModal] = useState(false);
+
+const [newViewName, setNewViewName] = useState("");
+const [newViewType, setNewViewType] = useState("table");
+const [newViewVisibility, setNewViewVisibility] = useState("USER");
+
+const [hasViewChanges, setHasViewChanges] = useState(false);
+
+
+
+
+useEffect(() => {
+  loadViews();
+}, [id, activeUserEmail]);
+
+useEffect(() => {
+  if (activeViewId !== "main" && activeViewId !== "table") {
+    setHasViewChanges(true);
+  }
+}, [
+  search,
+  dateFilters,
+  appliedFilters,
+  filters,
+  selectedColumns,
+  pinnedColumns,
+  sortConfig,
+  groupByColumn,
+]);
+
     const snoRef = useRef(null);
     useEffect(() => {
       const handleResize = () => {
@@ -307,7 +349,7 @@ export default function DynamicTablePage() {
 });
     }, []);
 
-const getCurrentMonth = () => {
+function getCurrentMonth() {
   const now = new Date();
 
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -325,7 +367,7 @@ const getCurrentMonth = () => {
     startDate: format(start),
     endDate: format(end),
   };
-};
+}
 
 const handleDragEnd = (event) => {
   const { active, over } = event;
@@ -353,7 +395,7 @@ const handleDragEnd = (event) => {
   );
 };
 
-const [dateFilters, setDateFilters] = useState(getCurrentMonth());
+
 
 const isFilterActive = search || appliedFilters?.length > 0 
 
@@ -1623,7 +1665,7 @@ const isGenerated = rows.some(r => !!r.prf_num);
 
 useEffect(() => {
   loadModule();
-}, [ search]);
+}, [id]);
 
     const loadCurrencies = async () => {
         try {
@@ -2218,9 +2260,12 @@ const handleClear = async () => {
 
   // ================= RESET SORT + GROUP =================
   setSortConfig([]);
-  setSortKey(null);
-  setSortOrder(null);
-  setGroupBy("");
+  // setSortKey(null);
+  // setSortOrder(null);
+  setGroupBy({
+  key: null,
+  direction: "asc",
+});
 
   // ================= RESET CHIPS =================
   setColumnChips([]);
@@ -2323,7 +2368,7 @@ openPrintWindow({
   return columns;
 };
     // ================= SEARCH FILTER =================
-    const filtered = applyFilters(rows, filters, columns);
+    // const finalRows = filteredRows;
 
    const normalizeString = (str) =>
   String(str).toLowerCase().replace(/\s+/g, "");
@@ -2351,20 +2396,13 @@ const rowMatchesSearch = (row) => {
   });
 };
 
-const finalRows = filtered.filter((row) => rowMatchesSearch(row));
+// const finalRows = filteredRows;
 
-    const normalizedRows = finalRows.map(row => {
-  const currency = (row.currency || "").toLowerCase();
+ 
 
-  return {
-    ...row,
-    [`amount_${currency}`]: row.amount
-  };
-});
 
 
     // ================= PAGINATION =================
-    const totalPages = Math.ceil(normalizedRows.length / pageSize);
 
   
 
@@ -2520,6 +2558,17 @@ const filteredRows = rows.filter((row) => {
 
   return rowMatchesSearch(row);
 });
+
+const finalRows = filteredRows;
+   const normalizedRows = finalRows.map(row => {
+  const currency = (row.currency || "").toLowerCase();
+
+  return {
+    ...row,
+    [`amount_${currency}`]: row.amount
+  };
+});
+    const totalPages = Math.ceil(normalizedRows.length / pageSize);
 
 
 // ======================================================
@@ -3345,6 +3394,226 @@ const openMenuEye = () => {
   setShowHidePopup(true);
 };
 
+const buildCurrentViewPayload = () => {
+  return {
+    filters: {
+      search,
+      dateFilters,
+      appliedFilters: appliedFilters || filters || [],
+    },
+
+    columns: {
+      visibleColumns: selectedColumns || [],
+      pinnedColumns: pinnedColumns || [],
+    },
+
+    sort_config: sortConfig || [],
+
+   group_config: groupBy || {
+  key: null,
+  direction: "asc",
+},
+  };
+};
+
+const loadViews = async () => {
+  try {
+    if (!id || !activeUserEmail) return;
+
+    const res = await getModuleViews(id, activeUserEmail);
+
+    const savedViews = res.data || [];
+    setViews(savedViews);
+
+    const defaultView = savedViews.find((v) => v.is_default);
+
+    if (defaultView) {
+      setActiveViewId(defaultView.id);
+      applySavedView(defaultView);
+    }
+  } catch (err) {
+    console.error("Failed to load module views:", err);
+  }
+};
+
+const safeJsonParse = (value, fallback) => {
+  try {
+    if (!value) return fallback;
+    if (typeof value === "object") return value;
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+};
+
+const applySavedView = async (view) => {
+  const savedFilters = safeJsonParse(view.filters, {});
+  const savedColumns = safeJsonParse(view.columns, {});
+  const savedSort = safeJsonParse(view.sort_config, []);
+  const savedGroup = safeJsonParse(view.group_config, {});
+
+  setSearch(savedFilters.search || "");
+
+  if (savedFilters.dateFilters) {
+    setDateFilters(savedFilters.dateFilters);
+  }
+
+  if (Array.isArray(savedFilters.appliedFilters)) {
+    setAppliedFilters(savedFilters.appliedFilters);
+    setFilters(savedFilters.appliedFilters);
+  }
+
+  if (Array.isArray(savedColumns.visibleColumns)) {
+    setSelectedColumns(savedColumns.visibleColumns);
+    setVisibleColumnsState?.(savedColumns.visibleColumns);
+    setSavedTableColumns(savedColumns.visibleColumns);
+    setTableColumnMode("custom");
+  }
+
+  if (Array.isArray(savedColumns.pinnedColumns)) {
+    setPinnedColumns(savedColumns.pinnedColumns);
+  }
+
+  if (savedSort) {
+    setSortConfig(savedSort);
+  }
+
+ if (savedGroup?.key) {
+  setGroupBy({
+    key: savedGroup.key,
+    direction: savedGroup.direction || "asc",
+  });
+} else {
+  setGroupBy({
+    key: null,
+    direction: "asc",
+  });
+}
+
+  setHasViewChanges(false);
+
+  await refreshRowsByView(savedFilters);
+};
+
+const refreshRowsByView = async (savedFilters = null) => {
+  try {
+    setLoading(true);
+
+    const filterSource = savedFilters || {
+      search,
+      dateFilters,
+      appliedFilters: appliedFilters || filters || [],
+    };
+
+    const payload = {
+      search: filterSource.search || "",
+      filters: JSON.stringify(filterSource.appliedFilters || []),
+      dateFilters: JSON.stringify({
+        date: {
+          startDate: filterSource.dateFilters?.startDate || dateFilters.startDate,
+          endDate: filterSource.dateFilters?.endDate || dateFilters.endDate,
+        },
+      }),
+    };
+
+    const res = await getModuleData(
+      id,
+      activeUserEmail,
+      payload,
+      userRole
+    );
+
+    setRows(res.data || []);
+    setPage(1);
+  } catch (err) {
+    console.error("Failed to refresh rows by view:", err);
+    setRows([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleCreateView = async () => {
+  try {
+    if (!newViewName.trim()) {
+      setPopupMessage("Please enter view name.");
+      setPopupType("error");
+      return;
+    }
+
+    const currentView = buildCurrentViewPayload();
+
+    const payload = {
+      module_id: Number(id),
+      view_name: newViewName.trim(),
+      view_type: newViewType || "table",
+      visibility: newViewVisibility || "USER",
+      activeUserEmail,
+      filters: currentView.filters,
+      columns: currentView.columns,
+      sort_config: currentView.sort_config,
+      group_config: currentView.group_config,
+      is_default: false,
+    };
+
+    const res = await createModuleView(payload);
+
+    setShowCreateViewModal(false);
+    setNewViewName("");
+    setNewViewType("table");
+    setNewViewVisibility("USER");
+
+   const createdView = res.data?.data;
+
+await loadViews();
+
+if (createdView?.id) {
+  setActiveViewId(createdView.id);
+  applySavedView(createdView);
+}
+
+    setPopupMessage("View created successfully.");
+    setPopupType("success");
+  } catch (err) {
+    console.error("Create view failed:", err);
+    setPopupMessage(err.response?.data?.error || "Failed to create view.");
+    setPopupType("error");
+  }
+};
+
+const handleSaveViewChanges = async () => {
+  try {
+    const activeView = views.find(
+      (v) => String(v.id) === String(activeViewId)
+    );
+
+    if (!activeView) {
+      setShowCreateViewModal(true);
+      return;
+    }
+
+    const currentView = buildCurrentViewPayload();
+
+    await updateModuleView(activeView.id, {
+      view_name: activeView.view_name,
+      filters: currentView.filters,
+      columns: currentView.columns,
+      sort_config: currentView.sort_config,
+      group_config: currentView.group_config,
+    });
+
+    setHasViewChanges(false);
+    await loadViews();
+
+    setPopupMessage("View saved successfully.");
+    setPopupType("success");
+  } catch (err) {
+    console.error("Save view failed:", err);
+    setPopupMessage(err.response?.data?.error || "Failed to save view.");
+    setPopupType("error");
+  }
+};
+
     return (
         <div className="h-full flex flex-col">
              <ValidatePopups
@@ -3422,6 +3691,38 @@ const openMenuEye = () => {
   >
     Customize
   </button>
+
+  {activeViewId !== "main" && activeViewId !== "table" && (
+  <button
+    onClick={handleSaveViewChanges}
+    disabled={!hasViewChanges}
+    className={`px-3 py-2 rounded-lg text-sm ${
+      hasViewChanges
+        ? "bg-blue-600 text-white hover:bg-blue-700"
+        : "bg-gray-200 text-gray-500 cursor-not-allowed"
+    }`}
+  >
+    Save View
+  </button>
+)}
+<button
+  onClick={() => setShowCreateViewModal(true)}
+  className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-50"
+>
+  Save as New View
+</button>
+  <CreateViewModal
+  open={showCreateViewModal}
+  onClose={() => setShowCreateViewModal(false)}
+  newViewName={newViewName}
+  setNewViewName={setNewViewName}
+  newViewType={newViewType}
+  setNewViewType={setNewViewType}
+  newViewVisibility={newViewVisibility}
+  setNewViewVisibility={setNewViewVisibility}
+  onCreate={handleCreateView}
+  activeUser={activeUser}
+/>
 <CustomizeDrawer
   open={showCustomizeDrawer}
   onClose={() => setShowCustomizeDrawer(false)}
@@ -3467,15 +3768,17 @@ const openMenuEye = () => {
                hover:bg-orange-50 hover:border-orange-400 hover:text-orange-600 transition">
         Filters
    </button>
+ {console.log("Filters state:", filters)}
+<TableFiltersDrawer
 
- <TableFiltersDrawer
   open={showFilters}
   onClose={() => setShowFilters(false)}
   onSearch={(cleanedFilters) => {
-    console.log("Filters applied:", cleanedFilters);
-    setFilters(cleanedFilters);   // IMPORTANT
-    loadModule(dateFilters, cleanedFilters);
-  }}
+  setAppliedFilters(cleanedFilters || []);
+  setFilters(cleanedFilters || []);
+  setHasViewChanges(true);
+  setPage(1);
+}}
   masterList={masterList}
   filters={filters}
   setFilters={setFilters}
@@ -3550,7 +3853,49 @@ const openMenuEye = () => {
 </div>
 
             </div>
+ <BoardViewsBar
+      views={views}
+      activeViewId={activeViewId}
+      setActiveViewId={setActiveViewId}
+     onMainViewClick={() => {
+  const defaults = getCurrentMonth();
 
+  setSearch("");
+  setSearchColumnKey(null);
+
+  setFilters([]);
+  setAppliedFilters([]);
+
+  setDateFilters(defaults);
+  setActiveDateFilter("");
+
+  setSortConfig([]);
+  setGroupBy({
+    key: null,
+    direction: "asc",
+  });
+  setColumnChips([]);
+
+  setTableColumnMode("default");
+  setHasViewChanges(false);
+
+  refreshRowsByView({
+    search: "",
+    dateFilters: defaults,
+    appliedFilters: [],
+  });
+}}
+      onTableViewClick={() => {
+        setHasViewChanges(false);
+      }}
+      onApplyView={applySavedView}
+      showViewDropdown={showViewDropdown}
+      setShowViewDropdown={setShowViewDropdown}
+      onCreateTableView={() => {
+        setNewViewType("table");
+        setShowCreateViewModal(true);
+      }}
+    />
             {/* ================= CONTROL BAR (LEFT ALIGNED) ================= */}
            <div className="bg-white p-3 rounded-xl shadow mb-4">
 

@@ -460,3 +460,27 @@ export const getReportData = ( reportId, activeUserEmail, payload = {} ) => {
 export const getDisplayName = () => {
   return API.get(`/displayname`);
 }
+
+export const getModuleViews = (moduleId, activeUserEmail) => {
+  return API.get(`/module-views/${moduleId}`, {
+    params: { activeUserEmail },
+  });
+};
+
+export const createModuleView = (payload) => {
+  return API.post("/module-views", payload);
+};
+
+export const updateModuleView = (id, payload) => {
+  return API.put(`/module-views/${id}`, payload);
+};
+
+export const deleteModuleView = (id) => {
+  return API.delete(`/module-views/${id}`);
+};
+
+export const setDefaultModuleView = (id, activeUserEmail) => {
+  return API.put(`/module-views/${id}/default`, {}, {
+    params: { activeUserEmail },
+  });
+};
