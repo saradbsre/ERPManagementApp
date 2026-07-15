@@ -393,7 +393,7 @@ const closeHoverMenuWithDelay = () => {
                   {/* collapsed hover submenu */}
                   {collapsed && item.children && hoverMenu === item.name && (
   <div
-    className="fixed left-20 min-w-[280px] max-w-[360px] max-h-[70vh] overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] py-2"
+    className="fixed left-21 min-w-[280px] max-w-[360px] max-h-[70vh] overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] py-2"
     style={{
       top: `${Math.max(70, 85 + menuItems.findIndex((m) => m.name === item.name) * 52)}px`,
     }}

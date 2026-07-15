@@ -3447,6 +3447,7 @@ const safeJsonParse = (value, fallback) => {
 };
 
 const applySavedView = async (view) => {
+  console.log("Applying saved view:", view);  
   const savedFilters = safeJsonParse(view.filters, {});
   const savedColumns = safeJsonParse(view.columns, {});
   const savedSort = safeJsonParse(view.sort_config, []);
@@ -3489,7 +3490,7 @@ const applySavedView = async (view) => {
     direction: "asc",
   });
 }
-
+  console.log("saved filters:", savedFilters);
   setHasViewChanges(false);
 
   await refreshRowsByView(savedFilters);
@@ -3504,7 +3505,7 @@ const refreshRowsByView = async (savedFilters = null) => {
       dateFilters,
       appliedFilters: appliedFilters || filters || [],
     };
-
+   
     const payload = {
       search: filterSource.search || "",
       filters: JSON.stringify(filterSource.appliedFilters || []),
@@ -3770,15 +3771,20 @@ const handleSaveViewChanges = async () => {
    </button>
  {console.log("Filters state:", filters)}
 <TableFiltersDrawer
-
   open={showFilters}
   onClose={() => setShowFilters(false)}
+//   onSearch={(cleanedFilters) => {
+//   setAppliedFilters(cleanedFilters || []);
+//   setFilters(cleanedFilters || []);
+//   loadModule(dateFilters, cleanedFilters);
+//   setHasViewChanges(true);
+//   setPage(1);
+// }}
   onSearch={(cleanedFilters) => {
-  setAppliedFilters(cleanedFilters || []);
-  setFilters(cleanedFilters || []);
-  setHasViewChanges(true);
-  setPage(1);
-}}
+    console.log("Filters applied:", cleanedFilters);
+    setFilters(cleanedFilters);   // IMPORTANT
+    loadModule(dateFilters, cleanedFilters);
+  }}
   masterList={masterList}
   filters={filters}
   setFilters={setFilters}

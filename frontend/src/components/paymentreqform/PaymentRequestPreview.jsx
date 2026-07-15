@@ -370,10 +370,27 @@ const selectedDepartment = Array.isArray(departments) && header.dep_code ? depar
     (d) => (d.dep_code || "").toString().trim().toUpperCase() === header.dep_code.toString().trim().toUpperCase()
 ) : null;
 
-const selectedTransactionType = Array.isArray(transactionType) && header.trntype_code ? transactionType.find(
-    (tt) => (tt.trntype_code || "").toString().trim().toUpperCase() === header.trntype_code.toString().trim().toUpperCase()
-) : null;
+const selectedTransactionType =
+  transactionType?.find((tt) => {
+    const headerValue = String(header.trntype_code || "")
+      .trim()
+      .toUpperCase();
 
+    const codeValue = String(tt.trntype_code || "")
+      .trim()
+      .toUpperCase();
+
+    const nameValue = String(tt.trntype_name || "")
+      .trim()
+      .toUpperCase();
+
+    return (
+      codeValue === headerValue ||
+      nameValue === headerValue
+    );
+  }) || null;
+
+console.log("Selected Transaction Type:", selectedTransactionType);
 const selectedProductType = Array.isArray(productTypes) && header.prdtype_code ? productTypes.find(
     (pt) => (pt.prdtype_code || "").toString().trim().toUpperCase() === header.prdtype_code.toString().trim().toUpperCase()
 ) : null;

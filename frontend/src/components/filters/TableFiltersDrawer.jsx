@@ -119,13 +119,12 @@ const getOptions = (master) => {
 
 const cleanedFilters = filters.map(f => ({
   master: f.master,
-
   pk: masterDataMap?.[f.master]?.pk,
-
   values: f.values.map(v => v.key)
 }));
 
 const handleSearch = (overrideFilters) => {
+  console.log("Filters sent to main table:", overrideFilters || cleanedFilters);  
   if (!onSearch) return;
 
   const sourceFilters = Array.isArray(overrideFilters)
@@ -138,10 +137,9 @@ const handleSearch = (overrideFilters) => {
     master: f.master,
     pk: masterDataMap?.[f.master]?.pk,
     values: (f.values || []).map(v =>
-  typeof v === "string" ? v : v.key
-)
+   typeof v === "string" ? v : v.key
+  )
   }));
-
   onSearch(cleanedFilters);
   onClose?.();
 };
