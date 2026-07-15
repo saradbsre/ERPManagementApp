@@ -209,7 +209,7 @@ export default function RecentTransactions() {
 
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+     <div className="w-full h-full flex flex-col min-w-0">
 
       {/* HEADER */}
       <div className="flex items-center justify-between mb-5">
@@ -228,13 +228,13 @@ export default function RecentTransactions() {
       </div>
 
       {/* FILTERS */}
-      <div className="grid grid-cols-2 gap-3 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
 
         {/* MASTER */}
         <select
           value={selectedMaster}
           onChange={(e) => setSelectedMaster(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
         >
           <option value="">Group By</option>
 
@@ -253,7 +253,7 @@ export default function RecentTransactions() {
           value={selectedValue}
           disabled={!selectedMaster}
           onChange={(e) => setSelectedValue(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
         >
           <option value=""> Value</option>
 
@@ -267,7 +267,11 @@ export default function RecentTransactions() {
       </div>
 
       {/* LIST */}
-      <div className={`space-y-3 ${filteredTransactions.length > 5 ? "max-h-[420px] overflow-y-auto pr-2" : ""}`}>
+      <div className={`space-y-3 ${
+  filteredTransactions.length > 5
+    ? "max-h-[420px] overflow-y-auto pr-2"
+    : ""
+}`}>
 
         {filteredTransactions.length === 0 && (
           <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
@@ -281,7 +285,7 @@ export default function RecentTransactions() {
           return (
             <div
               key={i}
-              className="group bg-gray-50 hover:bg-white border border-gray-100 rounded-2xl p-4 flex justify-between items-center"
+              className="group bg-gray-50 hover:bg-white border border-gray-100 rounded-2xl p-4 flex items-center justify-between gap-3 min-w-0"
             >
               {/* LEFT */}
               <div className="ml-3 flex-1 min-w-0">
@@ -296,7 +300,7 @@ export default function RecentTransactions() {
               </div>
 
               {/* RIGHT */}
-              <div className="text-right ml-4">
+              <div className="text-right ml-2 flex-shrink-0">
                 <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-700">
                   {currencyMap[item.currency] } {formatAmount(amount)}
                 </div>

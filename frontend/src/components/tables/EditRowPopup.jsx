@@ -186,9 +186,30 @@ export default function EditRowPopup({
                   <div className="relative">
                     <input
                       type={isNumericColumn(col.column_name) ? "number" : isDate ? "date" : "text"}
-                      value={currentValue}
+                      value={
+  isMaster && activeField === col.column_name
+    ? searchText
+    : currentValue
+}
                       disabled={isDisabled}
-                      onChange={(e) => handleFieldChange(col, e.target.value)}
+                      onChange={(e) => {
+  const value = e.target.value;
+
+  if (isMaster) {
+    setFieldSearch((prev) => ({
+      ...prev,
+      [col.column_name]: value,
+    }));
+
+    handleFieldChange(col, value);
+
+    if (activeField !== col.column_name) {
+      setActiveField(col.column_name);
+    }
+  } else {
+    handleFieldChange(col, value);
+  }
+}}
                       onFocus={() => {
                         if (isMaster) {
                           handleFieldFocus(col);
@@ -226,22 +247,7 @@ export default function EditRowPopup({
                         className="absolute z-50 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg max-h-48 overflow-y-auto"
                       >
                         {/* Search box in dropdown */}
-                        <div className="sticky top-0 p-2 border-b bg-gray-50">
-                          <input
-                            type="text"
-                            placeholder="Search..."
-                            value={searchText}
-                            onChange={(e) =>
-                              setFieldSearch((prev) => ({
-                                ...prev,
-                                [col.column_name]: e.target.value,
-                              }))
-                            }
-                            className="w-full rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-blue-400"
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
+                        
 
                         {filteredOptions.length > 0 ? (
                           filteredOptions.map((opt, idx) => {

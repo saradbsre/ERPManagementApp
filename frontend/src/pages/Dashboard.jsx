@@ -58,13 +58,18 @@ export default function Dashboard() {
         </div>
 
         {/* MIDDLE COLUMN */}
-         <div className="grid grid-rows-[2fr_1fr] gap-6 h-[500px]">
+         <div className="grid grid-rows-[2fr_1fr] gap-6 h-[900px]">
 
            {/* Transactions (Bottom Half) */}
-          <div className="bg-white p-6 rounded-xl shadow flex flex-col">
-            <h2 className="font-semibold mb-4">Recent Transactions (Last 30 Days)</h2>
-            <RecentTransactions />
-          </div>
+          <div className="bg-white p-6 rounded-xl shadow flex flex-col min-w-0 min-h-0">
+  <h2 className="font-semibold mb-4">
+    Recent Transactions (Last 30 Days)
+  </h2>
+
+  <div className="flex-1 min-h-0">
+    <RecentTransactions />
+  </div>
+</div>
          
           {/* {user?.role === "ADMIN" ? (
             <div className="bg-white p-6 rounded-xl shadow">

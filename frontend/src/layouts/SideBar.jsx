@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { logOut } from "../api/api";
+import { useUser } from "../components/UserContext";
 
 import {
   fetchSections,
@@ -20,11 +22,12 @@ import {
   X,
   ChevronDown,
   ChevronRight as ArrowRight,
+  UserCircle2, LogOut, UserPen
 } from "lucide-react";
 
 export default function SideBar({ collapsed, setCollapsed }) {
   const location = useLocation();
-
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sections, setSections] = useState([]);
   const [masters, setMasters] = useState([]);
@@ -32,9 +35,9 @@ export default function SideBar({ collapsed, setCollapsed }) {
   const [views, setViews] = useState([]);
   const [openMain, setOpenMain] = useState(null);
   const [hoverMenu, setHoverMenu] = useState(null);
-const [hoverTimeout, setHoverTimeout] = useState(null);
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
-
+  const [hoverTimeout, setHoverTimeout] = useState(null);
+  // const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const { user, setUser } = useUser();
   const role = (user?.role || "user").toLowerCase().trim();
 
   useEffect(() => {
@@ -141,6 +144,18 @@ const [hoverTimeout, setHoverTimeout] = useState(null);
         path: `/reports/${report.report_id}`,
       })),
     },
+
+    //  {
+    //   name: "Views",
+    //   icon: <FileBarChart2 size={18} />,
+    //   children: views.map((view) => ({
+    //     key: `${view.id}_${view.filter_name}`,
+    //     id: view.id,
+    //     name: view.filter_name,
+    //     view: view,
+    //     path: `/views/${view.id}`,
+    //   })),
+    // },
   ].filter(Boolean);
 
   const sidebarWidth = collapsed ? "md:w-20" : "md:w-64";
@@ -160,6 +175,22 @@ const closeHoverMenuWithDelay = () => {
 
   setHoverTimeout(timeout);
 };
+
+ const handleLogout = async () => {
+  try {
+    await logOut();
+
+    setUser(null);
+    localStorage.removeItem("user");
+
+    setOpen(false);
+
+    navigate("/", { replace: true }); // prevents back navigation
+  } catch (error) {
+    console.error("Logout failed:", error);
+  }
+};
+
   return (
     <>
       {/* mobile menu button */}
@@ -195,10 +226,10 @@ const closeHoverMenuWithDelay = () => {
     <>
       <div className="min-w-0 mr-10">
           <h1 className="text-lg font-bold text-[#264d86] truncate">
-          BIN SHABIB
+          BIN SHABIB GROUP
         </h1>
         <p className="text-xs text-gray-500 truncate">
-          ERP workspace
+          IT Asset Management
         </p>
       </div>
 
@@ -212,13 +243,13 @@ const closeHoverMenuWithDelay = () => {
     </>
   ) : (
     <>
-      <div className="w-10 h-10 rounded-xl bg-[#264d86] text-white flex items-center justify-center font-bold text-lg">
+      <div className="w-9 h-9 rounded-xl bg-[#264d86] text-white flex items-center justify-center font-bold text-lg">
         B
       </div>
 
       <button
         onClick={() => setCollapsed(false)}
-        className="hidden md:flex absolute right-1 items-center justify-center w-7 h-7 rounded-lg hover:bg-gray-100 text-gray-600"
+        className=" hidden md:flex absolute right-1 items-center justify-center w-6 h-6 rounded-lg hover:bg-gray-100 text-gray-600"
         title="Expand sidebar"
       >
         <ChevronRight size={17} />
@@ -419,7 +450,7 @@ const closeHoverMenuWithDelay = () => {
         {(user?.name || user?.username || "U").charAt(0).toUpperCase()}
       </div>
 
-      <div className="min-w-0">
+      <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-900 truncate">
           {user?.name || user?.username || "User"}
         </p>
@@ -427,17 +458,63 @@ const closeHoverMenuWithDelay = () => {
           {user?.role || "User"}
         </p>
       </div>
-    </div>
-  ) : (
-    <div className="flex justify-center">
-      <div
-        className="w-10 h-10 rounded-full bg-[#264d86] text-white flex items-center justify-center font-semibold"
-        title={user?.name || user?.username || "User"}
-      >
-        {(user?.name || user?.username || "U").charAt(0).toUpperCase()}
+
+      {/* Action Icons */}
+      <div className="flex items-center gap-1">
+        <button
+          title="Profile"
+          className="p-2 rounded-lg hover:bg-gray-200 transition-colors"
+          onClick={() => {
+            // Navigate to profile
+            navigate("/profile");
+          }}
+        >
+          <UserPen size={18} className="text-gray-600" />  
+        </button>
+
+        <button
+          title="Logout"
+          className="p-2 rounded-lg hover:bg-red-100 transition-colors"
+         onClick={handleLogout}
+        >
+          <LogOut size={18} className="text-red-500" />
+        </button>
       </div>
     </div>
-  )}
+  )  : (
+  <div className="flex flex-col items-center gap-3">
+   
+
+    {/* Profile */}
+    <button
+      title="Profile"
+      className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+      onClick={() => {
+        // Navigate to profile
+        navigate("/profile");
+      }}
+    >
+      <UserPen size={18} className="text-gray-600" />
+    </button>
+
+    {/* Logout */}
+    <button
+      title="Logout"
+      className="p-2 rounded-lg hover:bg-red-100 transition-colors"
+     onClick={handleLogout}
+    >
+      <LogOut size={18} className="text-red-500" />
+    </button>
+
+     {/* User Avatar */}
+    <div
+      className="w-10 h-10 rounded-full bg-[#264d86] text-white flex items-center justify-center font-semibold"
+      title={user?.name || user?.username || "User"}
+    >
+      {(user?.name || user?.username || "U").charAt(0).toUpperCase()}
+    </div>
+  </div>
+)}
 </div>
         </div>
       </aside>
