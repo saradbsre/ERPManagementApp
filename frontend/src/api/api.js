@@ -19,6 +19,10 @@ API.interceptors.request.use((config) => {
   return config;
 });
 
+export const getAccessToken = () => {
+  return API.get("/auth/access-token");
+};
+
 export const registerUser = (data) => {
   return API.post("/auth/register", data);
 };

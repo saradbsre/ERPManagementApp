@@ -823,7 +823,7 @@ const covertedExchangeRate = 1 / (details?.exchange_rate || 1);
           {selectedProductType?.prdtype_name || header.prdtype_code} Fees
         </div>
 
-        <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px", lineHeight: "1" }}>
+        {/* <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px", lineHeight: "1" }}>
          {
   (
     selectedTransactionType?.trntype_code === "TT003" ||
@@ -869,6 +869,15 @@ const covertedExchangeRate = 1 / (details?.exchange_rate || 1);
             header?.trntype_code?.toLowerCase() === "Repurchase"
           ) &&
             "This payment request is related to the Repurchase of a service."}
+        </div> */}
+
+        <div style={{ fontSize: "12px", color: "#374151", marginTop: "4px", lineHeight: "1" }}>
+         {
+          header?.prdtype_code === "S52" ||
+          selectedProductType?.prdtype_code === "IT Accessories"
+            ? "This payment request is for a new purchase."
+            : selectedTransactionType?.trntype_descr
+         }
         </div>
 
         {expiryDate && (

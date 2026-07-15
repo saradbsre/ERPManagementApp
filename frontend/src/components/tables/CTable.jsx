@@ -749,7 +749,7 @@ useEffect(() => {
     typeof newRow.curr_code === "object"
       ? newRow.curr_code?.value
       : newRow.curr_code;
-  console.log("currency:", currency);
+  
   if (isNaN(amount) || !currency) return;
 
 
@@ -795,7 +795,7 @@ useEffect(() => {
     // ];
    // console.log("Columns for master list:", columns);
     const masterMap = {};
-console.log("Columns for master list:", columns);
+
 columns.forEach((c) => {
   if (c.master) {
     masterMap[c.master] = {
@@ -1082,6 +1082,16 @@ useEffect(() => {
     }));
   }
 }, [workflow]);
+
+useEffect(() => {
+  if (modalItems && modalItems.length > 0) {
+    setForm(prev => ({
+      ...prev,
+      period_start: modalItems[0]?.period_start || prev.period_start,
+      period_end: modalItems[0]?.period_end || prev.period_end,
+    }));
+  }
+}, [modalItems]);
 // console.log("selectedRow:", selectedRow);
 // console.log("currencies:", currencies);
 
@@ -1101,22 +1111,20 @@ const selectedCurrency = currencies.find((c) => {
     .toString()
     .trim()
     .toUpperCase();
-  console.log("Checking currency:", currencyCode, "against row currency:", rowCurrency);
+ 
   const currencyName = (c.curr_name || "")
     .toString()
     .trim()
     .toUpperCase();
-  console.log("Checking currency name:", currencyName, "against row currency:", rowCurrency);
-  return (
+    
+    return (
     currencyCode === rowCurrency ||
     currencyName === rowCurrency
   );
 });
-console.log("currencies:", currencies);
-// console.log("Selected Currency:", selectedCurrency);
-// console.log("Selected currency for PRF generation:", selectedCurrency);
+
 const exchange_rate = selectedCurrency?.curr_exchange_rate || 1;
-console.log("exchange_rate:", exchange_rate, "for currency:", selectedCurrency);
+
 const loadPreviewData = async (prfNum) => {
   const res = await getPreviewPRF(prfNum);
   const previewObj = Array.isArray(res.data)
@@ -1166,7 +1174,9 @@ const handleGenerate = async () => {
     exchange_rate: formatNumber(covertedExchangeRate),
     userid: activeUserEmail,
     is_advertising: isAdvertising ? 1 : 0,
-    remarks: form.remarks
+    remarks: form.remarks,
+    period_start : form.period_start,
+    period_end : form.period_end,
   };
 
   setPreviewFromGenerateModal(false);
@@ -1197,16 +1207,14 @@ const handleGenerate = async () => {
 
   setSelectedRowIds([]);
 
-  setForm({
-    receipt_number: "",
-    prepared_by: "",
-    checked_by: "",
-    verified_by_it: "",
-    verified_by: "",
-    signed_by: "",
-    approved_by: "",
-    remarks: "",
-  });
+  setForm(prev => ({
+  ...prev,
+  receipt_number: "",
+  remarks: "",
+  period_start: "",
+  period_end: "",
+}));
+  loadModule();
 };
 
 const handleDraftPreviewFromModal = () => {
@@ -1268,6 +1276,8 @@ const handleDraftPreviewFromModal = () => {
     sysdate: new Date().toISOString(),
     is_advertising: isAdvertising ? 1 : 0,
     remarks: form.remarks || "",
+    period_start: form.period_start || "",
+    period_end: form.period_end || "",
   };
  
   const paidByName =
@@ -1297,7 +1307,7 @@ const handlePreview = async (prfNum) => {
     const res = await getPreviewPRF(prfNum);
     // The API returns: { data: [ { header, details } ] }
     const previewObj = Array.isArray(res.data) ? res.data[0] : res.data;
-    console.log("API Response for preview:", res.data);
+    //console.log("API Response for preview:", res.data);
     // console.log("header:", previewObj?.header);
     // console.log("details:", previewObj?.details);
     setPreviewData({
@@ -1834,7 +1844,7 @@ const calculateCost = (amount, currencyCode, term) => {
   if (!rate || isNaN(rate)) return null;
   return Number(amount) * Number(rate);
 };
-console.log("Column chips for grouping:", columnChips);
+
 const groupedChips = columnChips.reduce((acc, chip) => {
   if (!acc[chip.type]) acc[chip.type] = [];
   acc[chip.type].push(chip);
@@ -2828,26 +2838,36 @@ ${groupedRows.map(group => `
 
  
 
-    const handleGenerateSelected = () => {
+const handleGenerateSelected = async () => {
   // Get the selected rows' data
- const selectedRows = sortedAllRows.filter(
-  (row) => selectedRowIds.includes(row.id) && !isPrfBlockedProductType(row.product_types)
-);
+  const selectedRows = sortedAllRows.filter(
+    (row) =>
+      selectedRowIds.includes(row.id) &&
+      !isPrfBlockedProductType(row.product_types)
+  );
+
   if (selectedRows.length === 0) return;
-  // setSelectedRow(selectedRows[0] || null);
+
+  // Generate next PRF number
+  const nextPrfNumber = await generateNextPrfNumber();
+  setPrfNumber(nextPrfNumber);
+
   setSelectedRow(selectedRows);
-  // If you want to show all products from selected rows in the modal:
-  //console.log("Preparing row for modal:", selectedRows);
-  setModalItems(selectedRows.map(row => ({
-    doc_date: row.date || "",
-    doc_no: row.invoice_number || "",
-    product: row.prd_code || "",
-    amount: row.amount || "",
-    vat: row.vat_amount || "",
-    total_amount: row.total_amount || "",
-    isSelected: true,
-  })));
-  
+
+  setModalItems(
+    selectedRows.map((row) => ({
+      doc_date: row.date || "",
+      doc_no: row.invoice_number || "",
+      product: row.prd_code || "",
+      amount: row.amount || "",
+      vat: row.vat_amount || "",
+      total_amount: row.total_amount || "",
+      isSelected: true,
+      period_start: row.date || "",
+      period_end: row.expiry_date || "",
+    }))
+  );
+
   setShowGenerateModal(true);
 };
 
@@ -3447,7 +3467,7 @@ const openMenuEye = () => {
                hover:bg-orange-50 hover:border-orange-400 hover:text-orange-600 transition">
         Filters
    </button>
- {console.log("Filters state:", filters)}
+
  <TableFiltersDrawer
   open={showFilters}
   onClose={() => setShowFilters(false)}
@@ -3740,7 +3760,7 @@ const openMenuEye = () => {
             {/* ACTIVE FILTER CHIPS */}
             <div className="flex items-start justify-between flex-wrap gap-3">
             <div className="flex flex-wrap gap-2 mt-0 mb-4">
-  {console.log("Rendering filter chips:", filters)}
+ 
   {/* {filters.map((f, i) => {
     
     const masterName = normalize(f.master);
@@ -4605,7 +4625,7 @@ onDrop={() => handleDrop(col.column_name)}
     />
   </svg>
 </label>
-                                                      </td>
+ </td>
                                 );
                               }
                             }
@@ -4731,7 +4751,7 @@ onDrop={() => handleDrop(col.column_name)}
                                         // =========================
                                         // FIRST CHECK VENDOR
                                         // =========================
-                                        console.log("Checking for matched provider based on vend_code:", updatedRow.vend_code);
+                                       
                                         if (updatedRow.vend_code) {
 
                                           matchedProvider = serviceProviders.find(
@@ -4746,29 +4766,27 @@ onDrop={() => handleDrop(col.column_name)}
                                           
                                         }
 
-                                        // =========================
-                                        // IF NO VENDOR MATCH
-                                        // CHECK PRODUCT
-                                        // =========================
                                         if (!matchedProvider && updatedRow.prd_code) {
+   
+                                        matchedProvider = serviceProviders.find(sp => {
+  const value = String(updatedRow.prd_code || "")
+    .trim()
+    .toLowerCase();
 
-                                          matchedProvider = serviceProviders.find(
-                                            sp =>
-                                              String(sp.prd_code || "")
-                                                .trim()
-                                                .toLowerCase() ===
-                                              String(updatedRow.prd_code || "")
-                                                .trim()
-                                                .toLowerCase()
-                                          );
+  return (
+    String(sp.prd_code || "")
+      .trim()
+      .toLowerCase() === value ||
+    String(sp.prd_name || "")
+      .trim()
+      .toLowerCase() === value
+  );
+});
                                         }
 
                                         const amount = parseFloat(updatedRow.amount || 0);
 
-                                        // =========================
-                                        // VAT ENABLED
-                                        // =========================
-                                        console.log("Matched Provider for VAT Calculation:", matchedProvider);
+                                      
                                         if (matchedProvider?.prd_is_vat) {
 
                                           const vat = (amount * Number(vatPercent || 0)) / 100;
@@ -5693,37 +5711,29 @@ onDrop={() => handleDrop(col.column_name)}
 
     {/* ================= TABLE ================= */}
     <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-
       <div className="flex items-center justify-between px-5 py-4 border-b bg-gradient-to-r from-slate-50 to-blue-50">
-
         <div>
-
           <h3 className="font-semibold text-slate-800">
             Invoice / PO Details
           </h3>
-
-          <p className="text-xs text-slate-500 mt-1">
-            Add invoice details
-          </p>
-
         </div>
   <div className="flex items-center gap-2">
     <label className="text-sm font-medium text-slate-700">
       Receipt No
     </label>
 
-<input
-  type="text"
-  value={form.receipt_number || ""}
-  onChange={(e) =>
-    setForm(prev => ({
-      ...prev,
-      receipt_number: e.target.value
-    }))
-  }
-  placeholder="Enter receipt number"
-  className="px-3 py-2 border rounded-lg text-sm w-56 focus:outline-none focus:ring-2 focus:ring-blue-500"
-/>
+    <input
+      type="text"
+      value={form.receipt_number || ""}
+      onChange={(e) =>
+        setForm(prev => ({
+          ...prev,
+          receipt_number: e.target.value
+        }))
+      }
+      placeholder="Enter receipt number"
+      className="px-3 py-2 border rounded-lg text-sm w-56 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    />
   </div>
 
       </div>
@@ -5865,23 +5875,69 @@ onDrop={() => handleDrop(col.column_name)}
 
     </div>
     {/* ================= REMARKS ================= */}
-<div className="bg-white border border-slate-200 rounded-xl p-4 flex gap-3">
-  <label className="text-sm font-medium text-slate-700 mt-2 whitespace-nowrap">
-    Remarks :
-  </label>
+<div className="bg-white border border-slate-200 rounded-xl p-4 flex gap-6 items-start">
 
-  <textarea
-    value={form.remarks || ""}
-    onChange={(e) =>
-      setForm((prev) => ({
-        ...prev,
-        remarks: e.target.value,
+  {/* Period */}
+  <div className="flex items-center gap-3">
+    <label className="text-sm font-medium text-slate-700 whitespace-nowrap">
+      Period :
+    </label>
+
+  <input
+  type="date"
+  value={modalItems[0]?.period_start?.split("T")[0] || ""}
+  onChange={(e) => {
+    const value = e.target.value;
+
+    setModalItems(prev =>
+      prev.map(item => ({
+        ...item,
+        period_start: value,
       }))
-    }
-    rows={2}
-    placeholder="Enter remarks"
-    className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-  />
+    );
+  }}
+  className="w-30 px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+/>
+
+<span className="text-sm text-slate-600">to</span>
+
+<input
+  type="date"
+  value={modalItems[0]?.period_end?.split("T")[0] || ""}
+  onChange={(e) => {
+    const value = e.target.value;
+
+    setModalItems(prev =>
+      prev.map(item => ({
+        ...item,
+        period_end: value,
+      }))
+    );
+  }}
+  className="w-30 px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+/>
+  </div>
+
+  {/* Remarks */}
+  <div className="flex flex-1 gap-3">
+    <label className="text-sm font-medium text-slate-700 mt-2 whitespace-nowrap">
+      Remarks :
+    </label>
+
+    <textarea
+      value={form.remarks || ""}
+      onChange={(e) =>
+        setForm((prev) => ({
+          ...prev,
+          remarks: e.target.value,
+        }))
+      }
+      rows={2}
+      placeholder="Enter remarks"
+      className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+    />
+  </div>
+
 </div>
     {/* ================= APPROVAL ================= */}
   <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
@@ -5950,17 +6006,27 @@ onDrop={() => handleDrop(col.column_name)}
         {field.label}
       </label>
 
-      <input
-        value={field.key === "prepared_by" ? (activeUserName || "") : (form[field.key] ?? "")}
-        readOnly={field.key === "prepared_by"}
-        onChange={(e) =>
-          setForm((prev) => ({
-            ...prev,
-            [field.key]: e.target.value
-          }))
-        }
-        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none"
-      />
+     <input
+  value={
+    field.key === "prepared_by"
+      ? (activeUserName || "")
+      : (form[field.key] ?? "")
+  }
+  readOnly={field.key === "prepared_by"}
+  disabled={field.key === "checked_by" && !isAdvertising}
+  onChange={(e) =>
+    setForm((prev) => ({
+      ...prev,
+      [field.key]: e.target.value,
+    }))
+  }
+  className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none
+    ${
+      field.key === "checked_by" && !isAdvertising
+        ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+        : "bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+    }`}
+/>
     </div>
 
   ))}

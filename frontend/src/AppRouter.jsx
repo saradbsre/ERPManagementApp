@@ -18,6 +18,7 @@ import PDFUpload from "./pages/PDFUpload";
 import { useUser } from "./components/UserContext";
 import { sessionHeartbeat, logOut } from "./api/api";
 import DbStatusOverlay from "./components/DbStatusOverlay";
+import { getAccessToken } from "./api/api";
 
 function AppRouter() {
   const navigate = useNavigate();
@@ -30,16 +31,16 @@ function AppRouter() {
 useEffect(() => {
 
   const checkDb = async () => {
-    console.log("Checking database status...");
+    // console.log("Checking database status...");
     // delay before showing loading
     const loadingTimer = setTimeout(() => {
       setDbStatus("loading");
     }, 1500); // 1.5 sec delay
 
     try {
-      console.log("Fetching database status...");
+      // console.log("Fetching database status...");
       const res = await getDbStatus();
-      console.log("DB Status Response:", res.data);
+      // console.log("DB Status Response:", res.data);
       // stop loading timer
       clearTimeout(loadingTimer);
 
@@ -111,75 +112,49 @@ useEffect(() => {
   };
 }, [user, setUser, navigate]);
 
-// useEffect(() => {
+useEffect(() => {
+  if (!user) return;
 
-//   if (!user) return;
+  const checkAccessToken = async () => {
+    try {
+      const res = await getAccessToken();
 
-//   // helper to read cookies
-//   const getCookie = (name) => {
+      if (!res.data?.accessToken) {
+        throw new Error("No access token");
+      }
 
-//     const value = `; ${document.cookie}`;
-//     const parts = value.split(`; ${name}=`);
+      console.log("Access token is valid");
+    } catch (err) {
+      console.log("Access token missing or expired");
 
-//     if (parts.length === 2) {
-//       return parts.pop().split(";").shift();
-//     }
+      setInactiveMsg("Your session has expired. Logging out...");
 
-//     return null;
-//   };
+      setTimeout(async () => {
+        try {
+          await logOut();
+        } catch (error) {
+          console.error("Logout failed:", error);
+        }
 
-//   const checkSession = async () => {
+        setUser(null);
+        localStorage.removeItem("user");
+        navigate("/", { replace: true });
+      }, 2000);
+    }
+  };
 
-//     const accessToken = getCookie("accessToken");
-//     const sessionId = getCookie("session_id");
+  // Check immediately
+  checkAccessToken();
 
-//     console.log("Checking session cookies:", {
-//       accessToken,
-//       sessionId
-//     });
+  // Check every 1 minute
+  const interval = setInterval(checkAccessToken, 60000);
 
-//     // logout if cookies missing
-//     if (!accessToken || !sessionId) {
+  return () => clearInterval(interval);
 
-//       try {
+}, [user, navigate, setUser]);
 
-//         setInactiveMsg(
-//           "Your session has expired or you have been logged out from this session. Redirecting to login..."
-//         );
 
-//        // await logOut();
 
-//       } catch (err) {
-
-//         console.error("Logout failed:", err);
-
-//       } finally {
-
-//         setTimeout(() => {
-
-//          // setUser(null);
-
-//         //   localStorage.removeItem("user");
-
-//         //   navigate("/", { replace: true });
-
-//         }, 1500);
-
-//       }
-//     }
-//   };
-
-//   // initial check
-//   checkSession();
-
-//   // check every 1 minute
-//   const interval = setInterval(() => {
-//     checkSession();
-//   }, 60000);
-
-//   return () => clearInterval(interval);
-
-// }, [user, navigate, setUser]);
 
   return (
     <>
