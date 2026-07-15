@@ -1,22 +1,25 @@
-import { useState, useEffect } from "react";
-
+import { useState, useEffect, useRef  } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Upload, Loader } from "lucide-react";
+import { ArrowLeft, Upload, Loader, Trash2, ChevronDown  } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
-import { getMasterData } from "../api/api";
+import {
+  getMasterData,
+  getVatPercentage,
+  createPaymentTransactions,
+} from "../api/api";
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
 
 const API_URL = import.meta.env.VITE_API_URL;
-  const invoiceColumns = [
-  { key: "product", label: "Product", type: "text" },
+const invoiceColumns = [
+  { key: "product", label: "Product", type: "dropdown", source: "products" },
   { key: "invoiceNumber", label: "Invoice Number", type: "text" },
   { key: "invoiceDate", label: "Invoice Date", type: "date" },
   { key: "vendorName", label: "Vendors", type: "dropdown", source: "vendors" },
   { key: "billingCompany", label: "Billing Company", type: "dropdown", source: "companies" },
   { key: "currency", label: "Currency", type: "dropdown", source: "currencies" },
   { key: "amount", label: "Amount", type: "number" },
-  { key: "totalAmount", label: "Total Amount", type: "number" },
   { key: "vatAmount", label: "VAT Amount", type: "number" },
+  { key: "totalAmount", label: "Total Amount", type: "number" },
   { key: "totalAmountAED", label: "Total Amount (AED)", type: "number" },
   { key: "itRequestNum", label: "IT Request Num", type: "text" },
   { key: "requestedBy", label: "Requested By", type: "text" },
@@ -26,14 +29,14 @@ const API_URL = import.meta.env.VITE_API_URL;
   { key: "expiryDate", label: "Expiry Date", type: "date" },
   { key: "deliveryDate", label: "Delivery Date", type: "date" },
   { key: "remarks", label: "Remarks", type: "text" },
-  { key: "productType", label: "Product Type", type: "text" },
-  { key: "plan", label: "Plan", type: "text" },
-  { key: "department", label: "Department", type: "text" },
-  { key: "term", label: "Term", type: "text" },
-  { key: "creditCard", label: "Credit Card", type: "text" },
-  { key: "costCenter", label: "Cost Center", type: "text" },
+  { key: "productType", label: "Product Type", type: "dropdown", source: "productTypes" },
+  { key: "plan", label: "Plan", type: "dropdown", source: "plans" },
+  { key: "department", label: "Department", type: "dropdown", source: "departments" },
+  { key: "term", label: "Term", type: "dropdown", source: "terms" },
+  { key: "creditCard", label: "Credit Card", type: "dropdown", source: "creditCards" },
+  { key: "costCenter", label: "Cost Center", type: "dropdown", source: "costCenters" },
   { key: "transactionType", label: "Transaction Type", type: "dropdown", source: "transactionTypes" },
-  { key: "projects", label: "Projects", type: "text" },
+  { key: "projects", label: "Projects", type: "dropdown", source: "projects" },
   { key: "createdBy", label: "Created By", type: "text" },
 ];
 
@@ -47,40 +50,120 @@ const [extractedData, setExtractedData] = useState(null); // for single invoice
 const [extractedInvoices, setExtractedInvoices] = useState([]); // for multiple invoices
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
-
+const [dropdownPosition, setDropdownPosition] = useState({
+  top: 0,
+  left: 0,
+  width: 260,
+});
   const [pdfText, setPdfText] = useState("");
   const [invoiceRows, setInvoiceRows] = useState([]);
 const [vendors, setVendors] = useState([]);
 const [currencies, setCurrencies] = useState([]);
 const [transactionTypes, setTransactionTypes] = useState([]);
 const [companies, setCompanies] = useState([]);
+const [products, setProducts] = useState([]);
+const [product_types, setProductTypes] = useState([]);
+const fileInputRef = useRef(null);
+const [plans, setPlans] = useState([]);
+const [departments, setDepartments] = useState([]);
+const [terms, setTerms] = useState([]);
+const [creditCards, setCreditCards] = useState([]);
+const [projects, setProjects] = useState([]);
+const [vatPercent, setVatPercent] = useState(0);
+const [costCenters, setCostCenters] = useState([]);
+const [openDropdown, setOpenDropdown] = useState(null);
+const [dropdownSearch, setDropdownSearch] = useState("");
 useEffect(() => {
   loadDropdownData();
 }, []);
 useEffect(() => {
   if (!invoiceRows.length) return;
 
+  const productOptions = getDropdownOptions({ source: "products" });
   const vendorOptions = getDropdownOptions({ source: "vendors" });
   const currencyOptions = getDropdownOptions({ source: "currencies" });
   const companyOptions = getDropdownOptions({ source: "companies" });
+  const transactionOptions = getDropdownOptions({ source: "transactionTypes" });
 
-  if (!vendorOptions.length && !currencyOptions.length && !companyOptions.length) return;
+  if (
+    !productOptions.length &&
+    !vendorOptions.length &&
+    !currencyOptions.length &&
+    !companyOptions.length &&
+    !transactionOptions.length
+  ) {
+    return;
+  }
 
   setInvoiceRows((prevRows) =>
     prevRows.map((row) => {
+      const matchedProduct = findMatchingOption(row.product, productOptions);
       const matchedVendor = findMatchingOption(row.vendorName, vendorOptions);
       const matchedCurrency = findMatchingOption(row.currency, currencyOptions);
       const matchedCompany = findMatchingOption(row.billingCompany, companyOptions);
+      const matchedTransactionType = findMatchingOption(row.transactionType, transactionOptions);
 
-      return {
+      let nextRow = {
         ...row,
-        vendorName: matchedVendor || "",
-        currency: matchedCurrency || "",
-        billingCompany: matchedCompany || "",
+        product: matchedProduct || row.product,
+        vendorName: matchedVendor || row.vendorName,
+        currency: matchedCurrency || row.currency,
+        billingCompany: matchedCompany || row.billingCompany,
+        transactionType: matchedTransactionType || row.transactionType,
       };
+
+          if (matchedProduct) {
+        const selectedProduct = products.find((product) => {
+          const id = product.prd_code || "";
+          return String(id) === String(matchedProduct);
+        });
+
+        nextRow = {
+          ...nextRow,
+          vendorName: selectedProduct?.vend_code || nextRow.vendorName,
+          productType: selectedProduct?.prdtype_code || nextRow.productType,
+          vatApplicable: isVatApplicable(selectedProduct),
+        };
+      }
+
+      const calculated = calculateInvoiceAmounts(nextRow);
+
+      nextRow = {
+        ...nextRow,
+        vatAmount: calculated.vatAmount,
+        totalAmount: calculated.totalAmount,
+        totalAmountAED: calculated.totalAmountAED,
+      };
+
+      return nextRow;
+
+    
     })
   );
-}, [vendors, currencies, companies, invoiceRows.length]);
+}, [
+  products,
+  vendors,
+  currencies,
+  companies,
+  transactionTypes,
+  invoiceRows.length,
+  vatPercent,
+]);
+
+useEffect(() => {
+  const handleClickOutside = (event) => {
+    if (!event.target.closest(".relative")) {
+      setOpenDropdown(null);
+      setDropdownSearch("");
+    }
+  };
+
+  document.addEventListener("mousedown", handleClickOutside);
+
+  return () => {
+    document.removeEventListener("mousedown", handleClickOutside);
+  };
+}, []);
 
  const handleFileSelect = (e) => {
   const selectedFiles = Array.from(e.target.files || []);
@@ -111,6 +194,7 @@ useEffect(() => {
   setExtractedInvoices([]);
   setInvoiceRows([]);
   setPdfText("");
+  setMessage({ type: "", text: "" });
 };
 
   const extractTextFromPDF = async (pdfFile) => {
@@ -443,34 +527,57 @@ const getInvoiceProductRows = (invoices) => {
   return rows;
 };
 const loadDropdownData = async () => {
+  
   try {
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email || "";
 
-    const [vendorRes, currencyRes, companyRes, transactionRes] =
-      await Promise.all([
-        getMasterData("vendors", activeUserEmail),
-        getMasterData("currency", activeUserEmail),
-        getMasterData("company", activeUserEmail),
-        getMasterData("transaction_types", activeUserEmail),
-      ]);
+    const [
+      productRes,
+      vendorRes,
+      currencyRes,
+      companyRes,
+      transactionRes,
+      planRes,
+      departmentRes,
+      termRes,
+      creditCardRes,
+      projectRes,
+      productTypeRes,
+      costCenterRes,
+      vatRes,
+      
+      
+    ] = await Promise.all([
+      getMasterData("products", activeUserEmail),
+      getMasterData("vendors", activeUserEmail),
+      getMasterData("currency", activeUserEmail),
+      getMasterData("company", activeUserEmail),
+      getMasterData("transaction_types", activeUserEmail),
+      getMasterData("plans", activeUserEmail),
+      getMasterData("department", activeUserEmail),
+      getMasterData("billing_cycle", activeUserEmail),
+      getMasterData("credit_card", activeUserEmail),
+      getMasterData("projects", activeUserEmail),
+      getMasterData("product_types", activeUserEmail),
+      getMasterData("division", activeUserEmail),
+      getVatPercentage(),
+    ]);
+    setProducts(Array.isArray(productRes?.data) ? productRes.data : []);
+    setVendors(Array.isArray(vendorRes?.data) ? vendorRes.data : []);
+    setCurrencies(Array.isArray(currencyRes?.data) ? currencyRes.data : []);
+    setCompanies(Array.isArray(companyRes?.data) ? companyRes.data : []);
+    setTransactionTypes(Array.isArray(transactionRes?.data) ? transactionRes.data : []);
+    setPlans(Array.isArray(planRes?.data) ? planRes.data : []);
+    setDepartments(Array.isArray(departmentRes?.data) ? departmentRes.data : []);
+    setTerms(Array.isArray(termRes?.data) ? termRes.data : []);
+    setCreditCards(Array.isArray(creditCardRes?.data) ? creditCardRes.data : []);
+    setProjects(Array.isArray(projectRes?.data) ? projectRes.data : []);
+    setProductTypes(Array.isArray(productTypeRes?.data) ? productTypeRes.data : []);
+    setCostCenters(Array.isArray(costCenterRes?.data) ? costCenterRes.data : []);
+    setVatPercent(Number(vatRes?.data?.vatPercentage || 0));
 
-    const vendorData = Array.isArray(vendorRes?.data) ? vendorRes.data : [];
-    const currencyData = Array.isArray(currencyRes?.data) ? currencyRes.data : [];
-    const companyData = Array.isArray(companyRes?.data) ? companyRes.data : [];
-    const transactionData = Array.isArray(transactionRes?.data)
-      ? transactionRes.data
-      : [];
-
-    setVendors(vendorData);
-    setCurrencies(currencyData);
-    setCompanies(companyData);
-    setTransactionTypes(transactionData);
-
-    console.log("Vendor Data:", vendorData);
-    console.log("Currency Data:", currencyData);
-    console.log("Company Data:", companyData);
-    console.log("Transaction Type Data:", transactionData);
+    
   } catch (error) {
     console.error("Dropdown loading failed:", error);
   }
@@ -507,7 +614,7 @@ const buildEditableInvoiceRows = (invoices) => {
 
     if (products.length > 0) {
       products.forEach((product) => {
-        const amount = product.amount ?? invoice.cost ?? invoice.totalAmount ?? "";
+        const amount = product.amount ?? "";
 
         rows.push({
           invoiceDate: formatDateForInput(invoice.invoiceDate),
@@ -520,9 +627,9 @@ const buildEditableInvoiceRows = (invoices) => {
           expiryDate: formatDateForInput(invoice.expiryDate),
           deliveryDate: formatDateForInput(invoice.deliveryDate),
           amount,
-          vatAmount: invoice.vatAmount || "",
-          totalAmount: invoice.totalAmount ?? invoice.cost ?? "",
-          totalAmountAED: invoice.totalAmountAED || "",
+           vatAmount: "",
+          totalAmount: "",
+          totalAmountAED: "",
           remarks: "",
           vendorName: invoice.vendorName || "",
           product: product.description || invoice.productName || invoice.productSummary || "",
@@ -541,54 +648,72 @@ const buildEditableInvoiceRows = (invoices) => {
         });
       });
     } else {
-      rows.push({
-        invoiceDate: formatDateForInput(invoice.invoiceDate),
-        invoiceNumber: invoice.invoiceNumber || "",
-        itRequestNum: "",
-        requestedBy: "",
-        qty: "",
-        lpoNo: "",
-        lpoDate: "",
-        expiryDate: formatDateForInput(invoice.expiryDate),
-        deliveryDate: formatDateForInput(invoice.deliveryDate),
-        amount: invoice.cost ?? invoice.totalAmount ?? "",
-        vatAmount: invoice.vatAmount || "",
-        totalAmount: invoice.totalAmount ?? invoice.cost ?? "",
-        totalAmountAED: invoice.totalAmountAED || "",
-        remarks: "",
-        vendorName: invoice.vendorName || "",
-        product: invoice.productName || invoice.productSummary || "",
-        productType: invoice.productType || "",
-        plan: invoice.plan || "",
-        department: invoice.department || "",
-        billingCompany: invoice.billingCompany || invoice.billingAddress || "",
-        term: invoice.term || "",
-        creditCard: invoice.creditCard || "",
-        currency: invoice.currency || "",
-        costCenter: "",
-        transactionType: "",
-        projects: invoice.projects || "",
-        createdBy: invoice.createdBy || "",
-        fileName: invoice.fileName || "",
-      });
+     rows.push({
+  invoiceDate: formatDateForInput(invoice.invoiceDate),
+  invoiceNumber: invoice.invoiceNumber || "",
+  itRequestNum: "",
+  requestedBy: "",
+  qty: "",
+  lpoNo: "",
+  lpoDate: "",
+  expiryDate: formatDateForInput(invoice.expiryDate),
+  deliveryDate: formatDateForInput(invoice.deliveryDate),
+  amount: invoice.cost ?? "",
+  vatAmount: "",
+  totalAmount: "",
+  totalAmountAED: "",
+  remarks: "",
+  vendorName: invoice.vendorName || "",
+  product: invoice.productName || invoice.productSummary || "",
+  productType: invoice.productType || "",
+  plan: invoice.plan || "",
+  department: invoice.department || "",
+  billingCompany: invoice.billingCompany || invoice.billingAddress || "",
+  term: invoice.term || "",
+  creditCard: invoice.creditCard || "",
+  currency: invoice.currency || "",
+  costCenter: "",
+  transactionType: "",
+  projects: invoice.projects || "",
+  createdBy: invoice.createdBy || "",
+  fileName: invoice.fileName || "",
+  vatApplicable: false,
+});
     }
   });
 
   return rows;
 };
 const handleInvoiceCellChange = (rowIndex, field, value) => {
+  if (field === "product") {
+    handleProductChange(rowIndex, value);
+    return;
+  }
+
   setInvoiceRows((prevRows) => {
     const updatedRows = [...prevRows];
 
-    updatedRows[rowIndex] = {
+    let nextRow = {
       ...updatedRows[rowIndex],
       [field]: value,
     };
 
+    if (field === "amount" || field === "currency") {
+      const calculated = calculateInvoiceAmounts(nextRow);
+
+      nextRow = {
+        ...nextRow,
+        vatAmount: calculated.vatAmount,
+        totalAmount: calculated.totalAmount,
+        totalAmountAED: calculated.totalAmountAED,
+      };
+    }
+
+    updatedRows[rowIndex] = nextRow;
+
     return updatedRows;
   });
 };
-
 
 
 
@@ -601,61 +726,101 @@ const normalizeText = (value) => {
 };
 
 const getDropdownOptions = (column) => {
-  if (column.source === "vendors") {
-    return vendors
-      .map((vendor) => {
-        const id = vendor.id || "";
-        const name = vendor.vend_name || "";
+  if (column.source === "products") {
+
+    return products
+      .map((product) => {
+        const id =
+          product.prd_code ||"";
+
+        const name =
+          product.prd_name ||
+       
+          "";
 
         return {
           value: id,
           label: name,
         };
       })
-      .filter((option) => option.value);
+      .filter((option) => option.value && option.label);
   }
-  
- 
 
-if (column.source === "companies") {
-  return companies
-    .map((company) => {
-      const id = company.id || "";
-      const name = company.com_name || "";
+  if (column.source === "vendors") {
+    return vendors
+      .map((vendor) => {
+        const id = vendor.vend_code || "";
 
-      return {
-        value: String(id),
-        label: name,
-      };
-    })
-    .filter((option) => option.value && option.label);
-}
+        const name =vendor.vend_name || "";
+
+        return {
+          value: String(id),
+          label: name,
+        };
+      })
+      .filter((option) => option.value && option.label);
+  }
+
+  if (column.source === "companies") {
+    return companies
+      .map((company) => {
+        const id =  company.com_code ||"";
+
+        const name =  company.com_name || "";
+
+        return {
+          value: String(id),
+          label: name,
+        };
+      })
+      .filter((option) => option.value && option.label);
+  }
 
   if (column.source === "currencies") {
     return currencies
       .map((currency) => {
-        const id = currency.curr_code || "";
-        const code = currency.curr_name || "";
+        const code =
+          currency.curr_code || "";
+
+        const name =
+          currency.curr_name || "";
 
         return {
-          value: String(id),
-          label: code,
+          value: String(code),
+          label: name,
         };
       })
       .filter((option) => option.value);
   }
 
-   if (column.source === "transactionTypes") {
+  if (column.source === "productTypes") {
+    
+    return product_types
+      .map((productType) => {
+        const code = productType.prdtype_code || "";
+
+        const name =
+          productType.prdtype_name || "";
+
+        return {
+          value: String(code),
+          label: name,
+        };
+      })
+      .filter((option, index, self) =>
+        option.value &&
+        index === self.findIndex((x) => x.value === option.value)
+      );
+  }
+
+  if (column.source === "transactionTypes") {
     return transactionTypes
       .map((type) => {
         const id =
-          type.id ||
-         
-          "";
+          type.trntype_code || "";
 
         const name =
           type.trntype_name ||
-         
           "";
 
         return {
@@ -665,6 +830,94 @@ if (column.source === "companies") {
       })
       .filter((option) => option.value && option.label);
   }
+
+  if (column.source === "plans") {
+    return plans
+      .map((plan) => {
+        const id = plan.plan_code  || "";
+        const name = plan.plan_name || "";
+
+        return {
+          value: String(id || name),
+          label: name,
+        };
+      })
+      .filter((option) => option.value && option.label);
+  }
+
+  if (column.source === "departments") {
+    return departments
+      .map((dept) => {
+        const id = dept.dep_code || "";
+        const name = dept.dep_name || "";
+
+        return {
+          value: String(id || name),
+          label: name,
+        };
+      })
+      .filter((option) => option.value && option.label);
+  }
+
+  if (column.source === "terms") {
+    return terms
+      .map((term) => {
+        const id = term.billcycle_code || "";
+        const name = term.billcycle_name || "";
+
+        return {
+          value: String(id || name),
+          label: name,
+        };
+      })
+      .filter((option) => option.value && option.label);
+  }
+
+  if (column.source === "creditCards") {
+    return creditCards
+      .map((card) => {
+        const id = card.crcd_code || "";
+        const name =
+          card.crcd_last4num || "";
+
+        return {
+          value: String(id || name),
+          label: name,
+        };
+      })
+      .filter((option) => option.value && option.label);
+  }
+
+  if (column.source === "projects") {
+    return projects
+      .map((project) => {
+        const id = project.prj_code || "";
+        const name = project.prj_name || "";
+
+        return {
+          value: String(id || name),
+          label: name,
+        };
+      })
+      .filter((option) => option.value && option.label);
+  }
+
+  if (column.source === "costCenters") {
+  return costCenters
+    .map((division) => {
+      const id =
+        division.dv_code || "";
+
+      const name =
+        division.dv_name || "";
+
+      return {
+        value: String(id),
+        label: name,
+      };
+    })
+    .filter((option) => option.value && option.label);
+}
 
   return [];
 };
@@ -709,86 +962,281 @@ const getCompanyName = (company) => {
   );
 };
 
+const isVatApplicable = (product) => {
+  const value =
+    product?.prd_is_vat ??0;
+
+  return value === true || value === 1 || value === "1" || String(value).toLowerCase() === "yes";
+};
+
+const getCurrencyRate = (currencyCode) => {
+  const currency = currencies.find((c) => {
+    const code =
+      c.curr_code ||
+      c.currency_code ||
+      c.currencyCode ||
+      c.code ||
+      "";
+
+    return String(code).toUpperCase() === String(currencyCode).toUpperCase();
+  });
+
+  return Number(
+    currency?.curr_exchange_rate ||0
+  );
+};
+
+const calculateInvoiceAmounts = (row) => {
+  const amount = Number(row.amount || 0);
+  const currencyCode = row.currency || "AED";
+
+  const vatAmount = row.vatApplicable
+    ? Number(((amount * Number(vatPercent || 0)) / 100).toFixed(2))
+    : 0;
+
+  const totalAmount = Number((amount + vatAmount).toFixed(2));
+
+  let totalAmountAED = totalAmount;
+
+  if (String(currencyCode).toUpperCase() !== "AED") {
+    const rate = getCurrencyRate(currencyCode);
+
+    // Your currency table shows USD = 0.2723, meaning 1 AED = 0.2723 USD.
+    // So USD to AED = USD / 0.2723
+    totalAmountAED = rate ? Number((totalAmount / rate).toFixed(2)) : totalAmount;
+  }
+
+  return {
+    vatAmount,
+    totalAmount,
+    totalAmountAED,
+  };
+};
+
+const handleProductChange = (rowIndex, productId) => {
+  const selectedProduct = products.find((product) => {
+    const id =
+      product.prd_code || "";
+
+    return String(id) === String(productId);
+  });
+
+  setInvoiceRows((prevRows) => {
+    const updatedRows = [...prevRows];
+    const currentRow = updatedRows[rowIndex];
+
+    const vendorId =
+      selectedProduct?.vend_code ||"";
+
+    const productTypeCode =
+      selectedProduct?.prdtype_code ||"";
+
+    const nextRow = {
+      ...currentRow,
+      product: String(productId),
+      vendorName: String(vendorId),
+      productType: String(productTypeCode),
+      vatApplicable: isVatApplicable(selectedProduct),
+    };
+
+    const calculated = calculateInvoiceAmounts(nextRow);
+
+    updatedRows[rowIndex] = {
+      ...nextRow,
+      vatAmount: calculated.vatAmount,
+      totalAmount: calculated.totalAmount,
+      totalAmountAED: calculated.totalAmountAED,
+    };
+
+    return updatedRows;
+  });
+};
+const createBlankInvoiceRow = () => ({
+  invoiceDate: "",
+  invoiceNumber: "",
+  itRequestNum: "",
+  requestedBy: "",
+  qty: "",
+  lpoNo: "",
+  lpoDate: "",
+  expiryDate: "",
+  deliveryDate: "",
+  amount: "",
+  vatAmount: "",
+  totalAmount: "",
+  totalAmountAED: "",
+  remarks: "",
+  vendorName: "",
+  product: "",
+  productType: "",
+  plan: "",
+  department: "",
+  billingCompany: "",
+  term: "",
+  creditCard: "",
+  currency: "AED",
+  costCenter: "",
+  transactionType: "",
+  projects: "",
+  createdBy: "",
+  fileName: "",
+  vatApplicable: false,
+});
+
+const handleAddSingleRecord = () => {
+  setInvoiceRows((prevRows) => [
+    ...prevRows,
+    createBlankInvoiceRow(),
+  ]);
+
+
+};
+const handleDeleteRow = (rowIndex) => {
+  setInvoiceRows((prevRows) =>
+    prevRows.filter((_, index) => index !== rowIndex)
+  );
+};
+const getFilteredOptions = (options) => {
+  const searchText = dropdownSearch.toLowerCase().trim();
+
+  if (!searchText) return options;
+
+  return options.filter((option) =>
+    String(option.label || "")
+      .toLowerCase()
+      .includes(searchText)
+  );
+};
 const renderEditableCell = (row, rowIndex, column) => {
   const value = row[column.key] ?? "";
 
 if (column.type === "dropdown") {
-  let options = [];
-
-  if (column.source === "vendors") {
-    console.log("Vendors available for dropdown:", vendors);
-    options = vendors.map((vendor) => ({
-      value: vendor.id,
-      label: vendor.vend_name,
-    }));
-  }
-
-  if (column.source === "currencies") {
-    console.log("Currencies available for dropdown:", currencies);
-    options = currencies.map((currency) => ({
-      value: currency.curr_code,
-      label: currency.curr_name,
-    }));
-  }
-
-  if (column.source === "transactionTypes") {
-    console.log("Transaction Types available for dropdown:", transactionTypes);
-    options = transactionTypes.map((type) => ({
-      value: type.id,
-      label: type.trntype_name,
-    }));
-  }
-  
-  if (column.source === "companies") {
-     console.log("Companies available for dropdown:", companies);
-    options = companies.map((company) => ({
-      value: company.id,
-      label: company.com_name,
-    }));
-  }
-
-
+  const options = getDropdownOptions(column);
   const mappedValue = findMatchingOption(value, options);
 
-  return (
-    <select
-      value={mappedValue}
-      onChange={(e) =>
-        handleInvoiceCellChange(rowIndex, column.key, e.target.value)
-      }
-      className="
-        w-full h-full min-h-[42px]
-      bg-transparent
-      border-0 outline-none
-      px-3 py-2
-      text-xs text-gray-900
-      focus:bg-blue-50
-      focus:ring-1 focus:ring-blue-400
-      appearance-none
-      cursor-pointer
-      "
-      style={{
-          backgroundImage:
-        "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E\")",
-      backgroundRepeat: "no-repeat",
-      backgroundPosition: "right 10px center",
-      backgroundSize: "16px",
-      paddingRight: "34px",
-      }}
-    >
-      <option value="">Select</option>
+  const selectedOption =
+    options.find((option) => String(option.value) === String(mappedValue)) ||
+    null;
 
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+  const dropdownKey = `${rowIndex}-${column.key}`;
+  const isOpen = openDropdown === dropdownKey;
+  const filteredOptions = getFilteredOptions(options);
+
+  return (
+    <div className="relative w-full h-full">
+      <button
+        type="button"
+        onClick={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+
+          setDropdownPosition({
+            top: rect.bottom + 4,
+            left: rect.left,
+            width: Math.max(rect.width, 260),
+          });
+
+          setOpenDropdown(isOpen ? null : dropdownKey);
+          setDropdownSearch("");
+        }}
+        className="
+          w-full h-full min-h-[42px]
+          bg-transparent
+          border-0 outline-none
+          px-3 py-2
+          text-xs text-gray-900
+          text-left
+          flex items-center justify-between
+          focus:bg-blue-50
+          focus:ring-1 focus:ring-blue-400
+        "
+      >
+        <span className="truncate">
+          {selectedOption?.label || "Select"}
+        </span>
+
+       <span className="inline-flex items-center justify-center px-2 py-1 text-gray-600">
+  <ChevronDown size={16} />
+</span>
+      </button>
+
+      {isOpen && (
+        <div
+          className="
+            fixed
+            bg-white
+            border border-gray-300
+            rounded-md
+            shadow-lg
+            z-[99999]
+            overflow-hidden
+          "
+          style={{
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            width: `${dropdownPosition.width}px`,
+          }}
+        >
+          <input
+            type="text"
+            value={dropdownSearch}
+            onChange={(e) => setDropdownSearch(e.target.value)}
+            placeholder="Search..."
+            autoFocus
+            className="
+              w-full
+              px-3 py-2
+              text-xs
+              border-0 border-b border-gray-200
+              outline-none
+              focus:ring-0
+            "
+          />
+
+          <div className="max-h-[220px] overflow-y-auto">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    handleInvoiceCellChange(
+                      rowIndex,
+                      column.key,
+                      option.value
+                    );
+                    setOpenDropdown(null);
+                    setDropdownSearch("");
+                  }}
+                  className={`
+                    w-full
+                    px-3 py-2
+                    text-left
+                    text-xs
+                    hover:bg-gray-100
+                    ${
+                      String(option.value) === String(mappedValue)
+                        ? "bg-blue-50 text-blue-700"
+                        : "text-gray-800"
+                    }
+                  `}
+                >
+                  {option.label}
+                </button>
+              ))
+            ) : (
+              <div className="px-3 py-2 text-xs text-gray-500">
+                No results found
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
  return (
-  <input
+  <input readOnly={["vatAmount", "totalAmount", "totalAmountAED"].includes(column.key)}
     type={column.type || "text"}
     value={value}
     onChange={(e) =>
@@ -805,6 +1253,88 @@ if (column.type === "dropdown") {
     "
   />
 );
+};
+
+const handleSaveTransactions = async () => {
+  try {
+    if (!invoiceRows.length) {
+      setMessage({
+        type: "error",
+        text: "No rows available to save.",
+      });
+      return;
+    }
+
+    const activeUser = JSON.parse(localStorage.getItem("user"));
+    const activeUserEmail = activeUser?.email || "";
+
+    const validRows = invoiceRows.filter((row) => {
+      return row.product || row.vendorName || row.invoiceNumber || row.amount;
+    });
+
+    if (!validRows.length) {
+      setMessage({
+        type: "error",
+        text: "Please enter at least one valid transaction row.",
+      });
+      return;
+    }
+console.log("Saving transactions:", validRows);
+    await createPaymentTransactions(
+      {
+        rows: validRows.map((row) => ({
+          invoiceDate: row.invoiceDate || null,
+          vendorName: row.vendorName || null,
+          product: row.product || null,
+          productType: row.productType || null,
+          plan: row.plan || null,
+          department: row.department || null,
+          billingCompany: row.billingCompany || null,
+          term: row.term || null,
+          creditCard: row.creditCard || null,
+          currency: row.currency || null,
+          amount: Number(row.amount || 0),
+          totalAmountAED: Number(row.totalAmountAED || 0),
+          expiryDate: row.expiryDate || null,
+          costCenter: row.costCenter || null,
+          remarks: row.remarks || null,
+          vatAmount: Number(row.vatAmount || 0),
+          totalAmount: Number(row.totalAmount || 0),
+          invoiceNumber: row.invoiceNumber || null,
+          transactionType: row.transactionType || null,
+          projects: row.projects || null,
+          itRequestNum: row.itRequestNum || null,
+          requestedBy: row.requestedBy || null,
+          qty: Number(row.qty || 0),
+          lpoNo: row.lpoNo || null,
+          lpoDate: row.lpoDate || null,
+          deliveryDate: row.deliveryDate || null,
+        })),
+      },
+      activeUserEmail
+    );
+
+    setMessage({
+      type: "success",
+      text: "Payment transactions saved successfully.",
+    });
+
+    setInvoiceRows([]);
+    setExtractedInvoices([]);
+    setExtractedData(null);
+    setFiles([]);
+    setPdfText("");
+    if (fileInputRef.current) {
+  fileInputRef.current.value = "";
+}
+  } catch (error) {
+    console.error("Save transaction error:", error);
+
+    setMessage({
+      type: "error",
+      text: error.response?.data?.error || error.message || "Failed to save transactions.",
+    });
+  }
 };
 
   return (
@@ -837,15 +1367,16 @@ if (column.type === "dropdown") {
     </div>
 
     <div className="flex items-center gap-3">
-      <input
-        type="file"
-        accept=".pdf"
-        multiple
-        onChange={handleFileSelect}
-        className="hidden"
-        id="pdf-input"
-        disabled={loading}
-      />
+     <input
+  ref={fileInputRef}
+  type="file"
+  accept=".pdf"
+  multiple
+  onChange={handleFileSelect}
+  className="hidden"
+  id="pdf-input"
+  disabled={loading}
+/>
 
       <label
         htmlFor="pdf-input"
@@ -870,6 +1401,25 @@ if (column.type === "dropdown") {
   }`}
 >
   {loading ? "processing..." : "Extract"}
+</button>
+<button
+  type="button"
+  onClick={handleAddSingleRecord}
+  disabled={loading}
+  className="
+    px-5 py-2
+    rounded-md
+    text-sm
+    font-medium
+    bg-green-600
+    text-white
+    hover:bg-green-700
+    disabled:bg-gray-300
+    disabled:text-gray-500
+    disabled:cursor-not-allowed
+  "
+>
+  Add Manually
 </button>
     </div>
   </div>
@@ -907,6 +1457,9 @@ if (column.type === "dropdown") {
       <table className="border-collapse text-xs min-w-[3800px] w-full">
                 <thead className="bg-slate-200 sticky top-0 z-30 text-gray-900">
                   <tr>
+                    <th className="border border-gray-400 px-3 py-2 min-w-[80px] bg-slate-200 text-center">
+  Action
+</th>
                   <th className="border border-gray-400 px-3 py-2 min-w-[60px] bg-slate-200">
                     S.No
                   </th>
@@ -925,6 +1478,7 @@ if (column.type === "dropdown") {
                       // }
 
                       return (
+                        
                         <th
                           key={column.key}
                           className={`border border-gray-400 px-3 py-2 text-left whitespace-nowrap min-w-[160px] font-semibold`}
@@ -942,6 +1496,16 @@ if (column.type === "dropdown") {
                       key={rowIndex}
                       className={rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50"}
                     >
+                      <td className="border border-gray-400 text-center min-w-[80px]">
+  <button
+    type="button"
+    onClick={() => handleDeleteRow(rowIndex)}
+    className="inline-flex items-center justify-center px-2 py-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
+    title="Delete row"
+  >
+    <Trash2 size={16} />
+  </button>
+</td>
                       <td className="border border-gray-400 px-3 py-2 text-center">
                         {rowIndex + 1}
                       </td>
@@ -962,7 +1526,7 @@ if (column.type === "dropdown") {
                         return (
                           <td
                             key={column.key}
-                            className={`border border-gray-400 min-w-[160px] p-0`}
+                            className={`border border-gray-400 min-w-[180px] p-0 relative overflow-visible`}
                           >
                             {renderEditableCell(row, rowIndex, column)}
                           </td>
@@ -975,14 +1539,13 @@ if (column.type === "dropdown") {
             </div>
 
             <div className="flex gap-3 mt-5" style={{ justifyContent: "center", fontSize: "11px" }}>
-              <button
-                onClick={() => {
-                  console.log("Final editable invoice rows:", invoiceRows);
-                }}
-                className="px-2 py-1 bg-blue-600 text-xs text-white rounded hover:bg-blue-700"
-              >
-                Confirm
-              </button>
+             <button
+  onClick={handleSaveTransactions}
+  disabled={!invoiceRows.length || loading}
+  className="px-5 py-2 bg-blue-600 text-xs text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
+>
+  Save Transactions
+</button>
 
               <button
                 onClick={() => {
@@ -992,6 +1555,9 @@ if (column.type === "dropdown") {
                   setFiles([]);
                   setPdfText("");
                   setMessage({ type: "", text: "" });
+                    if (fileInputRef.current) {
+    fileInputRef.current.value = "";
+  }
                 }}
                 className="px-5 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
               >

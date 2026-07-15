@@ -174,6 +174,12 @@ export const getMasterData = (masterName, activeUserEmail) => {
   });
 }
 
+export const createPaymentTransactions = (payload, activeUserEmail) => {
+  return API.post("/payment-transactions", payload, {
+    params: { activeUserEmail },
+  });
+};
+
 export const dataTypes = () => {
   return API.get("/data-types");
 }
