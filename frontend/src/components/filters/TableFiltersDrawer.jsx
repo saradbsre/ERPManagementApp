@@ -74,12 +74,24 @@ export default function TableFiltersDrawer({
   // ================= UPDATE VALUES =================
 
 
-  const normalizeValues = (values = []) =>
-  values.map(v =>
-    typeof v === "string"
-      ? { key: v, value: v }
-      : v
-  );
+const normalizeValues = (values = []) =>
+  (values || []).map((v) => {
+    if (v === null || v === undefined) {
+      return { key: "", value: "" };
+    }
+
+    if (typeof v === "object") {
+      return {
+        key: String(v.key ?? v.id ?? v.value ?? ""),
+        value: String(v.value ?? v.label ?? v.key ?? v.id ?? ""),
+      };
+    }
+
+    return {
+      key: String(v),
+      value: String(v),
+    };
+  });
 
 const updateValues = (index, values) => {
   setFilters((prev) =>
@@ -105,9 +117,23 @@ const updateValues = (index, values) => {
 
   // ================= OPTIONS =================
 const getOptions = (master) => {
+  const pk = masterDataMap?.[master]?.pk || "key";
+
   return (masterDataMap?.[master]?.data || []).map((x) => ({
-    key: x.key,
-    value: x.value,
+    key: String(
+      x?.[pk] ??
+      x?.key ??
+      x?.id ??
+      x?.value ??
+      ""
+    ),
+    value: String(
+      x?.value ??
+      x?.name ??
+      x?.label ??
+      x?.[pk] ??
+      ""
+    ),
   }));
 };
 
@@ -117,29 +143,63 @@ const getOptions = (master) => {
       !filters.some((f) => f.master === item.master)
   );
 
-const cleanedFilters = filters.map(f => ({
-  master: f.master,
-  pk: masterDataMap?.[f.master]?.pk,
-  values: f.values.map(v => v.key)
-}));
+// const cleanedFilters = (filters || [])
+//   .map((f) => ({
+//     master: f.master,
+//     pk: f.pk || masterDataMap?.[f.master]?.pk || f.master,
+//     values: (f.values || [])
+//       .map((v) => {
+//         if (v === null || v === undefined) return "";
+
+//         if (typeof v === "object") {
+//           return String(
+//             v.key ??
+//             v.id ??
+//             v.value ??
+//             ""
+//           );
+//         }
+
+//         return String(v);
+//       })
+//       .filter(Boolean),
+//   }))
+//   .filter((f) => f.master && f.values.length > 0);
 
 const handleSearch = (overrideFilters) => {
-  console.log("Filters sent to main table:", overrideFilters || cleanedFilters);  
   if (!onSearch) return;
 
   const sourceFilters = Array.isArray(overrideFilters)
-  ? overrideFilters
-  : Array.isArray(filters)
-    ? filters
-    : [];
+    ? overrideFilters
+    : Array.isArray(filters)
+      ? filters
+      : [];
 
-  const cleanedFilters = sourceFilters.map(f => ({
-    master: f.master,
-    pk: masterDataMap?.[f.master]?.pk,
-    values: (f.values || []).map(v =>
-   typeof v === "string" ? v : v.key
-  )
-  }));
+  const cleanedFilters = sourceFilters
+    .map((f) => ({
+      master: f.master,
+      pk: f.pk || masterDataMap?.[f.master]?.pk || f.master,
+      values: (f.values || [])
+        .map((v) => {
+          if (v === null || v === undefined) return "";
+
+          if (typeof v === "object") {
+            return String(
+              v.key ??
+              v.id ??
+              v.value ??
+              ""
+            );
+          }
+
+          return String(v);
+        })
+        .filter(Boolean),
+    }))
+    .filter((f) => f.master && f.values.length > 0);
+
+  console.log("Filters sent to main table:", cleanedFilters);
+
   onSearch(cleanedFilters);
   onClose?.();
 };
@@ -251,25 +311,34 @@ const handleSearch = (overrideFilters) => {
                        value: opt.key,     // backend key
                        label: opt.value,   // UI label
                     }))}
-                   value={(filter.values || []).map(v => {
-  const key = typeof v === "string" ? v : v.key;
+  value={(filter.values || []).map((v) => {
+  const key =
+    typeof v === "object"
+      ? String(v.key ?? v.id ?? v.value ?? "")
+      : String(v ?? "");
 
-  const option = options.find(o => o.key === key);
+  const option = options.find(
+    (o) => String(o.key) === key
+  );
 
   return {
     value: key,
-    label: option?.value || (typeof v === "string" ? v : v.value),
+    label:
+      option?.value ||
+      (typeof v === "object"
+        ? String(v.value ?? v.label ?? key)
+        : key),
   };
 })}
-                    onChange={(selected) =>
-                      updateValues(
-                        index,
-                        selected?.map((x) => ({
-                          key: x.value,
-                          value: x.label,
-                        })) || []
-                      )
-                    }
+                 onChange={(selected) =>
+  updateValues(
+    index,
+    selected?.map((x) => ({
+      key: String(x.value),
+      value: String(x.label),
+    })) || []
+  )
+}
                     styles={{
                       control: (base) => ({
                         ...base,

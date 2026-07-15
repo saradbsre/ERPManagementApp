@@ -969,21 +969,32 @@ const getVisibleColumns = () => {
   // =========================
   const currencyFilter = filters.find(f => f.master === "currency");
 
-  if (currencyFilter?.values?.length) {
-    const selectedCurrencies = currencyFilter.values.map(v =>
-      v.toLowerCase()
+ if (currencyFilter?.values?.length) {
+  const selectedCurrencies = currencyFilter.values.map((v) => {
+    if (v === null || v === undefined) return "";
+
+    if (typeof v === "object") {
+      return String(
+        v.key ??
+        v.id ??
+        v.value ??
+        ""
+      ).toLowerCase();
+    }
+
+    return String(v).toLowerCase();
+  });
+
+  cols = cols.filter((col) => {
+    const name = String(col.column_name || "").toLowerCase();
+
+    if (!name.includes("amount")) return true;
+
+    return selectedCurrencies.some((cur) =>
+      cur && name.includes(cur)
     );
-
-    cols = cols.filter(col => {
-      const name = col.column_name.toLowerCase();
-
-      if (!name.includes("amount")) return true;
-
-      return selectedCurrencies.some(cur =>
-        name.includes(cur)
-      );
-    });
-  }
+  });
+}
 
   // =========================
   // 🔥 USE FETCHED CUSTOMIZED ORDER ONLY
@@ -2528,38 +2539,12 @@ const isPrfBlockedProductType = (productTypeValue) => {
 
 
 const filteredRows = rows.filter((row) => {
-
-  const passesFilters = appliedFilters.every((filter) => {
-
-    const selectedValues =
-      (filter.values || []).map(normalize);
-
-    if (selectedValues.length === 0) return true;
-
-    const fieldKey =
-      columns.find(
-        (c) =>
-          c.master === filter.master ||
-          c.master1 === filter.master
-      )?.column_name || filter.master;
-
-    const rawValue = row?.[fieldKey];
-
-    const rowValue = normalize(
-      typeof rawValue === "object"
-        ? rawValue?.value
-        : rawValue
-    );
-
-    return selectedValues.includes(rowValue);
-  });
-
-  if (!passesFilters) return false;
-
   return rowMatchesSearch(row);
 });
 
 const finalRows = filteredRows;
+
+
    const normalizedRows = finalRows.map(row => {
   const currency = (row.currency || "").toLowerCase();
 
@@ -3395,24 +3380,29 @@ const openMenuEye = () => {
 };
 
 const buildCurrentViewPayload = () => {
+  const activeFilters = Array.isArray(filters) ? filters : [];
+
   return {
     filters: {
-      search,
-      dateFilters,
-      appliedFilters: appliedFilters || filters || [],
+      search: search || "",
+      dateFilters: dateFilters || getCurrentMonth(),
+      appliedFilters: activeFilters,
     },
 
     columns: {
-      visibleColumns: selectedColumns || [],
+      visibleColumns:
+        visibleColumnsState?.length > 0
+          ? visibleColumnsState
+          : selectedColumns || [],
       pinnedColumns: pinnedColumns || [],
     },
 
     sort_config: sortConfig || [],
 
-   group_config: groupBy || {
-  key: null,
-  direction: "asc",
-},
+    group_config: groupBy || {
+      key: null,
+      direction: "asc",
+    },
   };
 };
 
@@ -3460,8 +3450,9 @@ const applySavedView = async (view) => {
   }
 
   if (Array.isArray(savedFilters.appliedFilters)) {
-    setAppliedFilters(savedFilters.appliedFilters);
+    // setAppliedFilters(savedFilters.appliedFilters);
     setFilters(savedFilters.appliedFilters);
+    setAppliedFilters([]);
   }
 
   if (Array.isArray(savedColumns.visibleColumns)) {
@@ -3770,7 +3761,7 @@ const handleSaveViewChanges = async () => {
         Filters
    </button>
  {console.log("Filters state:", filters)}
-<TableFiltersDrawer
+{/* <TableFiltersDrawer
   open={showFilters}
   onClose={() => setShowFilters(false)}
 //   onSearch={(cleanedFilters) => {
@@ -3784,6 +3775,8 @@ const handleSaveViewChanges = async () => {
     console.log("Filters applied:", cleanedFilters);
     setFilters(cleanedFilters);   // IMPORTANT
     loadModule(dateFilters, cleanedFilters);
+    setAppliedFilters(cleanedFilters);
+
   }}
   masterList={masterList}
   filters={filters}
@@ -3794,7 +3787,41 @@ const handleSaveViewChanges = async () => {
   // saveFilterName={saveFilterName}
   // setSaveFilterName={setSaveFilterName}
   // handleSaveFilter={handleSaveFilter}
+/> */}
+
+<TableFiltersDrawer
+  open={showFilters}
+  onClose={() => setShowFilters(false)}
+  onSearch={(cleanedFilters) => {
+    const nextFilters = cleanedFilters || [];
+const normalizedFilters = nextFilters.map((filter) => ({
+    ...filter,
+    values: (filter.values || []).map((value) =>
+      value === null || value === undefined ? "" : String(value)
+    ),
+  }));
+
+  console.log("Filters applied:", normalizedFilters);
+
+
+    setFilters(nextFilters);
+
+    // keep this empty to avoid double frontend filtering
+    setAppliedFilters([]);
+
+    setHasViewChanges(true);
+    setPage(1);
+
+    loadModule(dateFilters, normalizedFilters);
+  }}
+  masterList={masterList}
+  filters={filters}
+  setFilters={setFilters}
+  currencies={currencies}
+  masterDataMap={masterDataMap}
+  setMasterDataMap={setMasterDataMap}
 />
+
  <button
   className="
     px-3 py-1.5 text-sm rounded-md
