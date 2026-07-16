@@ -1523,10 +1523,12 @@ const getValue = (row, col) => {
 const handleExcel = async () => {
   const cols = orderedVisibleColumns;
 
-  const moduleName =
-    printModuleName ||
-    localStorage.getItem("print_module_name") ||
-    module?.display_name;
+ const moduleName =
+  printModuleName ||
+  localStorage.getItem("print_module_name") ||
+  module?.display_name;
+
+const reportHeader = "ABDULWAHED BIN SHABIB GROUP";
 
   const groups = printableGroupedRows; // ✅ already grouped correctly
 
@@ -1553,7 +1555,8 @@ const handleExcel = async () => {
     cols.map(c => c.display_name),
     moduleName,
     groupBy,
-    columns
+    columns,
+    reportHeader
   );
 
   //console.log("Excel exported rows:", printableGroupedRows);
@@ -2442,7 +2445,11 @@ const rowMatchesSearch = (row) => {
   }
 
   const company =
-    selectedCompany || localStorage.getItem("print_company") || "";
+  customPrintHeader ||
+  localStorage.getItem("print_custom_header") ||
+  selectedCompany ||
+  localStorage.getItem("print_company") ||
+  "";
 
   const moduleTitle =
     printModuleName || module?.display_name;
@@ -2666,6 +2673,15 @@ const reportTitle =
     minute: "2-digit",
   });
 
+  const approvalData = {
+  prepared_by: activeUserName || "",
+  checked_by: form?.checked_by || workflow?.checked_by || "",
+  verified_by_it: form?.verified_by_it || workflow?.verified_by_it || "",
+  verified_by: form?.verified_by || workflow?.verified_by || "",
+  signed_by: form?.signed_by || workflow?.signed_by || "",
+  approved_by: form?.approved_by || workflow?.approved_by || "",
+};
+
   const toDisplayValue = (row, col) => {
     let value = "";
 
@@ -2780,10 +2796,12 @@ const reportTitle =
       font-size: 9px;
     }
 
-    .report-page {
-      width: 100%;
-      padding: 4px 8px 16px 8px;
-    }
+  .report-page {
+  width: 100%;
+  min-height: 190mm;
+  position: relative;
+  padding: 4px 8px 45mm 8px;
+}
 
     .report-header {
       border: 1px solid #1f2937;
@@ -2862,16 +2880,18 @@ const reportTitle =
       text-transform: uppercase;
     }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-      margin-bottom: 8px;
-      page-break-inside: auto;
-    }
+   table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin-bottom: 4px;
+  page-break-inside: auto;
+}
 
     thead {
       display: table-header-group;
+       background: #e5e7eb;
+      color: #111827;
     }
 
     tr {
@@ -2880,11 +2900,11 @@ const reportTitle =
     }
 
     th {
-      background: #102347;
-      color: #ffffff;
+      background: #e5e7eb !important;
+      color: #111827 !important;
       border: 1px solid #111827;
       padding: 4px 3px;
-      font-size: 7px;
+      font-size: 8px;
       font-weight: bold;
       text-align: center;
       vertical-align: middle;
@@ -2894,20 +2914,20 @@ const reportTitle =
 
     td {
       border: 1px solid #9ca3af;
-      padding: 3px 3px;
-      font-size: 7px;
+      padding: 12px 2px !important;
+      font-size: 8px;
       text-align: center;
       vertical-align: middle;
-      line-height: 1.15;
+      line-height: 1;
       word-break: break-word;
     }
 
-    tbody tr:nth-child(even) {
-      background: #f9fafb;
-    }
+    tbody  {
+      background: #f8fafc;
+    } 
 
     .sno-col {
-      width: 28px;
+      width: 20px !important;
       font-weight: bold;
     }
 
@@ -2925,21 +2945,10 @@ const reportTitle =
       background: #e5e7eb;
       font-weight: bold;
       color: #111827;
-      border-top: 2px solid #111827;
+      border-top: 2px solid black;
     }
 
-    .grand-total-row td {
-      background: #102347;
-      color: #ffffff;
-      font-weight: bold;
-      border: 1px solid #111827;
-      font-size: 8px;
-    }
 
- .report-page {
-  width: 100%;
-  padding: 4px 8px 28px 8px;
-}
 
 .report-header {
   border: 1px solid #1f2937;
@@ -2978,12 +2987,9 @@ const reportTitle =
 }
 
 .footer {
-  position: fixed;
-  left: 7mm;
-  right: 7mm;
-  bottom: 5mm;
+  margin-top: 6px;
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  grid-template-columns: 1.4fr 1fr 1fr;
   gap: 8px;
   align-items: center;
   font-size: 7px;
@@ -2991,6 +2997,7 @@ const reportTitle =
   border-top: 1px solid #9ca3af;
   padding-top: 4px;
   background: #ffffff;
+  page-break-inside: avoid;
 }
 
 .footer-item {
@@ -2999,8 +3006,74 @@ const reportTitle =
 
 .footer-item strong {
   color: #111827;
+}.print-footer-area {
+ 
+  left: 8px;
+  right: 8px;
+  
 }
 
+.blank-space {
+  margin-bottom: 6px;
+  padding: 6px;
+  text-align: center;
+  font-size: 6px;
+  font-weight: bold;
+  color: #6b7280;
+  letter-spacing: 0.4px;
+ 
+ 
+}
+
+.approval-section {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.approval-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.approval-title {
+  background: #e5e7eb;
+  color: #111827;
+  text-align: left !important;
+  font-size: 8px;
+  font-weight: bold;
+  padding: 3px !important;
+  padding-left: 4px !important;
+  border: 1px solid #111827;
+}
+
+.approval-table th {
+  background: #e5e7eb;
+  color: #111827;
+  border: 1px solid #111827;
+  padding: 3px 2px;
+  font-size: 8px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.approval-table td {
+  height: 100px !important;
+  border: 1px solid #111827;
+  padding: 3px 2px;
+  font-size: 8px !important;
+  font-weight: bold;
+  text-align: center;
+  vertical-align: bottom;
+  background: #f8fafc;
+}
+
+.approval-dept {
+  margin-top: 3px;
+  font-size: 8px;
+  color: #4b5563;
+  font-weight: bold;
+}
     @media print {
       body {
         -webkit-print-color-adjust: exact;
@@ -3022,143 +3095,164 @@ const reportTitle =
 
    
 
-    ${groupedRows
-      .map(
-        (group) => `
+${groupedRows
+  .map(
+    (group) => `
+      ${
+        groupBy?.key
+          ? `<div class="group-title">${group.group} (${group.rows.length})</div>`
+          : ""
+      }
+
+      <table>
+        <thead>
+          <tr>
+            <th class="sno-col">S/N</th>
+            ${printableCols
+              .map(
+                (col) => `
+                  <th>${col.display_name}</th>
+                `
+              )
+              .join("")}
+          </tr>
+        </thead>
+
+        <tbody>
+          ${group.rows
+            .map(
+              (row, index) => `
+                <tr>
+                  <td class="sno-col">${index + 1}</td>
+
+                  ${printableCols
+                    .map((col) => {
+                      const value = toDisplayValue(row, col);
+
+                      const isNumber =
+                        isNumericColumn(col) ||
+                        col.isDynamicCurrency;
+
+                      return `
+                        <td class="${isNumber ? "num" : ""}">
+                          ${value}
+                        </td>
+                      `;
+                    })
+                    .join("")}
+                </tr>
+              `
+            )
+            .join("")}
+
           ${
-            groupBy?.key
-              ? `<div class="group-title">${group.group} (${group.rows.length})</div>`
+            firstTotalIndex >= 0
+              ? `
+                <tr class="total-row">
+                  <td colspan="${totalColSpan}" style="text-align:right;">
+                    TOTAL
+                  </td>
+
+                  ${printableCols
+                    .slice(firstTotalIndex)
+                    .map((col) => {
+                      if (!isTotalColumn(col) && !col.isDynamicCurrency) {
+                        return `<td></td>`;
+                      }
+
+                      const total = group.rows.reduce((sum, row) => {
+                        let value = "";
+
+                        if (col.isDynamicCurrency) {
+                          value =
+                            row.currency === col.currency
+                              ? row.amount
+                              : "";
+                        } else {
+                          value = row[col.column_name];
+                        }
+
+                        return sum + toNumber(value);
+                      }, 0);
+
+                      return `
+                        <td class="num">
+                          ${
+                            total
+                              ? formatNumber(total)
+                              : "-"
+                          }
+                        </td>
+                      `;
+                    })
+                    .join("")}
+                </tr>
+              `
               : ""
           }
+        </tbody>
+      </table>
+    `
+  )
+  .join("")}
 
-          <table>
-            <thead>
-              <tr>
-                <th class="sno-col">S.No</th>
-                ${printableCols
-                  .map(
-                    (col) => `
-                      <th>${col.display_name}</th>
-                    `
-                  )
-                  .join("")}
-              </tr>
-            </thead>
+<div class="print-footer-area" style="padding-top: 2px !important;">
 
-            <tbody>
-              ${group.rows
-                .map(
-                  (row, index) => `
-                    <tr>
-                      <td class="sno-col">${index + 1}</td>
 
-                      ${printableCols
-                        .map((col) => {
-                          const value = toDisplayValue(row, col);
+  <div class="approval-section">
+    <table class="approval-table">
+      <thead>
+        <tr>
+          <th colspan="5" class="approval-title">
+            APPROVALS
+          </th>
+        </tr>
 
-                          const isNumber =
-                            isNumericColumn(col) ||
-                            col.isDynamicCurrency;
+        <tr>
+          <th>PREPARED BY</th>
+        
+          <th>VERIFIED BY</th>
+          <th>VERIFIED BY</th>
+          <th>SIGNED BY</th>
+          <th>APPROVED BY</th>
+        </tr>
+      </thead>
 
-                          return `
-                            <td class="${isNumber ? "num" : ""}">
-                              ${value}
-                            </td>
-                          `;
-                        })
-                        .join("")}
-                    </tr>
-                  `
-                )
-                .join("")}
+      <tbody>
+        <tr>
+          <td>
+            <div>${approvalData.prepared_by || "-"}</div>
+            <div class="approval-dept">IT DEPARTMENT</div>
+          </td>
 
-              ${
-                firstTotalIndex >= 0
-                  ? `
-                    <tr class="total-row">
-                      <td colspan="${totalColSpan}" style="text-align:right;">
-                        TOTAL
-                      </td>
+        
 
-                      ${printableCols
-                        .slice(firstTotalIndex)
-                        .map((col) => {
-                          if (!isTotalColumn(col) && !col.isDynamicCurrency) {
-                            return `<td></td>`;
-                          }
+          <td>
+            <div>${approvalData.verified_by_it || "-"}</div>
+            <div class="approval-dept">IT DEPARTMENT</div>
+          </td>
 
-                          const total = group.rows.reduce((sum, row) => {
-                            let value = "";
+          <td>
+            <div>${approvalData.verified_by || "-"}</div>
+            <div class="approval-dept">ACCOUNTS</div>
+          </td>
 
-                            if (col.isDynamicCurrency) {
-                              value =
-                                row.currency === col.currency
-                                  ? row.amount
-                                  : "";
-                            } else {
-                              value = row[col.column_name];
-                            }
+          <td>
+            <div>${approvalData.signed_by || "-"}</div>
+            <div class="approval-dept">FINANCE MANAGER</div>
+          </td>
 
-                            return sum + toNumber(value);
-                          }, 0);
-
-                          return `
-                            <td class="num">
-                              ${
-                                total
-                                  ? formatNumber(total)
-                                  : "-"
-                              }
-                            </td>
-                          `;
-                        })
-                        .join("")}
-                    </tr>
-                  `
-                  : ""
-              }
-            </tbody>
-          </table>
-        `
-      )
-      .join("")}
-
-    ${
-      firstTotalIndex >= 0
-        ? `
-          <table>
-            <tbody>
-              <tr class="grand-total-row">
-                <td colspan="${totalColSpan}" style="text-align:right;">
-                  GRAND TOTAL
-                </td>
-
-                ${printableCols
-                  .slice(firstTotalIndex)
-                  .map((col) => {
-                    if (!isTotalColumn(col) && !col.isDynamicCurrency) {
-                      return `<td></td>`;
-                    }
-
-                    return `
-                      <td class="num">
-                        ${
-                          grandTotals[col.column_name]
-                            ? formatNumber(grandTotals[col.column_name])
-                            : "-"
-                        }
-                      </td>
-                    `;
-                  })
-                  .join("")}
-              </tr>
-            </tbody>
-          </table>
-        `
-        : ""
-    }
-
+          <td>
+            <div>${approvalData.approved_by || "-"}</div>
+            <div class="approval-dept">FOUNDER & CEO</div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </div>
+
+</div>
+
 
  
 </body>
