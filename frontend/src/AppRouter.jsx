@@ -123,9 +123,9 @@ useEffect(() => {
         throw new Error("No access token");
       }
 
-      console.log("Access token is valid");
+     // console.log("Access token is valid");
     } catch (err) {
-      console.log("Access token missing or expired");
+     // console.log("Access token missing or expired");
 
       setInactiveMsg("Your session has expired. Logging out...");
 

@@ -18,7 +18,7 @@ export default function TableFiltersDrawer({
 }) {
   const masterList1 = [...(masterList || [])];
    // console.log("Master List in Drawer:", masterList1);
-    console.log("filters send to main table:", filters);
+   // console.log("filters send to main table:", filters);
   // ================= LOAD MASTER DATA =================
   useEffect(() => {
     if (!open) return;
@@ -113,7 +113,7 @@ const updateValues = (index, values) => {
   //   );
   // };
 
-  console.log("updated values:", filters);
+ // console.log("updated values:", filters);
 
   // ================= OPTIONS =================
 const getOptions = (master) => {

@@ -26,7 +26,7 @@ setCustomPrintHeader,
 }) {
   const [openPrinter, setOpenPrinter] = useState(false);
   const initializedRef = useRef(false);
-  console.log("company list:", companyList);
+  //console.log("company list:", companyList);
   const STORAGE_KEY = "print-company";
 
   // ================= INIT COLUMNS SAFELY =================

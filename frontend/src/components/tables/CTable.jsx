@@ -660,7 +660,7 @@ const addMasterValue = async (masterName, value) => {
   // Option 1: If you have an API endpoint to get the latest PRF number:
   const res = await getLastPRFNumber(); // implement this API if needed
   const latest = res.data?.lastPRFNumber || "IT/000336";
-  console.log("Latest PRF from API:", latest);
+  //console.log("Latest PRF from API:", latest);
   // Extract the numeric part and increment
   const match = latest.match(/IT\/(\d{6})/);
   let nextNum = 1;
@@ -2291,11 +2291,11 @@ const handleClear = async () => {
   setColumnChips([]);
 
   // 🔥 IMPORTANT: RESET DERIVED CHIPS
-  setGroupedChips({
-    search: [],
-    sort: [],
-    group: []
-  });
+  // setGroupedChips({
+  //   search: [],
+  //   sort: [],
+  //   group: []
+  // });
 
   // ================= RESET UI =================
   setOpenIndex(null);
@@ -3631,30 +3631,33 @@ const orderedVisibleColumns = useMemo(() => {
 
 
 const printableGroupedRows = React.useMemo(() => {
-  const rows = sortedAllRows; // 🔥 IMPORTANT: NOT flatGroupedRows
+  const rows = sortedAllRows.filter((row) => {
+    return !(
+      row.prf_num &&
+      row.requires_prf_form === false
+    );
+  });
 
   if (!groupBy?.key) {
     return [
       {
         group: "All Records",
-        rows
-      }
+        rows,
+      },
     ];
   }
 
   const groups = {};
 
   rows.forEach((row) => {
-    //console.log("groupby", groupBy);
-    const key = getGroupKey(row, groupBy); // 🔥 IMPORTANT
-    
+    const key = getGroupKey(row, groupBy);
+
     if (!groups[key]) groups[key] = [];
     groups[key].push(row);
   });
 
   let entries = Object.entries(groups);
 
-  // optional group sort
   entries.sort((a, b) => {
     return groupBy?.direction === "desc"
       ? String(b[0]).localeCompare(String(a[0]))
@@ -3663,13 +3666,13 @@ const printableGroupedRows = React.useMemo(() => {
 
   return entries.map(([group, rows]) => ({
     group,
-    rows
+    rows,
   }));
 }, [sortedAllRows, groupBy]);
 
 
 
-//console.log("Printable grouped rows:", printableGroupedRows);
+console.log("Printable grouped rows:", printableGroupedRows);
 
 const dragIndexRef = useRef(null);
 
@@ -4173,7 +4176,7 @@ const handleSaveViewChanges = async () => {
                hover:bg-orange-50 hover:border-orange-400 hover:text-orange-600 transition">
         Filters
    </button>
- {console.log("Filters state:", filters)}
+
 {/* <TableFiltersDrawer
   open={showFilters}
   onClose={() => setShowFilters(false)}
@@ -4732,20 +4735,20 @@ const options = Array.isArray(rawOptions)
                         <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
                             <tr>
                                <th
-  ref={snoRef}
-  className="group relative px-4 py-3 border-b text-left sticky left-0 z-40 bg-gray-100 w-16 min-w-16 border-r border-gray-200 cursor-pointer"
-  onClick={openMenuEye}
->
-  {/* TEXT (hide on hover) */}
-  <span className="group-hover:opacity-0 transition">
-    S.No
-  </span>
+                                  ref={snoRef}
+                                  className="group relative px-4 py-3 border-b text-left sticky left-0 z-40 bg-gray-100 w-16 min-w-16 border-r border-gray-200 cursor-pointer"
+                                  onClick={openMenuEye}
+                                >
+                                  {/* TEXT (hide on hover) */}
+                                  <span className="group-hover:opacity-0 transition">
+                                    S.No
+                                  </span>
 
-  {/* ICON (show only on hover) */}
- <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition text-gray-500">
-  <EyeIcon className="w-6 h-6" />
-</span>
-</th>
+                                  {/* ICON (show only on hover) */}
+                                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition text-gray-500">
+                                  <EyeIcon className="w-6 h-6" />
+                                </span>
+                                </th>
 
                                {orderedVisibleColumns.map((col, index) => (
   <th
