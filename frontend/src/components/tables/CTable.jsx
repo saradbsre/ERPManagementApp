@@ -156,6 +156,10 @@ export default function DynamicTablePage() {
     const dropdownRefs = useRef([]);
     const [selectedCompany, setSelectedCompany] = useState("");
     const [printLogo, setPrintLogo] = useState(null);
+    const [showReportHeaderModal, setShowReportHeaderModal] = useState(false);
+const [reportActionType, setReportActionType] = useState(null);
+
+const [customPrintHeader] = useState("ABDULWAHED BIN SHABIB GROUP");
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email;
     const activeUserName = activeUser?.name;
@@ -168,6 +172,7 @@ export default function DynamicTablePage() {
     const [planManuallyChanged, setPlanManuallyChanged] = useState(false);
     const [masters, setMasters] = useState([]);
     const [showTotals, setShowTotals] = useState(false);
+  
     const [groupBy, setGroupBy] = useState({
       key: null,
       direction: "asc"
@@ -178,6 +183,7 @@ export default function DynamicTablePage() {
     const currentModule =  module;
     const [savedTableColumns, setSavedTableColumns] = useState([]);
     const [printModuleName, setPrintModuleName] = useState("");
+
     const [showPlanProviderPopup, setShowPlanProviderPopup] = useState(false);
     const [pendingColumn, setPendingColumn] = useState(null);
     const [inputValues, setInputValues] = useState({});
@@ -2632,241 +2638,531 @@ const grandTotals = {};
 //console.log("Current printableGroupedRows:", printableGroupedRows);
 
 const generateTableHTML = (cols, groupedData) => {
-  //console.log("groupedData for HTML generation:", groupedData);
+  const rows = groupedData.flatMap((g) => g.rows);
 
-  // ✅ KEEP ORDER FROM UI (DO NOT regroup)
-  const rows = groupedData.flatMap(g => g.rows);
+  const groupedRows = Array.isArray(groupedData)
+    ? groupedData
+    : Object.entries(groupedData || {}).map(([group, rows]) => ({
+        group,
+        rows,
+      }));
 
-const groupedRows = Array.isArray(groupedData)
-  ? groupedData
-  : Object.entries(groupedData || {}).map(([group, rows]) => ({
-      group,
-      rows
-    }));
+  const company =
+ "ABDULWAHED BIN SHABIB GROUP";
 
-  //console.log("rows for HTML generation:", rows);
+const reportTitle =
+  printModuleName?.trim() ||
+  localStorage.getItem("print_module_name") ||
+  module?.display_name ||
+  "Report";
 
-  const company = localStorage.getItem("print-company");
+  const printedBy = activeUser?.name || activeUserEmail || "User";
 
-  // =====================================================
-  // DISTINCT CURRENCIES
-  // =====================================================
+  const printedAt = new Date().toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const toDisplayValue = (row, col) => {
+    let value = "";
+
+    if (col.isDynamicCurrency) {
+      value = row.currency === col.currency ? row.amount : "";
+    } else {
+      const raw = row[col.column_name];
+      value =
+        typeof raw === "object"
+          ? raw?.value ?? ""
+          : raw ?? "";
+    }
+
+    if (col.master === "credit_card") {
+      const last4 = String(value || "").slice(-4);
+      return last4 || "-";
+    }
+
+    if ((col.data_type || "").toLowerCase().includes("date")) {
+      return value ? formatDate(value) : "-";
+    }
+
+    if (isNumericColumn(col) || col.isDynamicCurrency) {
+      if (value === "" || value === null || value === undefined) return "-";
+
+      const numberValue = toNumber(value);
+
+      return numberValue === 0
+        ? "-"
+        : formatNumber(numberValue);
+    }
+
+    return value || "-";
+  };
+
   const currencies = [
     ...new Set(
       rows
-        .map(r => r.currency)
+        .map((r) => r.currency)
         .filter(Boolean)
-    )
+    ),
   ];
 
-  // =====================================================
-  // REMOVE amount + currency columns
-  // =====================================================
-  const normalCols = cols.filter(c => {
-    const name = c.column_name.toLowerCase();
+  const normalCols = cols.filter((c) => {
+    const name = String(c.column_name || "").toLowerCase();
     return name !== "amount" && name !== "currency";
   });
 
-  const currencyCols = currencies.map(cur => ({
+  const currencyCols = currencies.map((cur) => ({
     column_name: `amount_${cur.toLowerCase()}`,
     display_name: `AMOUNT (${cur.toUpperCase()})`,
     currency: cur,
-    isDynamicCurrency: true
+    isDynamicCurrency: true,
   }));
 
-  // =====================================================
-  // FINAL COLUMNS
-  // =====================================================
   const sortedCols = sortColumns([
     ...normalCols,
-    ...currencyCols
+    ...currencyCols,
   ]);
 
-  const firstTotalIndex = sortedCols.findIndex(isTotalColumn);
+  const printableCols = sortedCols.map((col) => ({
+    ...col,
+    display_name:
+      col.master === "credit_card"
+        ? "Payment Method"
+        : col.display_name,
+  }));
 
-  // =====================================================
-  // GRAND TOTALS
-  // =====================================================
+  const firstTotalIndex = printableCols.findIndex(isTotalColumn);
+  const totalColSpan = firstTotalIndex >= 0 ? firstTotalIndex + 1 : 1;
+
   const grandTotals = {};
 
-  sortedCols.forEach(col => {
-    if (isTotalColumn(col)) {
+  printableCols.forEach((col) => {
+    if (isTotalColumn(col) || col.isDynamicCurrency) {
       grandTotals[col.column_name] = rows.reduce((sum, row) => {
-        return sum + toNumber(row[col.column_name]);
+        let value = "";
+
+        if (col.isDynamicCurrency) {
+          value = row.currency === col.currency ? row.amount : "";
+        } else {
+          value = row[col.column_name];
+        }
+
+        return sum + toNumber(value);
       }, 0);
     }
   });
 
-  // =====================================================
-  // HELPERS
-  // =====================================================
-  const isDateColumn = (col) => {
-    const data_type = (col.data_type || "").toLowerCase();
-    return data_type.includes("date");
-  };
-
-  const totalColSpan = firstTotalIndex + 1; // +1 for S.No column
-
-  // =====================================================
-  // HTML
-  // =====================================================
   return `
-    <div style="text-align:center; margin-bottom:20px;">
+<!DOCTYPE html>
+<html>
+<head>
+  <title>${reportTitle}</title>
 
-      ${
-        company
-          ? `<h1 style="font-size:24px; margin-bottom:5px;">${company}</h1>`
-          : ``
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 8mm 7mm 10mm 7mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Times New Roman", serif;
+      color: #1f2933;
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      font-size: 9px;
+    }
+
+    .report-page {
+      width: 100%;
+      padding: 4px 8px 16px 8px;
+    }
+
+    .report-header {
+      border: 1px solid #1f2937;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+    }
+
+    .company-name {
+      text-align: center;
+      font-size: 17px;
+      font-weight: bold;
+      letter-spacing: 0.4px;
+      color: #111827;
+      margin: 0;
+      text-transform: uppercase;
+    }
+
+    .report-title {
+      text-align: center;
+      font-size: 12px;
+      font-weight: bold;
+      color: #374151;
+      margin: 4px 0 0 0;
+      text-transform: uppercase;
+    }
+
+    .report-meta {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 6px;
+      padding-top: 5px;
+      border-top: 1px solid #d1d5db;
+      font-size: 8px;
+      color: #4b5563;
+    }
+
+    .summary-box {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .summary-card {
+      flex: 1;
+      border: 1px solid #d1d5db;
+      border-radius: 5px;
+      padding: 5px 8px;
+      background: #f9fafb;
+    }
+
+    .summary-label {
+      font-size: 7px;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .summary-value {
+      font-size: 10px;
+      font-weight: bold;
+      color: #111827;
+      margin-top: 2px;
+    }
+
+    .group-title {
+      margin: 8px 0 4px 0;
+      padding: 5px 8px;
+      border-left: 4px solid #102347;
+      background: #eef2ff;
+      font-size: 10px;
+      font-weight: bold;
+      color: #102347;
+      text-transform: uppercase;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      margin-bottom: 8px;
+      page-break-inside: auto;
+    }
+
+    thead {
+      display: table-header-group;
+    }
+
+    tr {
+      page-break-inside: avoid;
+      page-break-after: auto;
+    }
+
+    th {
+      background: #102347;
+      color: #ffffff;
+      border: 1px solid #111827;
+      padding: 4px 3px;
+      font-size: 7px;
+      font-weight: bold;
+      text-align: center;
+      vertical-align: middle;
+      line-height: 1.15;
+      word-break: break-word;
+    }
+
+    td {
+      border: 1px solid #9ca3af;
+      padding: 3px 3px;
+      font-size: 7px;
+      text-align: center;
+      vertical-align: middle;
+      line-height: 1.15;
+      word-break: break-word;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #f9fafb;
+    }
+
+    .sno-col {
+      width: 28px;
+      font-weight: bold;
+    }
+
+    .num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .text-left {
+      text-align: left;
+    }
+
+    .total-row td {
+      background: #e5e7eb;
+      font-weight: bold;
+      color: #111827;
+      border-top: 2px solid #111827;
+    }
+
+    .grand-total-row td {
+      background: #102347;
+      color: #ffffff;
+      font-weight: bold;
+      border: 1px solid #111827;
+      font-size: 8px;
+    }
+
+ .report-page {
+  width: 100%;
+  padding: 4px 8px 28px 8px;
+}
+
+.report-header {
+  border: 1px solid #1f2937;
+  border-radius: 5px;
+  padding: 6px 10px;
+  margin-bottom: 7px;
+  background: #ffffff;
+}
+
+.company-name {
+  text-align: center;
+  font-size: 16px;
+  font-weight: bold;
+  letter-spacing: 0.3px;
+  color: #111827;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.report-title {
+  text-align: center;
+  font-size: 11px;
+  font-weight: bold;
+  color: #374151;
+  margin: 3px 0 0 0;
+  text-transform: uppercase;
+}
+
+.report-meta {
+  margin-top: 5px;
+  padding-top: 4px;
+  border-top: 1px solid #d1d5db;
+  font-size: 7px;
+  color: #374151;
+  text-align: right;
+}
+
+.footer {
+  position: fixed;
+  left: 7mm;
+  right: 7mm;
+  bottom: 5mm;
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+  font-size: 7px;
+  color: #374151;
+  border-top: 1px solid #9ca3af;
+  padding-top: 4px;
+  background: #ffffff;
+}
+
+.footer-item {
+  white-space: nowrap;
+}
+
+.footer-item strong {
+  color: #111827;
+}
+
+    @media print {
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
+    }
+  </style>
+</head>
 
-      <h2>${printModuleName?.trim() || module?.display_name}</h2>
+<body>
+  <div class="report-page">
 
+    <div class="report-header">
+     ${company ? `<h1 class="company-name">${company}</h1>` : ""}
+<h2 class="report-title">${reportTitle}</h2>
+
+     
     </div>
 
-    <table border="1" cellspacing="0" cellpadding="5"
-      style="width:100%; border-collapse:collapse;">
-
-      <!-- HEADER -->
-      <thead>
-        <tr>
-          <th>S.No</th>
-          ${sortedCols.map(col => `
-            <th>${col.display_name}</th>
-          `).join("")}
-        </tr>
-      </thead>
-
-      <!-- BODY -->
-     <tbody>
-
-${groupedRows.map(group => `
-
-  ${groupBy?.key ? `
-    <tr>
-      <td
-        colspan="${sortedCols.length + 1}"
-        style="
-          font-weight:bold;
-          background:#f5f5f5;
-          text-align:left;
-          padding:8px;
-        "
-      >
-        ${group.group}
-      </td>
-    </tr>
-  ` : ""}
-
-  ${group.rows.map((row, index) => `
-    <tr>
-
-      <td style="text-align:center">
-        ${index + 1}
-      </td>
-
-      ${sortedCols.map(col => {
-
-        let value = "";
-
-        if (col.isDynamicCurrency) {
-          value =
-            row.currency === col.currency
-              ? row.amount
-              : "";
-        } else {
-          const raw = row[col.column_name];
-
-          value =
-            typeof raw === "object"
-              ? raw?.value ?? ""
-              : raw ?? "";
-        }
-
-        if (col.master === "credit_card") {
-          const str = String(value);
-          const last4 = str.slice(-4);
-
-          return `
-            <td style="text-align:center">
-              **** **** **** ${last4}
-            </td>
-          `;
-        }
-
-        if (isDateColumn(col)) {
-          value = value
-            ? formatDate(value)
-            : "";
-        }
-
-        if (
-          isNumericColumn(col) ||
-          col.isDynamicCurrency
-        ) {
-          return `
-            <td style="text-align:right">
-              ${
-                value === ""
-                  ? ""
-                  : toNumber(value) === 0
-                    ? "-"
-                    : formatNumber(value)
-              }
-            </td>
-          `;
-        }
-
-        return `
-          <td style="text-align:center">
-            ${value || "-"}
-          </td>
-        `;
-
-      }).join("")}
-
-    </tr>
-  `).join("")}
-
-`).join("")}
-
-
-
-<tr style="font-weight:bold;background:#e5e5e5;">
-
-  <td colspan="${totalColSpan}" style="
-      text-align:right;
-      padding-right:10px;
-      font-weight:bold;
-  ">
-     TOTAL 
-  </td>
-
-  ${sortedCols
-    .slice(firstTotalIndex)
-    .map(col => {
-      if (!isTotalColumn(col)) {
-        return `<td></td>`;
-      }
-
-      return `
-        <td style="text-align:right;font-weight:bold;">
-          ${
-            grandTotals[col.column_name]
-              ? formatNumber(grandTotals[col.column_name])
-              : "-"
-          }
-        </td>
-      `;
-    })
-    .join("")}
-
-</tr>
-
-</tbody>
-
-    </table>
-
    
+
+    ${groupedRows
+      .map(
+        (group) => `
+          ${
+            groupBy?.key
+              ? `<div class="group-title">${group.group} (${group.rows.length})</div>`
+              : ""
+          }
+
+          <table>
+            <thead>
+              <tr>
+                <th class="sno-col">S.No</th>
+                ${printableCols
+                  .map(
+                    (col) => `
+                      <th>${col.display_name}</th>
+                    `
+                  )
+                  .join("")}
+              </tr>
+            </thead>
+
+            <tbody>
+              ${group.rows
+                .map(
+                  (row, index) => `
+                    <tr>
+                      <td class="sno-col">${index + 1}</td>
+
+                      ${printableCols
+                        .map((col) => {
+                          const value = toDisplayValue(row, col);
+
+                          const isNumber =
+                            isNumericColumn(col) ||
+                            col.isDynamicCurrency;
+
+                          return `
+                            <td class="${isNumber ? "num" : ""}">
+                              ${value}
+                            </td>
+                          `;
+                        })
+                        .join("")}
+                    </tr>
+                  `
+                )
+                .join("")}
+
+              ${
+                firstTotalIndex >= 0
+                  ? `
+                    <tr class="total-row">
+                      <td colspan="${totalColSpan}" style="text-align:right;">
+                        TOTAL
+                      </td>
+
+                      ${printableCols
+                        .slice(firstTotalIndex)
+                        .map((col) => {
+                          if (!isTotalColumn(col) && !col.isDynamicCurrency) {
+                            return `<td></td>`;
+                          }
+
+                          const total = group.rows.reduce((sum, row) => {
+                            let value = "";
+
+                            if (col.isDynamicCurrency) {
+                              value =
+                                row.currency === col.currency
+                                  ? row.amount
+                                  : "";
+                            } else {
+                              value = row[col.column_name];
+                            }
+
+                            return sum + toNumber(value);
+                          }, 0);
+
+                          return `
+                            <td class="num">
+                              ${
+                                total
+                                  ? formatNumber(total)
+                                  : "-"
+                              }
+                            </td>
+                          `;
+                        })
+                        .join("")}
+                    </tr>
+                  `
+                  : ""
+              }
+            </tbody>
+          </table>
+        `
+      )
+      .join("")}
+
+    ${
+      firstTotalIndex >= 0
+        ? `
+          <table>
+            <tbody>
+              <tr class="grand-total-row">
+                <td colspan="${totalColSpan}" style="text-align:right;">
+                  GRAND TOTAL
+                </td>
+
+                ${printableCols
+                  .slice(firstTotalIndex)
+                  .map((col) => {
+                    if (!isTotalColumn(col) && !col.isDynamicCurrency) {
+                      return `<td></td>`;
+                    }
+
+                    return `
+                      <td class="num">
+                        ${
+                          grandTotals[col.column_name]
+                            ? formatNumber(grandTotals[col.column_name])
+                            : "-"
+                        }
+                      </td>
+                    `;
+                  })
+                  .join("")}
+              </tr>
+            </tbody>
+          </table>
+        `
+        : ""
+    }
+
+  </div>
+
+ 
+</body>
+</html>
   `;
 };
 
@@ -3638,10 +3934,22 @@ const handleSaveViewChanges = async () => {
     + New
   </PermissionButton>
 
-  <PermissionButton
+  {/* <PermissionButton
   user={activeUser}
   permission="print"
   onClick={handlePrint}
+  className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
+             hover:bg-gray-100 hover:border-gray-500 transition"
+>
+  Print
+</PermissionButton> */}
+<PermissionButton
+  user={activeUser}
+  permission="print"
+  onClick={() => {
+    setReportActionType("print");
+    setShowReportHeaderModal(true);
+  }}
   className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
              hover:bg-gray-100 hover:border-gray-500 transition"
 >
@@ -3651,7 +3959,11 @@ const handleSaveViewChanges = async () => {
   <PermissionButton
     user={activeUser}
     permission="export"
-    onClick={handleExcel}
+    // onClick={handleExcel}
+    onClick={() => {
+  setReportActionType("excel");
+  setShowReportHeaderModal(true);
+}}
     className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
                hover:bg-green-50 hover:border-green-500 hover:text-green-600 transition"
   >
@@ -3661,7 +3973,11 @@ const handleSaveViewChanges = async () => {
   <PermissionButton
     user={activeUser}
     permission="export"
-    onClick={handlePdf}
+    // onClick={handlePdf}
+    onClick={() => {
+  setReportActionType("pdf");
+  setShowReportHeaderModal(true);
+}}
     className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
                hover:bg-red-50 hover:border-red-400 hover:text-red-600 transition"
   >
@@ -3730,6 +4046,9 @@ const handleSaveViewChanges = async () => {
   selectedCompany={selectedCompany}
   setSelectedCompany={setSelectedCompany}
   companyList={company}
+
+    customPrintHeader={customPrintHeader}
+  // setCustomPrintHeader={setCustomPrintHeader}
 
   // Sub Header
   printModuleName={printModuleName}
@@ -4906,12 +5225,9 @@ onDrop={() => handleDrop(col.column_name)}
                                 : rawValue ?? "";
 
                             // ================= MASK DISPLAY =================
-                            if (col.master === "credit_card" && value) {
-                              const raw = String(value);
-                              const last4 = raw.slice(-4);
-
-                              value = `**** **** **** ${last4}`;
-                            }
+                          if (col.master === "credit_card" && value) {
+  value = String(value).slice(-4);
+}
                            if (col.column_name === "prf_num") {
 
                               const val = row[col.column_name];
@@ -5491,16 +5807,10 @@ onDrop={() => handleDrop(col.column_name)}
                                     }
 
                                     // ================= CREDIT CARD =================
-                                    if (
-                                      col.master === "credit_card"
-                                    ) {
-                                      const raw = String(value ?? "");
-                                      const last4 = raw.slice(-4);
-
-                                      return raw
-                                        ? `**** **** **** ${last4}`
-                                        : "-";
-                                    }
+                                    if (col.master === "credit_card") {
+  const raw = String(value ?? "");
+  return raw ? raw.slice(-4) : "-";
+}
 
                                     // ================= NORMAL =================
                                     return typeof value === "object"
@@ -6483,6 +6793,97 @@ onDrop={() => handleDrop(col.column_name)}
   onClose={() => setConfirmOpen(false)}
   onConfirm={confirmData.onConfirm}
 />
+{showReportHeaderModal && (
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
+    <div className="w-[520px] rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden">
+
+      {/* HEADER */}
+      <div className="px-6 py-4 border-b bg-gray-50">
+        <h2 className="text-lg font-semibold text-gray-800">
+          Report Header Settings
+        </h2>
+        <p className="text-sm text-gray-500 mt-1">
+          This header will be used for Print, Excel and PDF.
+        </p>
+      </div>
+
+      {/* BODY */}
+   {/* BODY */}
+<div className="p-6 space-y-4">
+
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-1">
+      Main Header
+    </label>
+
+    <input
+      type="text"
+      value="ABDULWAHED BIN SHABIB GROUP"
+      readOnly
+      className="w-full border rounded-lg px-3 py-2 text-sm bg-gray-100 text-gray-600 cursor-not-allowed"
+    />
+  </div>
+
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-1">
+      Sub Header
+    </label>
+
+    <input
+      type="text"
+      value={printModuleName}
+      onChange={(e) => setPrintModuleName(e.target.value)}
+      placeholder="Enter report title"
+      className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+    />
+  </div>
+
+</div>
+
+      {/* FOOTER */}
+      <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3">
+
+        <button
+          onClick={() => {
+            setShowReportHeaderModal(false);
+            setReportActionType(null);
+          }}
+          className="px-4 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-100"
+        >
+          Cancel
+        </button>
+
+        <button
+          onClick={() => {
+          localStorage.setItem("print_custom_header", "ABDULWAHED BIN SHABIB GROUP");
+localStorage.setItem("print_module_name", printModuleName || "");
+
+            setShowReportHeaderModal(false);
+
+            if (reportActionType === "print") {
+              handlePrint();
+            }
+
+            if (reportActionType === "excel") {
+              handleExcel();
+            }
+
+            if (reportActionType === "pdf") {
+              handlePdf();
+            }
+
+            setReportActionType(null);
+          }}
+          className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700"
+        >
+          Continue
+        </button>
+
+      </div>
+
+    </div>
+  </div>
+)}
 {showPreview && (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
 
