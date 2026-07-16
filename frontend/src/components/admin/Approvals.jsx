@@ -10,7 +10,7 @@ export default function Approvals() {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [requestType, setRequestType] = useState("signup");
-
+  const isMobile = window.innerWidth < 768;
   const activeUser = JSON.parse(localStorage.getItem("user"));
   const activeUserEmail = activeUser?.email;
 
@@ -150,83 +150,150 @@ export default function Approvals() {
       </div>
 
       {/* TABLE */}
-      <div className="bg-white rounded-xl shadow overflow-visible">
-        <table className="w-full text-sm table-fixed">
+      {!isMobile ? (
+  /* ================= DESKTOP TABLE ================= */
+  <div className="bg-white rounded-xl shadow overflow-visible">
+    <table className="w-full text-sm table-fixed">
 
-          <thead className="bg-gray-50 text-gray-500">
-            <tr>
-              <th className="p-4 text-left">NAME</th>
-              <th className="p-4 text-left">EMAIL</th>
+      <thead className="bg-gray-50 text-gray-500">
+        <tr>
+          <th className="p-4 text-left">NAME</th>
+          <th className="p-4 text-left">EMAIL</th>
 
-              {requestType === "signup" ? (
-                <th className="p-4 text-left">ROLE</th>
-              ) : (
-                <th className="p-4 text-left">STATUS</th>
-              )}
+          {requestType === "signup" ? (
+            <th className="p-4 text-left">ROLE</th>
+          ) : (
+            <th className="p-4 text-left">STATUS</th>
+          )}
 
-              <th className="p-4 text-left">REQUEST STATUS</th>
-              <th className="p-4 text-right">ACTIONS</th>
-            </tr>
-          </thead>
+          <th className="p-4 text-left">REQUEST STATUS</th>
+          <th className="p-4 text-right">ACTIONS</th>
+        </tr>
+      </thead>
 
-          <tbody>
-            {filteredUsers.map((user) => (
-              <tr key={user.id} className="border-t hover:bg-gray-50">
+      <tbody>
+        {filteredUsers.map((user) => (
+          <tr key={user.id} className="border-t hover:bg-gray-50">
+            <td className="p-4">{user.name}</td>
 
-                <td className="p-4">{user.name}</td>
-                <td className="p-4">{user.email}</td>
+            <td className="p-4">{user.email}</td>
 
-                <td className="p-4">
-                  {requestType === "signup"
-                    ? user.role
-                    : user.temp_status || "Requested"}
-                </td>
+            <td className="p-4">
+              {requestType === "signup"
+                ? user.role
+                : user.temp_status || "Requested"}
+            </td>
 
-                <td className="p-4">
-  <span
-    className={`px-3 py-1 text-xs rounded-full font-semibold
-      ${
-        user.is_rejected
-          ? "bg-red-50 text-red-600"
-          : user.confirm
-            ? "bg-green-50 text-green-600"
-            : "bg-yellow-50 text-yellow-600"
-      }`}
-  >
-    {user.is_rejected
-      ? "Rejected"
-      : user.confirm
-        ? "Approved"
-        : "Pending"}
-  </span>
-</td>
+            <td className="p-4">
+              <span
+                className={`px-3 py-1 text-xs rounded-full font-semibold
+                  ${
+                    user.is_rejected
+                      ? "bg-red-50 text-red-600"
+                      : user.confirm
+                      ? "bg-green-50 text-green-600"
+                      : "bg-yellow-50 text-yellow-600"
+                  }`}
+              >
+                {user.is_rejected
+                  ? "Rejected"
+                  : user.confirm
+                  ? "Approved"
+                  : "Pending"}
+              </span>
+            </td>
 
-                <td className="p-4 text-right">
-                  <div className="flex justify-end gap-2">
+            <td className="p-4 text-right">
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => handleApprove(user)}
+                  className="px-3 py-1 text-green-600 border border-green-300 rounded hover:bg-green-50"
+                >
+                  Approve
+                </button>
 
-                    <button
-                      onClick={() => handleApprove(user)}
-                      className="px-3 py-1 text-green-600 border border-green-300 rounded hover:bg-green-50"
-                    >
-                      Approve
-                    </button>
+                <button
+                  onClick={() => handleToggleStatus(user, "cancel")}
+                  className="px-3 py-1 text-red-600 border border-red-300 rounded hover:bg-red-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
 
-                    <button
-                      onClick={() => handleToggleStatus(user, "cancel")}
-                      className="px-3 py-1 text-red-600 border border-red-300 rounded hover:bg-red-50"
-                    >
-                      Cancel
-                    </button>
+    </table>
+  </div>
+) : (
+  /* ================= MOBILE CARDS ================= */
+  <div className="space-y-4">
+    {filteredUsers.map((user) => (
+      <div
+        key={user.id}
+        className="bg-white rounded-2xl shadow p-4 border"
+      >
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="font-semibold text-base">{user.name}</h3>
 
-                  </div>
-                </td>
+            <p className="text-sm text-gray-500 break-all">
+              {user.email}
+            </p>
+          </div>
 
-              </tr>
-            ))}
-          </tbody>
+          <span
+            className={`px-2 py-1 rounded-full text-xs font-semibold
+              ${
+                user.is_rejected
+                  ? "bg-red-50 text-red-600"
+                  : user.confirm
+                  ? "bg-green-50 text-green-600"
+                  : "bg-yellow-50 text-yellow-600"
+              }`}
+          >
+            {user.is_rejected
+              ? "Rejected"
+              : user.confirm
+              ? "Approved"
+              : "Pending"}
+          </span>
+        </div>
 
-        </table>
+        <div className="mt-4 text-sm space-y-2">
+          <div className="flex justify-between">
+            <span className="text-gray-500">
+              {requestType === "signup" ? "Role" : "Status"}
+            </span>
+
+            <span className="font-medium">
+              {requestType === "signup"
+                ? user.role
+                : user.temp_status || "Requested"}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mt-5">
+          <button
+            onClick={() => handleApprove(user)}
+            className="py-2 rounded-lg bg-green-600 text-white font-medium"
+          >
+            Approve
+          </button>
+
+          <button
+            onClick={() => handleToggleStatus(user, "cancel")}
+            className="py-2 rounded-lg bg-red-600 text-white font-medium"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
+    ))}
+  </div>
+)}
 
       {/* MODAL (ONLY FOR FORGOT PASSWORD) */}
       {showModal && (

@@ -43,8 +43,8 @@ export default function Header() {
     name?.charAt(0)?.toUpperCase() || "U";
 
   return (
-    <div className="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-end px-6 sticky top-0 z-50" style={{ display:"none" }}>
-
+    // <div className="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-end px-6 sticky top-0 z-50" style={{ display:"none" }}>
+      <div className="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-end px-6 sticky top-0 z-30 md:z-50">
       {/* PROFILE DROPDOWN */}
       <div className="relative" style={{ display:"none" }}>
 

@@ -390,7 +390,7 @@ const selectedTransactionType =
     );
   }) || null;
 
-console.log("Selected Transaction Type:", selectedTransactionType);
+//console.log("Selected Transaction Type:", selectedTransactionType);
 const selectedProductType = Array.isArray(productTypes) && header.prdtype_code ? productTypes.find(
     (pt) => (pt.prdtype_code || "").toString().trim().toUpperCase() === header.prdtype_code.toString().trim().toUpperCase()
 ) : null;
@@ -663,10 +663,8 @@ const TotalICANN = headers?.reduce((sum, item) => {
 }, 0);
 const grandTotal = grand + TotalICANN;
 // At the top, after expiryDate:
-const startDate = header.date
-  ? formatDateLong(header.date)
-  : details?.[0]?.doc_date
-    ? formatDateLong(details[0].doc_date)
+const startDate = details.period_start
+    ? formatDateLong(details.period_start)
     : null;
 
 const expiryDate = header?.expiry_date

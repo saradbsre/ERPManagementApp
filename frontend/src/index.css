@@ -41,3 +41,12 @@ input:checked + .slider:before {
 body {
   font-family: "Times New Roman", serif;
 }
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: "Times New Roman", serif;
+}

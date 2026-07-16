@@ -82,7 +82,7 @@ export default function Logs() {
   const [userSearch, setUserSearch] = useState("");
   const [actionSearch, setActionSearch] = useState("");
   const [moduleSearch, setModuleSearch] = useState("");
-
+  const [expandedLog, setExpandedLog] = useState(null);
   // Set default date range and fetch logs on mount
   useEffect(() => {
     const today = new Date();
@@ -137,72 +137,250 @@ export default function Logs() {
       ) : (
         <>
           {/* TEXT FILTERS */}
-          <div style={filterRow}>
-            <input
-              placeholder="Filter user"
-              value={userSearch}
-              onChange={(e) => setUserSearch(e.target.value)}
-              style={input}
-            />
-            <input
-              placeholder="Filter action"
-              value={actionSearch}
-              onChange={(e) => setActionSearch(e.target.value)}
-              style={input}
-            />
-            <input
-              placeholder="Filter module"
-              value={moduleSearch}
-              onChange={(e) => setModuleSearch(e.target.value)}
-              style={input}
-            />
-            <DateTimeRangeFilter
-              onApply={handleDateChange}
-            />
-          </div>
+        <div
+  className="
+    flex 
+    flex-col 
+    sm:flex-row 
+    gap-3 
+    mb-4
+    w-full
+  "
+>
+
+  <input
+    placeholder="Filter user"
+    value={userSearch}
+    onChange={(e) => setUserSearch(e.target.value)}
+    className="
+      w-full 
+      sm:w-56 
+      px-3 
+      py-2 
+      border 
+      rounded-lg
+      focus:outline-none
+      focus:ring-2
+      focus:ring-blue-400
+    "
+  />
+
+
+  <input
+    placeholder="Filter action"
+    value={actionSearch}
+    onChange={(e) => setActionSearch(e.target.value)}
+    className="
+      w-full 
+      sm:w-56 
+      px-3 
+      py-2 
+      border 
+      rounded-lg
+      focus:outline-none
+      focus:ring-2
+      focus:ring-blue-400
+    "
+  />
+
+
+  <input
+    placeholder="Filter module"
+    value={moduleSearch}
+    onChange={(e) => setModuleSearch(e.target.value)}
+    className="
+      w-full 
+      sm:w-56 
+      px-3 
+      py-2 
+      border 
+      rounded-lg
+      focus:outline-none
+      focus:ring-2
+      focus:ring-blue-400
+    "
+  />
+
+
+  <div className="w-full sm:w-auto">
+    <DateTimeRangeFilter
+      onApply={handleDateChange}
+    />
+  </div>
+
+
+</div>
 
           {/* TABLE */}
-          <div style={card}>
-            <div style={headerRow}>
-              <div>User</div>
-              <div>Action</div>
-              <div>Date</div>
-              <div>Module</div>
-              <div>Status</div>
-              <div>Message</div>
+          {/* DESKTOP TABLE */}
+<div className="hidden md:block" style={card}>
+  <div style={headerRow}>
+    <div>User</div>
+    <div>Action</div>
+    <div>Date</div>
+    <div>Module</div>
+    <div>Status</div>
+    <div>Message</div>
+  </div>
+
+  {filtered.map((log, i) => (
+    <div key={i} style={row}>
+      <div>{log.userid}</div>
+
+      <div>
+        <span
+          style={{
+            ...chip,
+            background: getActionColor(log.action) + "20",
+            color: getActionColor(log.action),
+          }}
+        >
+          {formatAction(log.action)}
+        </span>
+      </div>
+
+      <div>{formatDateTime(log.sysdate)}</div>
+
+      <div>{log.module_name}</div>
+
+      <div>
+        <span
+          style={{
+            ...chip,
+            background: getStatusColor(log.status) + "20",
+            color: getStatusColor(log.status),
+          }}
+        >
+          {log.status}
+        </span>
+      </div>
+
+      <div>{log.message}</div>
+
+    </div>
+  ))}
+</div>
+{/* MOBILE AUDIT LOG CARDS */}
+<div className="md:hidden space-y-3">
+
+  {filtered.map((log, i) => (
+
+    <div
+      key={i}
+      className="bg-white rounded-xl shadow border overflow-hidden"
+    >
+
+      {/* Header */}
+      <button
+        className="w-full flex justify-between items-center p-4"
+        onClick={() =>
+          setExpandedLog(
+            expandedLog === i ? null : i
+          )
+        }
+      >
+
+        <div className="text-left">
+
+          <div className="font-semibold">
+            {log.userid}
+          </div>
+
+          <div className="text-xs text-gray-500">
+            {formatDateTime(log.sysdate)}
+          </div>
+
+        </div>
+
+
+        <span className="text-xl text-gray-500">
+          {expandedLog === i ? "−" : "+"}
+        </span>
+
+      </button>
+
+
+
+      {/* Drawer */}
+      {expandedLog === i && (
+
+        <div className="border-t bg-gray-50 p-4 space-y-3">
+
+
+          <div className="flex justify-between">
+            <span className="font-medium">
+              Action
+            </span>
+
+            <span
+              style={{
+                ...chip,
+                background:
+                  getActionColor(log.action) + "20",
+                color:
+                  getActionColor(log.action),
+              }}
+            >
+              {formatAction(log.action)}
+            </span>
+
+          </div>
+
+
+
+          <div className="flex justify-between">
+            <span className="font-medium">
+              Module
+            </span>
+
+            <span>
+              {log.module_name}
+            </span>
+          </div>
+
+
+
+          <div className="flex justify-between">
+            <span className="font-medium">
+              Status
+            </span>
+
+            <span
+              style={{
+                ...chip,
+                background:
+                  getStatusColor(log.status) + "20",
+                color:
+                  getStatusColor(log.status),
+              }}
+            >
+              {log.status}
+            </span>
+
+          </div>
+
+
+
+          <div>
+            <div className="font-medium mb-1">
+              Message
             </div>
 
-            {filtered.map((log, i) => (
-              <div key={i} style={row}>
-                <div>{log.userid}</div>
-                <div>
-                  <span
-                    style={{
-                      ...chip,
-                      background: getActionColor(log.action) + "20",
-                      color: getActionColor(log.action),
-                    }}
-                  >
-                    {formatAction(log.action)}
-                  </span>
-                </div>
-                <div>{formatDateTime(log.sysdate)}</div>
-                <div>{log.module_name}</div>
-                <div>
-                  <span
-                    style={{
-                      ...chip,
-                      background: getStatusColor(log.status) + "20",
-                      color: getStatusColor(log.status),
-                    }}
-                  >
-                    {log.status}
-                  </span>
-                </div>
-                <div>{log.message}</div>
-              </div>
-            ))}
+            <div className="bg-white rounded p-3 text-sm">
+              {log.message}
+            </div>
           </div>
+
+
+        </div>
+
+      )}
+
+    </div>
+
+  ))}
+
+</div>
         </>
       )}
     </div>

@@ -48,15 +48,15 @@ export default function PDFUpload() {
 const [files, setFiles] = useState([]);
 const [extractedData, setExtractedData] = useState(null); // for single invoice
 const [extractedInvoices, setExtractedInvoices] = useState([]); // for multiple invoices
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ type: "", text: "" });
+const [loading, setLoading] = useState(false);
+const [message, setMessage] = useState({ type: "", text: "" });
 const [dropdownPosition, setDropdownPosition] = useState({
   top: 0,
   left: 0,
   width: 260,
 });
-  const [pdfText, setPdfText] = useState("");
-  const [invoiceRows, setInvoiceRows] = useState([]);
+const [pdfText, setPdfText] = useState("");
+const [invoiceRows, setInvoiceRows] = useState([]);
 const [vendors, setVendors] = useState([]);
 const [currencies, setCurrencies] = useState([]);
 const [transactionTypes, setTransactionTypes] = useState([]);
@@ -73,12 +73,21 @@ const [vatPercent, setVatPercent] = useState(0);
 const [costCenters, setCostCenters] = useState([]);
 const [openDropdown, setOpenDropdown] = useState(null);
 const [dropdownSearch, setDropdownSearch] = useState("");
+const [validationErrors, setValidationErrors] = useState({});
 useEffect(() => {
   loadDropdownData();
 }, []);
+
+const rightAlignedColumns = [
+  "amount",
+  "vatAmount",
+  "totalAmount",
+  "totalAmountAED",
+];
+
 useEffect(() => {
   if (!invoiceRows.length) return;
-
+  
   const productOptions = getDropdownOptions({ source: "products" });
   const vendorOptions = getDropdownOptions({ source: "vendors" });
   const currencyOptions = getDropdownOptions({ source: "currencies" });
@@ -97,6 +106,8 @@ useEffect(() => {
 
   setInvoiceRows((prevRows) =>
     prevRows.map((row) => {
+      console.log("billing company from rows:", prevRows.map(row => row.billingCompany));
+      console.log("billing company from companies:", companyOptions);
       const matchedProduct = findMatchingOption(row.product, productOptions);
       const matchedVendor = findMatchingOption(row.vendorName, vendorOptions);
       const matchedCurrency = findMatchingOption(row.currency, currencyOptions);
@@ -108,7 +119,7 @@ useEffect(() => {
         product: matchedProduct || row.product,
         vendorName: matchedVendor || row.vendorName,
         currency: matchedCurrency || row.currency,
-        billingCompany: matchedCompany || row.billingCompany,
+        billingCompany: matchedCompany || "",
         transactionType: matchedTransactionType || row.transactionType,
       };
 
@@ -451,9 +462,10 @@ const processSinglePdfFile = async (pdfFile, index, totalFiles) => {
     }
 
     const sortedResults = sortInvoicesByNumber(results);
-
+    //console.log("Sorted invoice results:", sortedResults);
     setExtractedInvoices(sortedResults);
 const editableRows = buildEditableInvoiceRows(sortedResults);
+//console.log("Editable invoice rows:", editableRows);
 setInvoiceRows(editableRows);
     if (sortedResults.length === 1) {
       setExtractedData(sortedResults[0]);
@@ -636,7 +648,7 @@ const buildEditableInvoiceRows = (invoices) => {
           productType: invoice.productType || "",
           plan: invoice.plan || "",
           department: invoice.department || "",
-          billingCompany: invoice.billingCompany || invoice.billingAddress || "",
+          billingCompany: invoice.billingCompany || "",
           term: invoice.term || "",
           creditCard: invoice.creditCard || "",
           currency: invoice.currency || "",
@@ -668,7 +680,7 @@ const buildEditableInvoiceRows = (invoices) => {
   productType: invoice.productType || "",
   plan: invoice.plan || "",
   department: invoice.department || "",
-  billingCompany: invoice.billingCompany || invoice.billingAddress || "",
+  billingCompany: invoice.billingCompany || "",
   term: invoice.term || "",
   creditCard: invoice.creditCard || "",
   currency: invoice.currency || "",
@@ -684,7 +696,33 @@ const buildEditableInvoiceRows = (invoices) => {
 
   return rows;
 };
+
+const handleCheckboxChange = (rowIndex, field, checked) => {
+  setInvoiceRows((prevRows) =>
+    prevRows.map((row, index) =>
+      index === rowIndex
+        ? { ...row, [field]: checked }
+        : row
+    )
+  );
+};
+
 const handleInvoiceCellChange = (rowIndex, field, value) => {
+  // Clear validation error for this field
+  setValidationErrors((prev) => {
+    const next = { ...prev };
+
+    if (next[rowIndex]) {
+      delete next[rowIndex][field];
+
+      if (Object.keys(next[rowIndex]).length === 0) {
+        delete next[rowIndex];
+      }
+    }
+
+    return next;
+  });
+
   if (field === "product") {
     handleProductChange(rowIndex, value);
     return;
@@ -715,6 +753,54 @@ const handleInvoiceCellChange = (rowIndex, field, value) => {
   });
 };
 
+const validateRows = () => {
+  const errors = {};
+
+  invoiceRows.forEach((row, rowIndex) => {
+    const rowErrors = {};
+
+    // Product
+    if (!row.product || !isValidProduct(row.product))
+      rowErrors.product = true;
+
+    // Required only
+    if (!row.invoiceDate)
+      rowErrors.invoiceDate = true;
+
+    // Vendor
+    if (!row.vendorName || !isValidVendor(row.vendorName))
+      rowErrors.vendorName = true;
+
+    // Company
+    if (!row.billingCompany || !isValidCompany(row.billingCompany))
+      rowErrors.billingCompany = true;
+
+    // Currency
+    if (!row.currency)
+      rowErrors.currency = true;
+
+    // Amount
+    if (!row.amount || Number(row.amount) <= 0)
+      rowErrors.amount = true;
+
+    // Transaction Type
+    if ( !row.transactionType )
+      rowErrors.transactionType = true;
+
+    if (Object.keys(rowErrors).length) {
+      // console.log("Row", rowIndex, row);
+      // console.log("Errors", rowErrors);
+
+      errors[rowIndex] = rowErrors;
+    }
+  });
+
+  console.log("Validation Errors:", errors);
+
+  setValidationErrors(errors);
+
+  return Object.keys(errors).length === 0;
+};
 
 
 const normalizeText = (value) => {
@@ -1109,151 +1195,185 @@ const getFilteredOptions = (options) => {
 };
 const renderEditableCell = (row, rowIndex, column) => {
   const value = row[column.key] ?? "";
+  const hasError = validationErrors[rowIndex]?.[column.key];
 
-if (column.type === "dropdown") {
-  const options = getDropdownOptions(column);
-  const mappedValue = findMatchingOption(value, options);
+  if (column.type === "dropdown") {
+    const options = getDropdownOptions(column);
+    const mappedValue = findMatchingOption(value, options);
 
-  const selectedOption =
-    options.find((option) => String(option.value) === String(mappedValue)) ||
-    null;
+    const selectedOption =
+      options.find((option) => String(option.value) === String(mappedValue)) ||
+      null;
 
-  const dropdownKey = `${rowIndex}-${column.key}`;
-  const isOpen = openDropdown === dropdownKey;
-  const filteredOptions = getFilteredOptions(options);
+    const dropdownKey = `${rowIndex}-${column.key}`;
+    const isOpen = openDropdown === dropdownKey;
+    const filteredOptions = getFilteredOptions(options);
+    const isRightAligned = rightAlignedColumns.includes(column.key);
 
-  return (
-    <div className="relative w-full h-full">
-      <button
-        type="button"
-        onClick={(e) => {
-          const rect = e.currentTarget.getBoundingClientRect();
+    return (
+      <div className="relative w-full h-full">
+        <button
+          type="button"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
 
-          setDropdownPosition({
-            top: rect.bottom + 4,
-            left: rect.left,
-            width: Math.max(rect.width, 260),
-          });
+            setDropdownPosition({
+              top: rect.bottom + 4,
+              left: rect.left,
+              width: Math.max(rect.width, 260),
+            });
 
-          setOpenDropdown(isOpen ? null : dropdownKey);
-          setDropdownSearch("");
-        }}
-        className="
-          w-full h-full min-h-[42px]
-          bg-transparent
-          border-0 outline-none
-          px-3 py-2
-          text-xs text-gray-900
-          text-left
-          flex items-center justify-between
-          focus:bg-blue-50
-          focus:ring-1 focus:ring-blue-400
-        "
-      >
-        <span className="truncate">
-          {selectedOption?.label || "Select"}
-        </span>
-
-       <span className="inline-flex items-center justify-center px-2 py-1 text-gray-600">
-  <ChevronDown size={16} />
-</span>
-      </button>
-
-      {isOpen && (
-        <div
-          className="
-            fixed
-            bg-white
-            border border-gray-300
-            rounded-md
-            shadow-lg
-            z-[99999]
-            overflow-hidden
-          "
-          style={{
-            top: `${dropdownPosition.top}px`,
-            left: `${dropdownPosition.left}px`,
-            width: `${dropdownPosition.width}px`,
+            setOpenDropdown(isOpen ? null : dropdownKey);
+            setDropdownSearch("");
           }}
+          className={`
+            w-full h-full min-h-[42px]
+            bg-transparent
+            outline-none
+            px-3 py-2
+            text-xs text-gray-900
+            ${isRightAligned ? "text-right" : "text-left"}
+            flex items-center justify-between
+            ${
+              hasError
+                ? " text-red-500 bg-red-50"
+                : "border-0 focus:bg-blue-50 focus:ring-1 focus:ring-blue-400"
+            }
+          `}
         >
-          <input
-            type="text"
-            value={dropdownSearch}
-            onChange={(e) => setDropdownSearch(e.target.value)}
-            placeholder="Search..."
-            autoFocus
+          <span
+  className={`truncate flex-1 ${
+    isRightAligned ? "text-right" : "text-left"
+  }`}
+>
+            {selectedOption?.label || "Select"}
+          </span>
+
+          <span className="inline-flex items-center justify-center px-2 py-1 text-gray-600">
+            <ChevronDown size={16} />
+          </span>
+        </button>
+
+        {isOpen && (
+          <div
             className="
-              w-full
-              px-3 py-2
-              text-xs
-              border-0 border-b border-gray-200
-              outline-none
-              focus:ring-0
+              fixed
+              bg-white
+              border border-gray-300
+              rounded-md
+              shadow-lg
+              z-[99999]
+              overflow-hidden
             "
-          />
+            style={{
+              top: `${dropdownPosition.top}px`,
+              left: `${dropdownPosition.left}px`,
+              width: `${dropdownPosition.width}px`,
+            }}
+          >
+            <input
+              type="text"
+              value={dropdownSearch}
+              onChange={(e) => setDropdownSearch(e.target.value)}
+              placeholder="Search..."
+              autoFocus
+              className="
+                w-full
+                px-3 py-2
+                text-xs
+                border-0 border-b border-gray-200
+                outline-none
+                focus:ring-0
+              "
+            />
 
-          <div className="max-h-[220px] overflow-y-auto">
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => {
-                    handleInvoiceCellChange(
-                      rowIndex,
-                      column.key,
-                      option.value
-                    );
-                    setOpenDropdown(null);
-                    setDropdownSearch("");
-                  }}
-                  className={`
-                    w-full
-                    px-3 py-2
-                    text-left
-                    text-xs
-                    hover:bg-gray-100
-                    ${
-                      String(option.value) === String(mappedValue)
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-gray-800"
-                    }
-                  `}
-                >
-                  {option.label}
-                </button>
-              ))
-            ) : (
-              <div className="px-3 py-2 text-xs text-gray-500">
-                No results found
-              </div>
-            )}
+            <div className="max-h-[220px] overflow-y-auto">
+              {filteredOptions.length > 0 ? (
+                filteredOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      handleInvoiceCellChange(
+                        rowIndex,
+                        column.key,
+                        option.value
+                      );
+                      setOpenDropdown(null);
+                      setDropdownSearch("");
+                    }}
+                    className={`
+                      w-full
+                      px-3 py-2
+                      text-left
+                      text-xs
+                      hover:bg-gray-100
+                      ${
+                        String(option.value) === String(mappedValue)
+                          ? "bg-blue-50 text-blue-700"
+                          : "text-gray-800"
+                      }
+                    `}
+                  >
+                    {option.label}
+                  </button>
+                ))
+              ) : (
+                <div className="px-3 py-2 text-xs text-gray-500">
+                  No results found
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    );
+  }
+  const isRightAligned = rightAlignedColumns.includes(column.key);
+  return (
+    <input
+      readOnly={["vatAmount", "totalAmount", "totalAmountAED"].includes(column.key)}
+      type={column.type || "text"}
+      value={value}
+      onChange={(e) =>
+        handleInvoiceCellChange(rowIndex, column.key, e.target.value)
+      }
+      className={`
+        w-full h-full min-h-[42px]
+        bg-transparent
+        outline-none
+        px-3 py-2
+        text-xs text-gray-900
+        flex items-center justify-between
+        ${isRightAligned ? "text-right" : "text-left"}
+        ${
+          hasError
+            ? " text-red-500 bg-red-50"
+            : "border-0 focus:bg-blue-50 focus:ring-1 focus:ring-blue-400"
+        }
+      `}
+    />
   );
-}
-
- return (
-  <input readOnly={["vatAmount", "totalAmount", "totalAmountAED"].includes(column.key)}
-    type={column.type || "text"}
-    value={value}
-    onChange={(e) =>
-      handleInvoiceCellChange(rowIndex, column.key, e.target.value)
-    }
-    className="
-      w-full h-full min-h-[42px]
-      bg-transparent
-      border-0 outline-none
-      px-3 py-2
-      text-xs text-gray-900
-      focus:bg-blue-50
-      focus:ring-1 focus:ring-blue-400
-    "
-  />
-);
 };
+
+const isValidCompany = (companyCode) => {
+  return companies.some(
+    (company) => String(company.com_code) === String(companyCode)
+  );
+};
+
+const isValidProduct = (productCode) => {
+  return products.some(
+    (product) => String(product.prd_code) === String(productCode)
+  );
+};
+
+const isValidVendor = (vendorCode) =>
+  vendors.some(
+    (vendor) => String(vendor.vend_code) === String(vendorCode)
+  );
+
+
 
 const handleSaveTransactions = async () => {
   try {
@@ -1261,6 +1381,13 @@ const handleSaveTransactions = async () => {
       setMessage({
         type: "error",
         text: "No rows available to save.",
+      });
+      return;
+    }
+    if (!validateRows()) {
+      setMessage({
+        type: "error",
+        text: "Please fill all required fields.",
       });
       return;
     }
@@ -1309,6 +1436,7 @@ console.log("Saving transactions:", validRows);
           lpoNo: row.lpoNo || null,
           lpoDate: row.lpoDate || null,
           deliveryDate: row.deliveryDate || null,
+          prfRequired: row.prfRequired || false,
         })),
       },
       activeUserEmail
@@ -1443,14 +1571,18 @@ console.log("Saving transactions:", validRows);
 </div>
 {invoiceRows.length > 0 && (
   <div className="bg-white rounded-lg shadow-sm border border-gray-300 p-4 mt-4">
-    <div className="flex items-center justify-between mb-3">
+    <div className="flex items-center justify-between mb-0">
       <h2 className="text-sm font-semibold text-gray-800">
         Extracted Invoice Details
       </h2>
-
       <span className="text-sm text-gray-500">
         {invoiceRows.length} row{invoiceRows.length > 1 ? "s" : ""}
       </span>
+    </div>
+    <div>
+       <p className="text-xs text-gray-500">
+        Enable the checkbox if PRF is required for the transaction.
+      </p>
     </div>
 
     <div className="border border-gray-400 rounded overflow-auto max-h-[650px] bg-white">
@@ -1481,7 +1613,10 @@ console.log("Saving transactions:", validRows);
                         
                         <th
                           key={column.key}
-                          className={`border border-gray-400 px-3 py-2 text-left whitespace-nowrap min-w-[160px] font-semibold`}
+                          className={`
+  border border-gray-400 px-3 py-2 whitespace-nowrap min-w-[160px] font-semibold
+  ${rightAlignedColumns.includes(column.key) ? "text-right" : "text-left"}
+`}
                         >
                           {column.label}
                         </th>
@@ -1496,15 +1631,34 @@ console.log("Saving transactions:", validRows);
                       key={rowIndex}
                       className={rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50"}
                     >
-                      <td className="border border-gray-400 text-center min-w-[80px]">
-  <button
-    type="button"
-    onClick={() => handleDeleteRow(rowIndex)}
-    className="inline-flex items-center justify-center px-2 py-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
-    title="Delete row"
-  >
-    <Trash2 size={16} />
-  </button>
+                      <td className="border border-gray-400 text-center min-w-[100px]">
+  <div className="flex items-center justify-center gap-3">
+    {/* Delete Button */}
+    <button
+      type="button"
+      onClick={() => handleDeleteRow(rowIndex)}
+      className="inline-flex items-center justify-center p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
+      title="Delete row"
+    >
+      <Trash2 size={16} />
+    </button>
+     {/* Modern Checkbox */}
+    <label className="inline-flex items-center cursor-pointer">
+      <input
+        type="checkbox"
+        checked={row.prfRequired || false}
+        onChange={(e) =>
+          handleCheckboxChange(
+            rowIndex,
+            "prfRequired",
+            e.target.checked
+          )
+        }
+        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+        title = "PRF Required"
+      />
+    </label>
+  </div>
 </td>
                       <td className="border border-gray-400 px-3 py-2 text-center">
                         {rowIndex + 1}
@@ -1526,7 +1680,14 @@ console.log("Saving transactions:", validRows);
                         return (
                           <td
                             key={column.key}
-                            className={`border border-gray-400 min-w-[180px] p-0 relative overflow-visible`}
+                            className={`
+                            border border-gray-400
+                            min-w-[180px]
+                            p-0
+                            relative
+                            overflow-visible
+                            ${rightAlignedColumns.includes(column.key) ? "text-right" : "text-left"}
+                          `}
                           >
                             {renderEditableCell(row, rowIndex, column)}
                           </td>

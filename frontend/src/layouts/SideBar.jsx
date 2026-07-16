@@ -39,12 +39,20 @@ export default function SideBar({ collapsed, setCollapsed }) {
   // const user = JSON.parse(localStorage.getItem("user") || "{}");
   const { user, setUser } = useUser();
   const role = (user?.role || "user").toLowerCase().trim();
+  const isAdminRole = role === "admin";
+  const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768);
 
   useEffect(() => {
     loadSections();
     loadMasters();
     loadReportFilters();
     loadReportMenu();
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => setIsMobileView(window.innerWidth < 768);
+      window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   const loadSections = async () => {
@@ -86,15 +94,39 @@ export default function SideBar({ collapsed, setCollapsed }) {
 
   const isActive = (path) => location.pathname === path;
 
-  const isChildActive = (children = []) =>
-    children.some((child) => location.pathname === child.path);
+  const getAdminTabFromLocation = () => {
+  if (location.pathname !== "/admin") return -1;
+  const tab = Number(location.state?.activeTab);
+  return Number.isInteger(tab) ? tab : 0;
+};
+
+const isChildItemActive = (child) => {
+  if (child.path !== "/admin") {
+    return location.pathname === child.path;
+  }
+
+  const currentTab = getAdminTabFromLocation();
+  const childTab = Number(child.state?.activeTab);
+  return currentTab === childTab;
+};
+
+const isChildActive = (children = []) =>
+  children.some((child) => isChildItemActive(child));
 
   const closeMobile = () => {
     setMobileOpen(false);
   };
 
-  const showAdmin = role !== "user" && role !== "asst admin";
+  const showAdmin = isAdminRole;
   const showMasters = role !== "user";
+
+  const adminSubmenus = [
+    { key: "admin-users", name: "Users", path: "/admin", state: { activeTab: 0 } },
+    { key: "admin-approvals", name: "Approvals", path: "/admin", state: { activeTab: 1 } },
+    { key: "admin-roles", name: "Roles & Permissions", path: "/admin", state: { activeTab: 2 } },
+    { key: "admin-sections", name: "Sections", path: "/admin", state: { activeTab: 3 } },
+    { key: "admin-logs", name: "Logs", path: "/admin", state: { activeTab: 4 } },
+  ];
 
   const menuItems = [
     {
@@ -103,11 +135,19 @@ export default function SideBar({ collapsed, setCollapsed }) {
       path: "/dashboard",
     },
 
-    showAdmin && {
+    showAdmin && (
+      isMobileView && isAdminRole
+      ? {
+      name: "Admin",
+      icon: <Settings size={19} />,
+      children: adminSubmenus,
+      }
+      : {
       name: "Admin",
       icon: <Settings size={19} />,
       path: "/admin",
-    },
+      }
+      ),
 
     showMasters && {
       name: "Masters",
@@ -183,7 +223,7 @@ const closeHoverMenuWithDelay = () => {
     setUser(null);
     localStorage.removeItem("user");
 
-    setOpen(false);
+    // setOpen(false);
 
     navigate("/", { replace: true }); // prevents back navigation
   } catch (error) {
@@ -194,32 +234,32 @@ const closeHoverMenuWithDelay = () => {
   return (
     <>
       {/* mobile menu button */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-[70] p-2 rounded-lg bg-white shadow border border-gray-200 text-gray-700"
-      >
-        <Menu size={22} />
-      </button>
-
+     <button
+  onClick={() => setMobileOpen(true)}
+  className={`md:hidden fixed top-4 left-4 z-[100] p-2 rounded-lg bg-white shadow border border-gray-200 text-gray-700 ${
+    mobileOpen ? "hidden" : "block"
+  }`}
+>
+  <Menu size={22} />
+</button>
       {/* mobile overlay */}
       {mobileOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/40 z-40"
+          className="md:hidden fixed inset-0 bg-black/40 z-[80]"
           onClick={closeMobile}
         />
       )}
 
       {/* sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-screen bg-white border-r border-gray-200 shadow-sm z-50 transition-all duration-300
+        className={`fixed top-0 left-0 h-screen bg-white border-r border-gray-200 shadow-sm z-[90] md:z-50 transition-all duration-300
         ${sidebarWidth}
         w-64
         ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
       `}
       >
         <div className="flex flex-col h-full">
-         
-        {/* logo/header */}
+      
 {/* logo/header */}
 <div className="h-16 flex items-center justify-start px-3 border-b border-gray-200 relative">
   {!collapsed ? (
@@ -370,15 +410,17 @@ const closeHoverMenuWithDelay = () => {
                           to={child.path}
                           onClick={closeMobile}
                           state={
-                            child.master
-                              ? { master: child.master }
-                              : child.report
-                              ? { report: child.report }
-                              : { module: child.module }
+                            child.state
+                            ? child.state
+                            : child.master
+                            ? { master: child.master }
+                            : child.report
+                            ? { report: child.report }
+                            : { module: child.module }
                           }
                           className={`block rounded-lg px-3 py-2 text-sm transition
                             ${
-                              isActive(child.path)
+                              isChildItemActive(child)
                                 ? "bg-blue-100 text-blue-700 font-medium"
                                 : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                             }
@@ -416,15 +458,17 @@ const closeHoverMenuWithDelay = () => {
             setHoverMenu(null);
           }}
           state={
-            child.master
-              ? { master: child.master }
-              : child.report
-              ? { report: child.report }
-              : { module: child.module }
+            child.state
+            ? child.state
+            : child.master
+            ? { master: child.master }
+            : child.report
+            ? { report: child.report }
+            : { module: child.module }
           }
           className={`block rounded-lg px-3 py-2 text-sm transition
             ${
-              isActive(child.path)
+              isChildItemActive(child)
                 ? "bg-blue-100 text-blue-700 font-medium"
                 : "text-gray-700 hover:bg-gray-100"
             }
