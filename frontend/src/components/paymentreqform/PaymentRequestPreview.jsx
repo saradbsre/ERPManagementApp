@@ -662,6 +662,8 @@ const TotalICANN = headers?.reduce((sum, item) => {
   return sum + (product?.is_icann ? Number(product?.icann_fee || 0) : 0);
 }, 0);
 const grandTotal = grand + TotalICANN;
+const covertedExchangeRate = 1 / (details?.exchange_rate || 1);
+const ConvertedGrandTotal = grandTotal * (covertedExchangeRate || 1);
 // At the top, after expiryDate:
 const startDate = details.period_start
     ? formatDateLong(details.period_start)
@@ -677,7 +679,7 @@ const periodDisplay =
     : "-";
 const currentDate = new Date();
 
-const covertedExchangeRate = 1 / (details?.exchange_rate || 1);
+
 
   return (
     <div className="bg-gray-200 min-h-screen py-10 px-4 overflow-auto">
@@ -1364,11 +1366,11 @@ const covertedExchangeRate = 1 / (details?.exchange_rate || 1);
     <>
       {/* <br /> */}
     <span>
-  Equivalent Amount in AED: {formatDecimal(header.total_amount_aed)}
+  Equivalent Amount in AED: {formatDecimal(ConvertedGrandTotal)}
   {details?.exchange_rate && (
     <>
       {" "}
-      (Converted at an exchange rate of {formatDecimal(1/covertedExchangeRate)} when this PRF was generated on{" "}
+      (Converted at an exchange rate of {formatDecimal(covertedExchangeRate)} when this PRF was generated on{" "}
       {formatDate(details.prf_date)})
     </>
   )}
