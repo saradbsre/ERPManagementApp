@@ -3638,13 +3638,10 @@ const orderedVisibleColumns = useMemo(() => {
 
 
 const printableGroupedRows = React.useMemo(() => {
-  const rows = sortedAllRows.filter((row) => {
-    return !(
-      row.prf_num &&
-      row.requires_prf_form === false
-    );
-  });
-
+  const rows = sortedAllRows.filter(
+  (row) => row.requires_prf_form === true && row.prf_num
+);
+  console.log("Printable grouped rows (filtered):", rows);
   if (!groupBy?.key) {
     return [
       {
