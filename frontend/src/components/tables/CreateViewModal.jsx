@@ -11,6 +11,7 @@ export default function CreateViewModal({
   setNewViewVisibility,
   onCreate,
   activeUser,
+  editingView,
 }) {
   if (!open) return null;
 
@@ -70,16 +71,16 @@ export default function CreateViewModal({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               View Access
             </label>
-            <select
-              value={newViewVisibility}
-              onChange={(e) => setNewViewVisibility(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+           <select
+            value={newViewVisibility}
+            onChange={(e) => setNewViewVisibility(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 text-sm"
             >
-              <option value="USER">Only for me</option>
+            <option value="USER">Only Me</option>
 
-              {isAdmin && (
-                <option value="GLOBAL">For all users</option>
-              )}
+            {(activeUser?.role === "ADMIN" || activeUser?.role === "SUPERADMIN") && (
+                <option value="GLOBAL">Everyone</option>
+            )}
             </select>
           </div>
 
@@ -93,12 +94,12 @@ export default function CreateViewModal({
             Cancel
           </button>
 
-          <button
-            onClick={onCreate}
-            className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
-          >
-            Create View
-          </button>
+        <button
+  onClick={onCreate}
+  className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+>
+  {editingView ? "Update View" : "Create View"}
+</button>
         </div>
 
       </div>

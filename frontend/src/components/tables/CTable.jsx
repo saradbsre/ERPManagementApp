@@ -1,5 +1,12 @@
 import React,{ useEffect, useState, useRef, useLayoutEffect, act, use, useMemo } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
+import {
+  Pin,
+  Copy,
+  Share2,
+  ChevronsUpDown,
+  ChevronRight,
+} from "lucide-react";
 import { fetchSections,fetchMasters, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow, getPreviewPRF, unpostPRFTransaction, postPRFTransaction,getModuleViews,
 createModuleView,
 updateModuleView,
@@ -41,7 +48,8 @@ import {
   verticalListSortingStrategy,
   useSortable
 } from "@dnd-kit/sortable";
-import { CircleX, SavePlus, SquarePen, Trash2, BookX , RotateCcw, ScanEye, Send, Undo2, FileSearch, Pencil, X } from "lucide-react";
+import { CircleX, SavePlus, SquarePen, Trash2, BookX , 
+  RotateCcw, ScanEye, Send, Undo2, FileSearch, Pencil, X } from "lucide-react";
 
 import { CSS } from "@dnd-kit/utilities";
 
@@ -268,7 +276,7 @@ const [newViewType, setNewViewType] = useState("table");
 const [newViewVisibility, setNewViewVisibility] = useState("USER");
 
 const [hasViewChanges, setHasViewChanges] = useState(false);
-
+const [editingView, setEditingView] = useState(null);
 
 
 
@@ -3921,6 +3929,88 @@ const refreshRowsByView = async (savedFilters = null) => {
     setLoading(false);
   }
 };
+const handleDeleteView = async (view) => {
+  try {
+    if (!view?.id) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${view.view_name}" view?`
+    );
+
+    if (!confirmed) return;
+
+    await deleteModuleView(view.id);
+
+    if (String(activeViewId) === String(view.id)) {
+      setActiveViewId("main");
+
+      const defaults = getCurrentMonth();
+
+      refreshRowsByView({
+        search: "",
+        dateFilters: defaults,
+        appliedFilters: [],
+      });
+    }
+
+    await loadViews();
+
+    setPopupMessage("View deleted successfully.");
+    setPopupType("success");
+  } catch (err) {
+    console.error("Delete view failed:", err);
+    setPopupMessage(err.response?.data?.error || "Failed to delete view.");
+    setPopupType("error");
+  }
+};
+const handleRenameView = (view) => {
+  setEditingView(view);
+  setNewViewName(view.view_name || "");
+  setNewViewType(view.view_type || "table");
+  setNewViewVisibility(view.visibility || "USER");
+  setShowCreateViewModal(true);
+};
+
+const handleDuplicateView = async (view) => {
+  try {
+    if (!view?.id) return;
+
+    const duplicatedPayload = {
+      module_id: Number(id),
+      view_name: `${view.view_name} Copy`,
+      view_type: view.view_type || "table",
+      visibility: view.visibility || "USER",
+      activeUserEmail,
+      filters: safeJsonParse(view.filters, {}),
+      columns: safeJsonParse(view.columns, {}),
+      sort_config: safeJsonParse(view.sort_config, []),
+      group_config: safeJsonParse(view.group_config, {
+        key: null,
+        direction: "asc",
+      }),
+      is_default: false,
+    };
+
+    const res = await createModuleView(duplicatedPayload);
+
+    const duplicatedView = res.data?.data;
+
+    await loadViews();
+
+    if (duplicatedView?.id) {
+      setActiveViewId(duplicatedView.id);
+      applySavedView(duplicatedView);
+    }
+
+    setPopupMessage("View duplicated successfully.");
+    setPopupType("success");
+  } catch (err) {
+    console.error("Duplicate view failed:", err);
+    setPopupMessage(err.response?.data?.error || "Failed to duplicate view.");
+    setPopupType("error");
+  }
+};
+
 
 const handleCreateView = async () => {
   try {
@@ -3930,6 +4020,28 @@ const handleCreateView = async () => {
       return;
     }
 
+    // ================= RENAME EXISTING VIEW =================
+    if (editingView) {
+      await updateModuleView(editingView.id, {
+        view_name: newViewName.trim(),
+        view_type: newViewType || "table",
+        visibility: newViewVisibility || "USER",
+      });
+
+      setShowCreateViewModal(false);
+      setEditingView(null);
+      setNewViewName("");
+      setNewViewType("table");
+      setNewViewVisibility("USER");
+
+      await loadViews();
+
+      setPopupMessage("View renamed successfully.");
+      setPopupType("success");
+      return;
+    }
+
+    // ================= CREATE NEW VIEW =================
     const currentView = buildCurrentViewPayload();
 
     const payload = {
@@ -3948,24 +4060,25 @@ const handleCreateView = async () => {
     const res = await createModuleView(payload);
 
     setShowCreateViewModal(false);
+    setEditingView(null);
     setNewViewName("");
     setNewViewType("table");
     setNewViewVisibility("USER");
 
-   const createdView = res.data?.data;
+    const createdView = res.data?.data;
 
-await loadViews();
+    await loadViews();
 
-if (createdView?.id) {
-  setActiveViewId(createdView.id);
-  applySavedView(createdView);
-}
+    if (createdView?.id) {
+      setActiveViewId(createdView.id);
+      applySavedView(createdView);
+    }
 
     setPopupMessage("View created successfully.");
     setPopupType("success");
   } catch (err) {
-    console.error("Create view failed:", err);
-    setPopupMessage(err.response?.data?.error || "Failed to create view.");
+    console.error("Create / Rename view failed:", err);
+    setPopupMessage(err.response?.data?.error || "Failed to save view.");
     setPopupType("error");
   }
 };
@@ -4152,9 +4265,15 @@ const handleRequiresPrfChange = async (row, checked) => {
 >
   Save as New View
 </button>
-  <CreateViewModal
+<CreateViewModal
   open={showCreateViewModal}
-  onClose={() => setShowCreateViewModal(false)}
+  onClose={() => {
+    setShowCreateViewModal(false);
+    setEditingView(null);
+    setNewViewName("");
+    setNewViewType("table");
+    setNewViewVisibility("USER");
+  }}
   newViewName={newViewName}
   setNewViewName={setNewViewName}
   newViewType={newViewType}
@@ -4163,6 +4282,7 @@ const handleRequiresPrfChange = async (row, checked) => {
   setNewViewVisibility={setNewViewVisibility}
   onCreate={handleCreateView}
   activeUser={activeUser}
+  editingView={editingView}
 />
 <CustomizeDrawer
   open={showCustomizeDrawer}
@@ -4338,51 +4458,56 @@ const normalizedFilters = nextFilters.map((filter) => ({
 </div>
 
             </div>
- <BoardViewsBar
-      views={views}
-      activeViewId={activeViewId}
-      setActiveViewId={setActiveViewId}
-     onMainViewClick={() => {
-  const defaults = getCurrentMonth();
+<BoardViewsBar
+  views={views}
+  activeViewId={activeViewId}
+  setActiveViewId={setActiveViewId}
+  onMainViewClick={() => {
+    const defaults = getCurrentMonth();
 
-  setSearch("");
-  setSearchColumnKey(null);
+    setSearch("");
+    setSearchColumnKey(null);
 
-  setFilters([]);
-  setAppliedFilters([]);
+    setFilters([]);
+    setAppliedFilters([]);
 
-  setDateFilters(defaults);
-  setActiveDateFilter("");
+    setDateFilters(defaults);
+    setActiveDateFilter("");
 
-  setSortConfig([]);
-  setGroupBy({
-    key: null,
-    direction: "asc",
-  });
-  setColumnChips([]);
+    setSortConfig([]);
+    setGroupBy({
+      key: null,
+      direction: "asc",
+    });
+    setColumnChips([]);
 
-  setTableColumnMode("default");
-  setHasViewChanges(false);
+    setTableColumnMode("default");
+    setHasViewChanges(false);
 
-  refreshRowsByView({
-    search: "",
-    dateFilters: defaults,
-    appliedFilters: [],
-  });
-}}
-      onTableViewClick={() => {
-        setHasViewChanges(false);
-      }}
-      onApplyView={applySavedView}
-      showViewDropdown={showViewDropdown}
-      setShowViewDropdown={setShowViewDropdown}
-      onCreateTableView={() => {
-        setNewViewType("table");
-        setShowCreateViewModal(true);
-      }}
-    />
+    refreshRowsByView({
+      search: "",
+      dateFilters: defaults,
+      appliedFilters: [],
+    });
+  }}
+  onTableViewClick={() => {
+    setActiveViewId("table");
+    setHasViewChanges(false);
+  }}
+  onApplyView={applySavedView}
+ onCreateView={() => {
+    setEditingView(null);
+    setNewViewName("");
+    setNewViewType("table");
+    setNewViewVisibility("USER");
+    setShowCreateViewModal(true);
+  }}
+  onRenameView={handleRenameView}
+  onDeleteView={handleDeleteView}
+  onDuplicateView={handleDuplicateView}
+/>
             {/* ================= CONTROL BAR (LEFT ALIGNED) ================= */}
-           <div className="bg-white p-3 rounded-xl shadow mb-4">
+           <div className="bg-white p-3 shadow mb-4">
 
 
 
