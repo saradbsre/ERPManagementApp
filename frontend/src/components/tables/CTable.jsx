@@ -6,6 +6,7 @@ import {
   Share2,
   ChevronsUpDown,
   ChevronRight,
+  Funnel,
 } from "lucide-react";
 import { fetchSections,fetchMasters, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow, getPreviewPRF, unpostPRFTransaction, postPRFTransaction,getModuleViews,
 createModuleView,
@@ -3089,6 +3090,36 @@ const reportTitle =
   color: #4b5563;
   font-weight: bold;
 }
+
+.print-shell {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.print-shell > thead {
+  display: table-header-group;
+}
+
+.print-shell > tbody {
+  display: table-row-group;
+}
+
+.print-shell > thead > tr > td,
+.print-shell > tbody > tr > td {
+  border: none !important;
+  padding: 0 !important;
+  background: #ffffff !important;
+}
+
+.print-shell-header {
+  padding-bottom: 6px !important;
+}
+
+.print-shell-content {
+  padding: 0 !important;
+}
+
     @media print {
       body {
         -webkit-print-color-adjust: exact;
@@ -3101,14 +3132,23 @@ const reportTitle =
 <body>
   <div class="report-page">
 
-    <div class="report-header">
-     ${company ? `<h1 class="company-name">${company}</h1>` : ""}
-<h2 class="report-title">${reportTitle}</h2>
+    <table class="print-shell">
+      <thead>
+        <tr>
+          <td class="print-shell-header">
 
-     
-    </div>
+            <div class="report-header">
+              ${company ? `<h1 class="company-name">${company}</h1>` : ""}
+              <h2 class="report-title">${reportTitle}</h2>
+            </div>
 
-   
+          </td>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr>
+          <td class="print-shell-content">
 
 ${groupedRows
   .map(
@@ -3266,7 +3306,7 @@ ${groupedRows
     </table>
   </div>
 
-</div>
+
 
 
  
@@ -4170,7 +4210,7 @@ const handleRequiresPrfChange = async (row, checked) => {
 {/* DESKTOP VIEW (UNCHANGED ROW) */}
 <div className="hidden md:flex items-center gap-2">
   
-  <PermissionButton
+  {/* <PermissionButton
     user={activeUser}
     permission="add"
     onClick={handleCreate}
@@ -4178,7 +4218,7 @@ const handleRequiresPrfChange = async (row, checked) => {
                hover:bg-green-700 hover:shadow-md transition"
   >
     + New
-  </PermissionButton>
+  </PermissionButton> */}
 
   {/* <PermissionButton
   user={activeUser}
@@ -4189,6 +4229,26 @@ const handleRequiresPrfChange = async (row, checked) => {
 >
   Print
 </PermissionButton> */}
+ <button
+    onClick={() => navigate(`/upload/${id}`)}
+    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-green-500 text-white
+               hover:bg-green-50 hover:border-green-400 hover:text-green-600 transition"
+  >
+    Add New
+  </button>
+    {activeViewId !== "main" && activeViewId !== "table" && (
+  <button
+    onClick={handleSaveViewChanges}
+    disabled={!hasViewChanges}
+    className={` ${
+      hasViewChanges
+        ? "px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-blue-500 text-white hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
+        : "px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white  transition bg-gray-200 text-gray-500 cursor-not-allowed"
+    }`}
+  >
+    Save View
+  </button>
+)}
 <PermissionButton
   user={activeUser}
   permission="print"
@@ -4230,41 +4290,23 @@ const handleRequiresPrfChange = async (row, checked) => {
     PDF
   </PermissionButton>
 
-  <button
-    onClick={() => navigate(`/upload/${id}`)}
-    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white
-               hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
-  >
-    Upload
-  </button>
+ 
 
-  <button
+  {/* <button
     onClick={() => setShowCustomizeDrawer(true)}
     className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white
                hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
   >
     Customize
-  </button>
+  </button> */}
 
-  {activeViewId !== "main" && activeViewId !== "table" && (
-  <button
-    onClick={handleSaveViewChanges}
-    disabled={!hasViewChanges}
-    className={`px-3 py-2 rounded-lg text-sm ${
-      hasViewChanges
-        ? "bg-blue-600 text-white hover:bg-blue-700"
-        : "bg-gray-200 text-gray-500 cursor-not-allowed"
-    }`}
-  >
-    Save View
-  </button>
-)}
-<button
+
+{/* <button
   onClick={() => setShowCreateViewModal(true)}
   className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-50"
 >
   Save as New View
-</button>
+</button> */}
 <CreateViewModal
   open={showCreateViewModal}
   onClose={() => {
@@ -4326,12 +4368,12 @@ const handleRequiresPrfChange = async (row, checked) => {
  
   Refresh
 </button>
-   <button 
+   {/* <button 
    onClick={() => setShowFilters(true)}
    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
                hover:bg-orange-50 hover:border-orange-400 hover:text-orange-600 transition">
         Filters
-   </button>
+   </button> */}
 
 {/* <TableFiltersDrawer
   open={showFilters}
@@ -4525,7 +4567,7 @@ const normalizedFilters = nextFilters.map((filter) => ({
             }...`
           : "Search records..."
       }
-      className="border px-3 py-2 rounded-lg w-60"
+      className="border border-gray-200 px-3 py-2 rounded-lg w-50"
       value={search}
       onChange={(e) => {
         const value = e.target.value;
@@ -4549,7 +4591,7 @@ const normalizedFilters = nextFilters.map((filter) => ({
     onChange={onInputChange}
     className="
       h-9 w-[130px]
-      rounded-xl
+      rounded-md
       border border-gray-200
       bg-white
       px-4
@@ -4572,7 +4614,7 @@ const normalizedFilters = nextFilters.map((filter) => ({
     onChange={onInputChange}
     className="
       h-9 w-[130px]
-      rounded-xl
+      rounded-md
       border border-gray-200
       bg-white
       px-4
@@ -4592,7 +4634,7 @@ const normalizedFilters = nextFilters.map((filter) => ({
     className="
       h-9
       min-w-[140px]
-      rounded-xl
+      rounded-md
       border border-gray-200
       bg-white
       px-4
@@ -4624,7 +4666,7 @@ const normalizedFilters = nextFilters.map((filter) => ({
     className="
       h-9
       px-5
-      rounded-xl
+      rounded-md
       bg-blue-600
       text-white
       text-sm
@@ -4643,7 +4685,7 @@ const normalizedFilters = nextFilters.map((filter) => ({
     className="
       h-9
       px-5
-      rounded-xl
+      rounded-md
       border border-gray-200
       bg-white
       text-sm
@@ -4655,12 +4697,17 @@ const normalizedFilters = nextFilters.map((filter) => ({
   >
     Clear
   </button>
-
+<button 
+   onClick={() => setShowFilters(true)}
+   className="px-1 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
+               hover:bg-orange-50 hover:border-orange-400 hover:text-orange-600 transition">
+        <Funnel size={15} />
+   </button>
 </div>
 
   {/* Right side: Pagination + Total */}
 <div className="ml-auto flex items-center gap-4">
-  <div className="flex items-end gap-2 text-sm">
+  <div className="flex items-end gap-1 text-sm">
     <button
       disabled={page === 1}
       onClick={() => setPage(1)}

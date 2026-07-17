@@ -113,10 +113,10 @@ export default function BoardViewsBar({
         overflow-hidden
       "
     >
-      <button type="button" disabled className={disabledItemClass}>
+      {/* <button type="button" disabled className={disabledItemClass}>
         <Pin size={18} />
         <span>Pin view</span>
-      </button>
+      </button> */}
 
       <div className="border-t border-gray-100" />
 
@@ -132,7 +132,7 @@ export default function BoardViewsBar({
         <Pencil size={18} />
         <span>Rename view</span>
       </button>
-
+  <div className="border-t border-gray-100" />
       <button
         type="button"
         onClick={() => {
@@ -146,14 +146,14 @@ export default function BoardViewsBar({
         <span>Duplicate view</span>
       </button>
 
-      <button type="button" disabled className={disabledItemClass}>
+      {/* <button type="button" disabled className={disabledItemClass}>
         <Share2 size={18} />
         <span>Share view</span>
-      </button>
+      </button> */}
 
       <div className="border-t border-gray-100" />
 
-      <button
+      {/* <button
         type="button"
         disabled
         className="w-full flex items-center justify-between px-5 py-3 text-sm text-gray-600 cursor-not-allowed text-left"
@@ -164,7 +164,7 @@ export default function BoardViewsBar({
         </span>
 
         <ChevronRight size={18} />
-      </button>
+      </button> */}
 
       <div className="border-t border-gray-100" />
 
@@ -196,6 +196,7 @@ export default function BoardViewsBar({
           shrink-0
           w-[170px]
           max-w-[170px]
+          
         "
       >
         <button
@@ -206,7 +207,7 @@ export default function BoardViewsBar({
             setShowMoreViews(false);
             onApplyView?.(view);
           }}
-          className={`h-full w-full truncate px-2 pr-8 text-sm font-medium border-b-2 transition text-left ${
+          className={`h-full w-full truncate px-2 pr-8 text-sm font-medium border-b-2 transition text-left cursor-pointer ${
             isActive
               ? "border-gray-400 text-black-bold"
               : "border-transparent text-gray-600 hover:text-gray-900"
@@ -269,7 +270,7 @@ export default function BoardViewsBar({
             setShowMoreViews(false);
             onMainViewClick?.();
           }}
-          className={`h-full w-[115px] shrink-0 truncate px-2 text-sm font-medium border-b-2 transition text-left ${
+          className={`h-full w-[115px] shrink-0 truncate px-2 text-sm font-medium border-b-2 transition text-left cursor-pointer ${
             activeViewId === "main"
               ? "border-gray-400 text-black-bold"
               : "border-transparent text-gray-600 hover:text-gray-900"
@@ -301,6 +302,7 @@ export default function BoardViewsBar({
                 text-gray-700
                 hover:bg-gray-100
                 transition
+                cursor-pointer
               "
             >
               More
@@ -370,6 +372,7 @@ export default function BoardViewsBar({
             hover:text-blue-600
             transition
             shrink-0
+            cursor-pointer
           "
           title="Create New View"
         >
