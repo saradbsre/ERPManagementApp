@@ -662,7 +662,7 @@ const TotalICANN = headers?.reduce((sum, item) => {
   return sum + (product?.is_icann ? Number(product?.icann_fee || 0) : 0);
 }, 0);
 const grandTotal = grand + TotalICANN;
-const covertedExchangeRate = 1 / (details?.exchange_rate || 1);
+const covertedExchangeRate = (details?.exchange_rate || 1);
 const ConvertedGrandTotal = grandTotal * (covertedExchangeRate || 1);
 // At the top, after expiryDate:
 const startDate = details.period_start
@@ -1001,7 +1001,7 @@ const currentDate = new Date();
       </td>
 
       <td className="border border-gray-800 px-2 py-1 font-semibold">
-        {header.mode || "ONLINE"}
+        {header.mode || "Online"}
       </td>
 
     </tr>
@@ -1080,7 +1080,7 @@ const currentDate = new Date();
     {/* TITLE */}
     <tr className="bg-gray-200 text-black">
       <th
-        colSpan={8}
+        colSpan={9}
         className="text-left px-2 py-1 border border-gray-800 text-[14px] font-bold"
       >
         INVOICE / PAYMENT PARTICULARS
@@ -1090,7 +1090,7 @@ const currentDate = new Date();
     {/* COLUMN HEADERS */}
     <tr className="bg-gray-200 text-black text-[9px]">
 
-      <th className="border border-gray-800 px-2 py-1 w-[3%]">
+      <th className="border border-gray-800 px-2 py-1 w-[2%]">
         S/N
       </th>
 
@@ -1108,16 +1108,18 @@ const currentDate = new Date();
        <th className="border border-gray-800 px-1 py-1 w-[15%]">
        NARRATION
       </th>
-
-      <th className="border border-gray-800 px-1 py-1 w-[8%] text-right">
+       <th className="border border-gray-800 px-1 py-1 w-[6%]">
+       QTY
+      </th>
+      <th className="border border-gray-800 px-1 py-1 w-[7%] text-right">
         AMOUNT ({selectedCurrency?.curr_name || header.curr_code})
       </th>
 
-      <th className="border border-gray-800 px-1 py-1 w-[8%] text-right">
+      <th className="border border-gray-800 px-1 py-1 w-[7%] text-right">
         VAT AMOUNT ({selectedCurrency?.curr_name || header.curr_code})
       </th>
 
-      <th className="border border-gray-800 px-1 py-1 w-[8%] text-right">
+      <th className="border border-gray-800 px-1 py-1 w-[7%] text-right">
         TOTAL AMOUNT ({selectedCurrency?.curr_name || header.curr_code})
       </th>
 
@@ -1218,6 +1220,18 @@ const currentDate = new Date();
   ))}
 </td>
 
+           {/* QTY */}
+          <td className="border border-gray-800 p-1 align-top text-center">
+            {headers?.map((item, i) => (
+              <div
+                key={i}
+                className={`${rowHeight} flex justify-center items-start py-1`}
+              >
+                {item?.qty || '-'}
+              </div>
+            ))}
+          </td>
+
           {/* AMOUNT */}
           <td className="border border-gray-800 p-1 align-top text-right">
             {headers?.map((item, i) => (
@@ -1286,7 +1300,7 @@ const currentDate = new Date();
         {/* TOTAL */}
         <tr className="bg-[#e5e7eb]">
           <td
-            colSpan={5}
+            colSpan={6}
             className="border border-gray-800 p-2 font-bold text-right"
           >
             TOTAL
@@ -1316,7 +1330,7 @@ const currentDate = new Date();
           </td>
 
           <td
-            colSpan={5}
+            colSpan={6}
             className="border border-gray-800 p-2 font-bold"
           >
             {numberToWords(

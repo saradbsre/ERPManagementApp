@@ -5,7 +5,8 @@ export default function PermissionButton({
   permission,
   onClick,
   children,
-  className = ""
+  className = "",
+  title = "",
 }) {
   if (!hasPermission(user, permission)) return null;
  // console.log("Rendering PermissionButton for permission:", permission); // Debug log
@@ -14,6 +15,7 @@ export default function PermissionButton({
     <button
       onClick={onClick}
       className={className}
+      title={title}
     >
       {children}
     </button>

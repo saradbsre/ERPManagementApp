@@ -22,7 +22,7 @@
     "html2pdf.js": "^0.14.0",
     "i": "^0.3.7",
     "jsbarcode": "^3.12.3",
-    "lucide-react": "^1.11.0",
+    "lucide-react": "^1.24.0",
     "pdfjs-dist": "^6.1.200",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

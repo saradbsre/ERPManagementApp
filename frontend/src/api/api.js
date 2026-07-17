@@ -484,3 +484,17 @@ export const setDefaultModuleView = (id, activeUserEmail) => {
     params: { activeUserEmail },
   });
 };
+
+export const updateRequiresPrf = (
+  id,
+  requires_prf_form,
+  activeUserEmail
+) => {
+  return API.put(
+    `/payment-transactions/${id}/requires-prf`,
+    { requires_prf_form },
+    {
+      params: { activeUserEmail },
+    }
+  );
+};

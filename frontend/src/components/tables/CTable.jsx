@@ -4,7 +4,7 @@ import { fetchSections,fetchMasters, getModuleData, createModuleRow, updateModul
 createModuleView,
 updateModuleView,
 deleteModuleView,
-setDefaultModuleView,  } from "../../api/api";
+setDefaultModuleView, updateRequiresPrf  } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -16,7 +16,7 @@ import { isAmountField, isTotalField, hasAnyAmountValue } from "../../utils/cost
 import PermissionButton from "../PermissionButton";
 import { formatDateTime } from "../../utils/formatDateTime";
 import { formatDate } from "../../utils/formatDate";
-import { Currency } from "lucide-react";
+import { Currency, Save } from "lucide-react";
 import DateTimeRangeFilter from "../DateRangeFilter";
 import DateOnlyFilter from "../DateOnlyFilter";
 import Loader from "../Loader";
@@ -41,6 +41,7 @@ import {
   verticalListSortingStrategy,
   useSortable
 } from "@dnd-kit/sortable";
+import { CircleX, SavePlus, SquarePen, Trash2, BookX , RotateCcw, ScanEye, Send, Undo2, FileSearch, Pencil, X } from "lucide-react";
 
 import { CSS } from "@dnd-kit/utilities";
 
@@ -1318,6 +1319,8 @@ const handleDraftPreviewFromModal = () => {
     0
   );
 
+  const covertedExchangeRate = 1 / exchange_rate;
+
   const previewDetails = {
     prf_num: prfNumber,
     receipt_number: form.receipt_number || "",
@@ -1330,7 +1333,7 @@ const handleDraftPreviewFromModal = () => {
     verified_by: form.verified_by || "",
     signed_by: form.signed_by || "",
     approved_by: form.approved_by || "",
-    exchange_rate,
+    exchange_rate: formatNumber(covertedExchangeRate),
     prf_date: new Date().toISOString(),
     sysdate: new Date().toISOString(),
     is_advertising: isAdvertising ? 1 : 0,
@@ -2122,7 +2125,7 @@ const handleDelete = (row) => {
         setPopupType("success");
         loadModule();
       } catch (err) {
-          setLoading(false);
+        setLoading(false);
         console.error(err);
         setPopupMessage("Error deleting record");
         setPopupType("error");
@@ -2134,16 +2137,17 @@ const handleDelete = (row) => {
 };
 
 const handleCancelRow = (row) => {
-  setLoading(true);
   setConfirmData({
     title: "Cancel Record",
     message: "Are you sure you want to cancel this record?",
     confirmText: "Yes, Cancel",
     type: "warning",
     onConfirm: async () => {
+      setLoading(true);
+
       try {
         await cancelModuleRow(id, row.id, activeUserEmail);
-        setLoading(false);
+
         setPopupMessage("Record cancelled successfully");
         setPopupType("success");
         loadModule();
@@ -2151,16 +2155,17 @@ const handleCancelRow = (row) => {
         console.error(err);
         setPopupMessage("Error cancelling record");
         setPopupType("error");
+      } finally {
+        setLoading(false);
+        setConfirmOpen(false);
       }
-      setLoading(false);
-      setConfirmOpen(false); // Always close modal
     }
   });
+
   setConfirmOpen(true);
 };
 
 const handleUndoCancelRow = (row) => {
-  setLoading(true);
   setConfirmData({
     title: "Undo Cancellation",
     message: "Do you want to restore this cancelled record?",
@@ -2169,17 +2174,19 @@ const handleUndoCancelRow = (row) => {
     onConfirm: async () => {
       try {
         await undoCancelModuleRow(id, row.id, activeUserEmail);
-        setLoading(false);
+    
         setPopupMessage("Record restored successfully");
         setPopupType("success");
         loadModule();
       } catch (err) {
-          setLoading(false);
         console.error(err);
         setPopupMessage("Error restoring record");
         setPopupType("error");
       }
-      setConfirmOpen(false); // Always close modal
+      finally {
+        setLoading(false);
+        setConfirmOpen(false);
+      }
     }
   });
   setConfirmOpen(true);
@@ -3672,7 +3679,7 @@ const printableGroupedRows = React.useMemo(() => {
 
 
 
-console.log("Printable grouped rows:", printableGroupedRows);
+//console.log("Printable grouped rows:", printableGroupedRows);
 
 const dragIndexRef = useRef(null);
 
@@ -3996,6 +4003,38 @@ const handleSaveViewChanges = async () => {
     console.error("Save view failed:", err);
     setPopupMessage(err.response?.data?.error || "Failed to save view.");
     setPopupType("error");
+  }
+};
+
+const handleRequiresPrfChange = async (row, checked) => {
+  try {
+    // Update UI immediately
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === row.id
+          ? { ...r, requires_prf_form: checked }
+          : r
+      )
+    );
+
+    // Save immediately to database
+    await updateRequiresPrf(
+      row.id,
+      checked,
+      activeUserEmail
+    );
+
+  } catch (err) {
+    console.error(err);
+
+    // Revert if API fails
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === row.id
+          ? { ...r, requires_prf_form: !checked }
+          : r
+      )
+    );
   }
 };
 
@@ -4749,6 +4788,7 @@ const options = Array.isArray(rawOptions)
                                   <EyeIcon className="w-6 h-6" />
                                 </span>
                                 </th>
+                                <th className="px-4 py-3 border-b text-right">Actions</th>
 
                                {orderedVisibleColumns.map((col, index) => (
   <th
@@ -4879,7 +4919,7 @@ onDrop={() => handleDrop(col.column_name)}
   </th>
 ))}
 
-                                <th className="px-4 py-3 border-b text-right">Actions</th>
+                                
                             </tr>
                         </thead>
 
@@ -4888,6 +4928,24 @@ onDrop={() => handleDrop(col.column_name)}
                       {isCreating && (
                         <tr className="bg-blue-50">
                           <td className="px-4 py-3 whitespace-nowrap sticky left-0 z-20 bg-blue-50 w-16 min-w-16 border-r border-gray-200"></td>
+                           {/* ACTIONS */}
+                          <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
+
+                            <button
+                              onClick={handleSave}
+                              title="Save"
+                            >
+                              <SavePlus size={18} className="text-green-500"  />
+                            </button>
+
+                            <button
+                              onClick={handleCancel}
+                               title="Cancel"
+                            >
+                              <CircleX size={18} className="text-red-500" />
+                            </button>
+
+                          </td>
 
                           {orderedVisibleColumns.map((col) => {
                             
@@ -5224,34 +5282,7 @@ onDrop={() => handleDrop(col.column_name)}
 
                           })}
 
-                          {/* ACTIONS */}
-                          <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
-
-                            <button
-                              onClick={handleSave}
-                              className="
-                                px-3 py-1.5 text-sm rounded-md
-                                border border-blue-300 bg-white
-                                hover:bg-blue-100 hover:border-blue-500
-                                transition
-                              "
-                            >
-                              Save
-                            </button>
-
-                            <button
-                              onClick={handleCancel}
-                              className="
-                                px-3 py-1.5 text-sm rounded-md
-                                border border-red-300 bg-white
-                                hover:bg-red-100 hover:border-red-500
-                                transition
-                              "
-                            >
-                              Cancel
-                            </button>
-
-                          </td>
+                         
 
                         </tr>
                       )}
@@ -5298,6 +5329,150 @@ onDrop={() => handleDrop(col.column_name)}
           {(rowIndexMap.get(row.id) ?? 0) + 1}
 
         </td>
+        
+                     <td className="px-4 py-3 whitespace-nowrap">
+  <div className="flex items-center justify-end gap-2">
+
+    {/* Always show PRF checkbox */}
+    <input
+      type="checkbox"
+      checked={row.requires_prf_form || false}
+      onChange={(e) =>
+        handleRequiresPrfChange(row, e.target.checked)
+      }
+      className="h-4 w-4 cursor-pointer shrink-0"
+      title="PRF Required"
+    />
+
+    {editRowId === row.id ? (
+      <>
+        {/* SAVE */}
+        <button
+          onClick={handleSaveEdit}
+          title="Save Edit"
+          className="p-1 rounded hover:bg-gray-200 transition"
+        >
+          <SavePlus size={18} className="text-green-600" />
+        </button>
+
+        {/* CANCEL EDIT */}
+        <button
+          onClick={handleCancelEdit}
+          title="Cancel Edit"
+          className="p-1 rounded hover:bg-gray-200 transition"
+        >
+          <X size={18} className="text-gray-500" />
+        </button>
+
+        {!row.is_active && (
+          <PermissionButton
+            user={activeUser}
+            permission="modify"
+            onClick={() => handleUndoCancelRow(row)}
+            title="Undo Cancel"
+            className="p-1 rounded hover:bg-gray-200 transition"
+          >
+            <RotateCcw size={18} className="text-gray-500" />
+          </PermissionButton>
+        )}
+      </>
+    ) : row.prf_num ? (
+      <>
+        {isRowUnposted(row) ? (
+          <>
+            <PermissionButton
+              user={activeUser}
+              permission="modify"
+              onClick={() => {
+                setEditRowId(row.id);
+                setEditRow({ ...row });
+                setOriginalRow(row);
+                setShowEditPopup(true);
+              }}
+              title="Edit"
+              className="p-1 rounded hover:bg-gray-200 transition"
+            >
+              <Pencil size={18} className="text-gray-500" />
+            </PermissionButton>
+
+            <button
+              onClick={() => handlePost(encodeURIComponent(row.prf_num))}
+              disabled={!isUserHavePrfAccess}
+              title="Post"
+              className="p-1 rounded hover:bg-blue-200 transition"
+            >
+              <Send size={18} className="text-gray-500" />
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => handleUnpost(encodeURIComponent(row.prf_num))}
+            disabled={!isUserHavePrfAccess}
+            title="Unpost"
+            className={`p-1 rounded hover:bg-yellow-100 transition ${
+              !isUserHavePrfAccess ? "cursor-not-allowed opacity-50" : ""
+            }`}
+          >
+            <Undo2 size={18} className="text-gray-500" />
+          </button>
+        )}
+
+        <button
+          onClick={() => handlePreview(encodeURIComponent(row.prf_num))}
+          title="Preview"
+          className="p-1 rounded hover:bg-gray-200 transition"
+        >
+          <FileSearch size={18} className="text-gray-500" />
+        </button>
+      </>
+    ) : (
+      <>
+        <PermissionButton
+          user={activeUser}
+          permission="modify"
+          onClick={() => {
+            setEditRowId(row.id);
+            setEditRow({ ...row });
+            setOriginalRow(row);
+          }}
+          title="Edit"
+          className="p-1 rounded hover:bg-gray-200 transition"
+        >
+          <Pencil size={18} className="text-gray-500" />
+        </PermissionButton>
+
+        {row.is_active ? (
+          <PermissionButton
+            user={activeUser}
+            permission="delete"
+            onClick={() => handleCancelRow(row)}
+            title="Cancel"
+            className="p-1 rounded hover:bg-gray-200 transition"
+          >
+            <X size={18} className="text-gray-500" />
+          </PermissionButton>
+        ) : (
+          <span
+            title="Row is already cancelled"
+            className="p-1 rounded text-gray-400"
+          >
+            <BookX size={18} className="text-gray-500" />
+          </span>
+        )}
+
+        <PermissionButton
+          user={activeUser}
+          permission="delete"
+          onClick={() => handleDelete(row)}
+          title="Delete"
+          className="p-1 rounded hover:bg-red-50 transition"
+        >
+          <Trash2 size={18} className="text-red-500" />
+        </PermissionButton>
+      </>
+    )}
+  </div>
+</td>
 
                           {/* ================= COLUMNS ================= */}
                           {orderedVisibleColumns.map((col) => {
@@ -5920,198 +6095,6 @@ onDrop={() => handleDrop(col.column_name)}
                             );
                           })}
 
-                      <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
-
-  {editRowId === row.id ? (
-
-    <>
-      {/* SAVE */}
-      <button
-        onClick={handleSaveEdit}
-        className="
-          px-3 py-1 text-sm rounded-md border transition
-          border-blue-300
-          bg-white
-          hover:bg-blue-100
-          hover:border-blue-500
-        "
-      >
-        Save
-      </button>
-
-      {/* CANCEL EDIT */}
-      <button
-        onClick={handleCancelEdit}
-        className="
-          px-3 py-1 text-sm rounded-md border transition
-          border-red-300
-          bg-white
-          hover:bg-red-100
-          hover:border-red-500
-        "
-      >
-        Cancel
-      </button>
-
-      {/* UNDO CANCEL */}
-      {!row.is_active && (
-        <PermissionButton
-          user={activeUser}
-          permission="modify"
-          onClick={() => handleUndoCancelRow(row)}
-          className="
-            px-3 py-1 text-sm rounded-md border transition
-            border-gray-400
-            bg-gray-100
-            hover:bg-gray-200
-            hover:border-gray-500
-          "
-        >
-          Undo Cancel
-        </PermissionButton>
-      )}
-    </>
-
-  ) : row.prf_num ? (
-
-    <>
-      {isRowUnposted(row) ? (
-        <>
-          <PermissionButton
-            user={activeUser}
-            permission="modify"
-            onClick={() => {
-              setEditRowId(row.id);
-              setEditRow({
-                ...row,
-              });
-              setOriginalRow(row);
-              setShowEditPopup(true);
-            }}
-            className="
-              px-3 py-1 text-sm rounded-md border transition
-              border-blue-300
-              bg-white
-              hover:bg-blue-100
-              hover:border-blue-500
-            "
-          >
-            Edit
-          </PermissionButton>
-
-          <button
-            onClick={() => handlePost(encodeURIComponent(row.prf_num))}
-            disabled={!isUserHavePrfAccess}
-             className="px-3 py-1 bg-green-400 hover:bg-green-500 text-white rounded-md text-sm font-medium"
-          >
-            Post
-          </button>
-        </>
-      ) : (
-        <button
-          onClick={() => handleUnpost(encodeURIComponent(row.prf_num))}
-          disabled={!isUserHavePrfAccess}
-          className={`px-3 py-1 text-white rounded-md text-sm font-medium transition-colors
-    ${
-      !isUserHavePrfAccess
-        ? "bg-gray-300 cursor-not-allowed opacity-50"
-        : "bg-red-400 hover:bg-red-500"
-    }`}
->
-        
-          Unpost
-        </button>
-      )}
-       
-     <button
-  
-  onClick={() => handlePreview(encodeURIComponent(row.prf_num))}
-  className="btn btn-primary"
->
-  Preview
-</button>
-    </>
-
-  ) : (
-
-    <>
-      {/* EDIT */}
-      <PermissionButton
-        user={activeUser}
-        permission="modify"
-        onClick={() => {
-
-          setEditRowId(row.id);
-
-          setEditRow({
-            ...row,
-          });
-
-          setOriginalRow(row);
-
-        }}
-        className="
-          px-3 py-1 text-sm rounded-md border transition
-          border-blue-300
-          bg-white
-          hover:bg-blue-100
-          hover:border-blue-500
-        "
-      >
-        Edit
-      </PermissionButton>
-
-      {/* CANCEL */}
-      {row.is_active ? (
-        <PermissionButton
-          user={activeUser}
-          permission="delete"
-          onClick={() => {
-            handleCancelRow(row);
-          }}
-          className="
-            px-3 py-1 text-sm rounded-md border transition
-            border-red-300
-            bg-white
-            hover:bg-red-100
-            hover:border-red-500
-          "
-        >
-          Cancel
-        </PermissionButton>
-      ) : (
-        <span
-          className="
-            px-3 py-1 text-sm rounded-md
-            bg-gray-100 text-gray-500
-          "
-        >
-          Cancelled
-        </span>
-      )}
-
-      {/* DELETE */}
-      <PermissionButton
-        user={activeUser}
-        permission="delete"
-        onClick={() => {
-          handleDelete(row);
-        }}
-        className="
-          px-3 py-1 text-sm rounded-md border transition
-          border-red-300
-          bg-white
-          hover:bg-red-100
-          hover:border-red-500
-        "
-      >
-        Delete
-      </PermissionButton>
-    </>
-
-  )}
-
-</td>
                         </tr>
                          ))}
   </React.Fragment>
