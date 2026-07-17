@@ -669,8 +669,8 @@ const startDate = details.period_start
     ? formatDateLong(details.period_start)
     : null;
 
-const expiryDate = header?.expiry_date
-  ? formatDateLong(header.expiry_date)
+const expiryDate = details?.period_end
+  ? formatDateLong(details.period_end)
   : null;
 
 const periodDisplay =

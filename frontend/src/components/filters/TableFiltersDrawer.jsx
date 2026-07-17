@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Select from "react-select";
 import { getMasterValues } from "../../api/api";
+import { X } from "lucide-react";
 
 export default function TableFiltersDrawer({
   open,
@@ -17,9 +18,7 @@ export default function TableFiltersDrawer({
   handleSaveFilter,
 }) {
   const masterList1 = [...(masterList || [])];
-   // console.log("Master List in Drawer:", masterList1);
-   // console.log("filters send to main table:", filters);
-  // ================= LOAD MASTER DATA =================
+  const [selectedFilter, setSelectedFilter] = useState(null);
   useEffect(() => {
     if (!open) return;
 
@@ -230,7 +229,7 @@ const handleSearch = (overrideFilters) => {
     <h2 className="text-lg font-semibold">Filters</h2>
   </div>
 
-  <div className="flex gap-2">
+  {/* <div className="flex gap-2">
    <button
   onClick={() => {
     const clearedFilters = [];
@@ -248,7 +247,18 @@ const handleSearch = (overrideFilters) => {
     >
       Search
     </button>
-  </div>
+  </div> */}
+  <button
+  onClick={onClose}
+  title="Close"
+  className="
+    h-10 w-10
+    flex items-center justify-center
+    bg-white
+    text-gray-600 "
+  >
+  <X size={23} />
+</button>
 </div>
 
         {/* BODY */}
@@ -256,24 +266,29 @@ const handleSearch = (overrideFilters) => {
 
           {/* ADD FILTER DROPDOWN */}
           {availableFilters.length > 0 && (
-            <Select
-              placeholder="+ Add Filter"
-              options={availableFilters.map((item) => ({
-                value: item.master,
-                label: item.display_name,
-              }))}
-              onChange={(selected) => {
-                if (!selected) return;
-                addFilter(selected.value);
-              }}
-              styles={{
-                control: (base) => ({
-                  ...base,
-                  borderRadius: 10,
-                  minHeight: 42,
-                }),
-              }}
-            />
+           <Select
+  placeholder="+ Add Filter"
+  value={selectedFilter}
+  options={availableFilters.map((item) => ({
+    value: item.master,
+    label: item.display_name,
+  }))}
+  onChange={(selected) => {
+    if (!selected) return;
+
+    addFilter(selected.value);
+
+    // Reset back to "+ Add Filter"
+    setSelectedFilter(null);
+  }}
+  styles={{
+    control: (base) => ({
+      ...base,
+      borderRadius: 10,
+      minHeight: 42,
+    }),
+  }}
+/>
           )}
 
           {/* FILTER LIST */}
@@ -410,19 +425,31 @@ const handleSearch = (overrideFilters) => {
 
         {/* FOOTER */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-white">
-          <button
-            onClick={onClose}
-            className="
-              w-20
-              h-11
-              bg-orange-500
-              text-white
-              rounded-xl
-              font-medium
-            "
-          >
-            Close
-          </button>
+         <div className="flex justify-between items-center">
+ 
+
+  <div className="flex gap-2">
+     <button
+      onClick={handleSearch}
+      className="text-sm px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+    >
+      Search
+    </button>
+   <button
+  onClick={() => {
+    const clearedFilters = [];
+    setFilters(clearedFilters);
+    handleSearch(clearedFilters);
+  }}
+  className="text-sm px-3 py-1 border rounded-lg hover:bg-gray-50"
+>
+  Clear
+</button>
+
+   
+  </div>
+</div>
+          
         </div>
 
       </div>
