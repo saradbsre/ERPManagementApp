@@ -1310,18 +1310,47 @@ const createBlankInvoiceRow = () => ({
 });
 
 const handleAddSingleRecord = () => {
+
+  setValidationErrors({});
+
   setInvoiceRows((prevRows) => [
     ...prevRows,
     createBlankInvoiceRow(),
   ]);
 
-
 };
+
 const handleDeleteRow = (rowIndex) => {
+
   setInvoiceRows((prevRows) =>
     prevRows.filter((_, index) => index !== rowIndex)
   );
+
+
+  setValidationErrors((prev) => {
+
+    const next = {};
+
+    Object.keys(prev).forEach((key) => {
+
+      const index = Number(key);
+
+      if (index < rowIndex) {
+        next[index] = prev[key];
+      }
+
+      if (index > rowIndex) {
+        next[index - 1] = prev[key];
+      }
+
+    });
+
+    return next;
+
+  });
+
 };
+
 const getFilteredOptions = (options) => {
   const searchText = dropdownSearch.toLowerCase().trim();
 
@@ -1597,6 +1626,7 @@ console.log("Saving transactions:", validRows);
     setExtractedData(null);
     setFiles([]);
     setPdfText("");
+    setValidationErrors({});
     if (fileInputRef.current) {
   fileInputRef.current.value = "";
 }
@@ -1854,21 +1884,24 @@ console.log("Saving transactions:", validRows);
 </button>
 
               <button
-                onClick={() => {
-                  setInvoiceRows([]);
-                  setExtractedInvoices([]);
-                  setExtractedData(null);
-                  setFiles([]);
-                  setPdfText("");
-                  setMessage({ type: "", text: "" });
-                    if (fileInputRef.current) {
-    fileInputRef.current.value = "";
-  }
-                }}
-                className="px-5 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-              >
-                Discard
-              </button>
+  onClick={() => {
+    setInvoiceRows([]);
+    setExtractedInvoices([]);
+    setExtractedData(null);
+    setFiles([]);
+    setPdfText("");
+    setMessage({ type: "", text: "" });
+    setValidationErrors({});
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }}
+  className="px-5 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+>
+  Discard
+</button>
+
             </div>
           </div>
         )}
