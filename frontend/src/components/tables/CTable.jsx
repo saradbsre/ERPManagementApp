@@ -6,7 +6,7 @@ import {
   Share2,
   ChevronsUpDown,
   ChevronRight,
-  Funnel,
+  Funnel, PinOff
 } from "lucide-react";
 import { fetchSections,fetchMasters, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow, getPreviewPRF, unpostPRFTransaction, postPRFTransaction,getModuleViews,
 createModuleView,
@@ -130,6 +130,7 @@ function SortableColumnItem({ col, checked, toggleTempColumn}) {
 
 
 
+
 export default function DynamicTablePage() {
     const { id } = useParams();
     const location = useLocation();
@@ -182,11 +183,11 @@ const [customPrintHeader] = useState("ABDULWAHED BIN SHABIB GROUP");
     const [planManuallyChanged, setPlanManuallyChanged] = useState(false);
     const [masters, setMasters] = useState([]);
     const [showTotals, setShowTotals] = useState(false);
-  
-    const [groupBy, setGroupBy] = useState({
-      key: null,
-      direction: "asc"
-    });
+    const [groupBy, setGroupBy] = useState([]);
+    // const [groupBy, setGroupBy] = useState({
+    //   key: null,
+    //   direction: "asc"
+    // });
     const [activeDateFilter, setActiveDateFilter] = useState(null);
     const [showSaveFilter, setShowSaveFilter] = useState(false);
     const [saveFilterName, setSaveFilterName] = useState("");
@@ -1919,11 +1920,15 @@ const calculateCost = (amount, currencyCode, term) => {
   return Number(amount) * Number(rate);
 };
 
-const groupedChips = columnChips.reduce((acc, chip) => {
-  if (!acc[chip.type]) acc[chip.type] = [];
-  acc[chip.type].push(chip);
-  return acc;
-}, {});
+const groupedChips = (Array.isArray(columnChips) ? columnChips : []).reduce(
+  (acc, chip) => {
+    if (!acc[chip.type]) acc[chip.type] = [];
+    acc[chip.type].push(chip);
+    return acc;
+  },
+  {}
+);
+
 
 
 const handleNewRowChange = async (key, value, masterName) => {
@@ -2298,10 +2303,7 @@ const handleClear = async () => {
   setSortConfig([]);
   // setSortKey(null);
   // setSortOrder(null);
-  setGroupBy({
-  key: null,
-  direction: "asc",
-});
+  setGroupBy([]);
 
   // ================= RESET CHIPS =================
   setColumnChips([]);
@@ -3439,27 +3441,43 @@ const handleSearch = (key, displayName) => {
 };
 
 const handleGroup = (key, direction, displayName) => {
-  setGroupBy({ key, direction });
+  setGroupBy(prev => {
+    const groups = Array.isArray(prev) ? prev : [];
+
+    const filtered = groups.filter(g => g.key !== key);
+
+    return [
+      ...filtered,
+      {
+        key,
+        direction,
+        displayName
+      }
+    ];
+  });
 
   setColumnChips(prev => {
-    
-    const filtered = prev.filter(
+    const chips = Array.isArray(prev) ? prev : [];
+
+    const filtered = chips.filter(
       c => !(c.type === "group" && c.column === key)
     );
-    console.log("Adding group chip:", { type: "group", column: key, value: direction });
+
     return [
       ...filtered,
       {
         type: "group",
         column: key,
         value: direction,
-        displayName: displayName 
+        displayName
       }
     ];
   });
 
   setOpenMenu(null);
 };
+
+
 
 const removeChip = (chip) => {
   setColumnChips(prev =>
@@ -3480,9 +3498,14 @@ const removeChip = (chip) => {
   }
 
   if (chip.type === "group") {
-    setGroupBy("");
+    setGroupBy(prev =>
+      Array.isArray(prev)
+        ? prev.filter(g => g.key !== chip.column)
+        : []
+    );
   }
 };
+
 
 const toggleChipDirection = (chip) => {
   const newDirection = chip.value === "asc" ? "desc" : "asc";
@@ -3517,156 +3540,141 @@ const togglePinColumn = (columnName) => {
 //     );
 
 const sortedAllRows = React.useMemo(() => {
-  return [...filteredRows].sort((a, b) => {
-    for (const sort of sortConfig) {
+
+  const data = [...filteredRows];
+
+  const sorting = [
+    ...sortConfig,
+    ...(Array.isArray(groupBy)
+      ? groupBy.map(g => ({
+          key: g.key,
+          direction: g.direction
+        }))
+      : [])
+  ];
+
+
+  return data.sort((a, b) => {
+
+    for (const sort of sorting) {
+
       let aValue = a?.[sort.key];
       let bValue = b?.[sort.key];
 
-      aValue = typeof aValue === "object" ? aValue?.value ?? "" : aValue ?? "";
-      bValue = typeof bValue === "object" ? bValue?.value ?? "" : bValue ?? "";
 
-      const isNumeric = !isNaN(aValue) && !isNaN(bValue);
+      aValue =
+        typeof aValue === "object"
+          ? aValue?.value ?? ""
+          : aValue ?? "";
 
-      let result = 0;
+      bValue =
+        typeof bValue === "object"
+          ? bValue?.value ?? ""
+          : bValue ?? "";
 
-      if (isNumeric) {
-        result = Number(aValue) - Number(bValue);
-      } else {
-        result = String(aValue).localeCompare(String(bValue));
-      }
 
-      if (result !== 0) {
-        return sort.direction === "asc" ? result : -result;
-      }
-    }
-    return 0;
-  });
-}, [filteredRows, sortConfig]);
+      const result = String(aValue).localeCompare(
+        String(bValue),
+        undefined,
+        {
+          numeric: true,
+          sensitivity: "base"
+        }
+      );
 
-const processedRows = React.useMemo(() => {
-  let data = [...filteredRows];
-
-  // 1. SORT
-  data = [...data].sort((a, b) => {
-    for (const sort of sortConfig) {
-      let aValue = a?.[sort.key];
-      let bValue = b?.[sort.key];
-
-      aValue = typeof aValue === "object" ? aValue?.value ?? "" : aValue ?? "";
-      bValue = typeof bValue === "object" ? bValue?.value ?? "" : bValue ?? "";
-
-      const isNumeric = !isNaN(aValue) && !isNaN(bValue);
-
-      let result = 0;
-
-      if (isNumeric) {
-        result = Number(aValue) - Number(bValue);
-      } else {
-        result = String(aValue).localeCompare(String(bValue));
-      }
 
       if (result !== 0) {
-        return sort.direction === "asc" ? result : -result;
+        return sort.direction === "desc"
+          ? -result
+          : result;
       }
     }
+
     return 0;
   });
 
-  return data;
-}, [filteredRows, sortConfig]);
 
-const groupedAllRows = React.useMemo(() => {
-  if (!groupBy?.key) {
-    return [
-      {
-        group: "All Records",
-        rows: sortedAllRows
+}, [filteredRows, sortConfig, groupBy]);
+
+console.log("Sorted all rows:", sortedAllRows);
+const groupedByRows = React.useMemo(() => {
+   const groups = {};
+
+   sortedAllRows.forEach(row => {
+
+      const key =
+        Array.isArray(groupBy) && groupBy.length > 0
+          ? groupBy.map(g => row[g.key] ?? "(Blank)").join(" - ")
+          : "All Records";
+
+
+      if (!groups[key]) {
+        groups[key] = [];
       }
-    ];
-  }
 
-  const groups = {};
+      groups[key].push(row);
+   });
 
-  sortedAllRows.forEach((row) => {
-    const key = row[groupBy.key] || "(Blank)";
+   console.log("Grouped rows:", groups);
+   return Object.entries(groups).map(([group, rows]) => ({
+      group,
+      rows
+   }));
 
-    if (!groups[key]) groups[key] = [];
-
-    groups[key].push(row);
-  });
-
-  let entries = Object.entries(groups);
-
-  entries.sort((a, b) => {
-    return groupBy.direction === "desc"
-      ? String(b[0]).localeCompare(String(a[0]))
-      : String(a[0]).localeCompare(String(b[0]));
-  });
-
-  return entries.map(([group, rows]) => ({
-    group,
-    rows
-  }));
 }, [sortedAllRows, groupBy]);
 
-const flatGroupedRows = React.useMemo(() => {
-  const flat = [];
 
-  groupedAllRows.forEach((g) => {
-    g.rows.forEach((row) => {
-      flat.push({
-        ...row,
-        __group: g.group
-      });
+// 3. PAGINATE INSIDE GROUPS
+const paginatedGroupedRows = React.useMemo(() => {
+
+  const result = [];
+
+  let count = 0;
+
+  groupedByRows.forEach(group => {
+
+    const rows = group.rows.filter(() => {
+
+      const show =
+        count >= (page - 1) * pageSize &&
+        count < page * pageSize;
+
+      count++;
+
+      return show;
     });
+
+
+    if(rows.length){
+      result.push({
+        group: group.group,
+        rows
+      });
+    }
+
   });
 
-  return flat;
-}, [groupedAllRows]);
 
-const paginatedRows = React.useMemo(() => {
-  const start = (page - 1) * pageSize;
-  const end = start + pageSize;
+  return result;
 
-  return flatGroupedRows.slice(start, end);
-}, [flatGroupedRows, page, pageSize]);
+}, [groupedByRows, page, pageSize]);
+console.log("Paginated grouped rows:", paginatedGroupedRows);
 
-const groupedByRows = React.useMemo(() => {
-  const groups = {};
 
-  paginatedRows.forEach((row) => {
-    const key = row.__group || "All Records";
-
-    if (!groups[key]) groups[key] = [];
-
-    groups[key].push(row);
-  });
-
-  let entries = Object.entries(groups);
-
-  entries.sort((a, b) => {
-    return groupBy?.direction === "desc"
-      ? String(b[0]).localeCompare(String(a[0]))
-      : String(a[0]).localeCompare(String(b[0]));
-  });
-
-  return entries.map(([group, rows]) => ({
-    group,
-    rows
-  }));
-}, [paginatedRows, groupBy]);
 
 const totalColumns = visibleColumns.length + 2;
 
 const rowIndexMap = React.useMemo(() => {
   const map = new Map();
 
-  flatGroupedRows.forEach((row, index) => {
-    map.set(row.id, index);
+  paginatedGroupedRows.forEach((group) => {
+    group.rows.forEach((row, index) => {
+      map.set(row.id, index);
+    });
   });
 
   return map;
-}, [flatGroupedRows]);
+}, [paginatedGroupedRows]);
 
 const orderedVisibleColumns = useMemo(() => {
   const pinned = [];
@@ -3689,7 +3697,7 @@ const printableGroupedRows = React.useMemo(() => {
   const rows = sortedAllRows.filter(
   (row) => row.requires_prf_form === true && row.prf_num
 );
-  console.log("Printable grouped rows (filtered):", rows);
+ // console.log("Printable grouped rows (filtered):", rows);
   if (!groupBy?.key) {
     return [
       {
@@ -3916,15 +3924,9 @@ const applySavedView = async (view) => {
   }
 
  if (savedGroup?.key) {
-  setGroupBy({
-    key: savedGroup.key,
-    direction: savedGroup.direction || "asc",
-  });
+  setGroupBy([savedGroup]);
 } else {
-  setGroupBy({
-    key: null,
-    direction: "asc",
-  });
+  setGroupBy([]);
 }
   console.log("saved filters:", savedFilters);
   setHasViewChanges(false);
@@ -4517,10 +4519,7 @@ const normalizedFilters = nextFilters.map((filter) => ({
     setActiveDateFilter("");
 
     setSortConfig([]);
-    setGroupBy({
-      key: null,
-      direction: "asc",
-    });
+    setGroupBy([]);
     setColumnChips([]);
 
     setTableColumnMode("default");
@@ -4699,7 +4698,7 @@ const normalizedFilters = nextFilters.map((filter) => ({
   </button>
 <button 
    onClick={() => setShowFilters(true)}
-   className="px-1 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
+   className="px-2 py-2 text-sm rounded-md border border-gray-300 bg-white 
                hover:bg-orange-50 hover:border-orange-400 hover:text-orange-600 transition">
         <Funnel size={15} />
    </button>
@@ -4762,78 +4761,6 @@ const normalizedFilters = nextFilters.map((filter) => ({
             {/* ACTIVE FILTER CHIPS */}
             <div className="flex items-start justify-between flex-wrap gap-3">
             <div className="flex flex-wrap gap-2 mt-0 mb-4">
- 
-  {/* {filters.map((f, i) => {
-    
-    const masterName = normalize(f.master);
-
-    const rawOptions = masterDataMap?.[masterName];
-
-const options = Array.isArray(rawOptions)
-  ? rawOptions.map(normalize)
-  : [];
-
-    const selectedValues = (f.values || []).map(normalize);
-
-    return (
-      <div
-        key={i}
-        className="relative flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-3 py-1 shadow-sm"
-      >
-
-     
-        <span className="text-sm font-medium text-gray-700">
-          {masterName}
-        </span>
-
-      
-        <div className="flex gap-1 flex-wrap">
-          {selectedValues.map((val, idx) => (
-            console.log("selected value:", val),
-            <span
-              key={idx}
-              className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
-            >
-              {val}
-              <button
-                onClick={() => {
-               setFilters(prev =>
-                  prev.map((item, index) => {
-                    if (index !== i) return item;
-
-                    return {
-                      ...item,
-                      values: (item.values || [])
-                        .map(normalize)
-                        .filter(v => v !== val),
-                    };
-                  })
-                );
-                }}
-                className="text-blue-500 hover:text-red-500"
-              >
-                ✕
-              </button>
-            </span>
-          ))}
-        </div>
-
-       
-
-    
-        <button
-          onClick={() =>
-            setFilters(filters.filter((_, index) => index !== i))
-          }
-          className="text-gray-400 hover:text-red-500 ml-1"
-        >
-          ✕
-        </button>
-
-      </div>
-    );
-  })} */}
-
 <div className="flex flex-wrap items-center gap-2 mb-3">
 
   {/* SEARCH */}
@@ -4867,7 +4794,7 @@ const options = Array.isArray(rawOptions)
       <span className="text-xs font-bold text-gray-600 mr-2">
         SORTING:
       </span>
-      {console.log("Rendering group chips:", groupedChips)}
+     
       {groupedChips.sort.map((chip, i) => (
         <div
   key={i}
@@ -4895,31 +4822,38 @@ const options = Array.isArray(rawOptions)
   {/* GROUP */}
   {groupedChips.group?.length > 0 && (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-bold text-gray-600 mr-2">
-        GROUPING:
-      </span>
-      {console.log("Rendering group chips:", groupedChips)}
-      {groupedChips.group.map((chip, i) => (
-       <div
-  key={i}
-  onClick={() => toggleChipDirection(chip)}
-  className="flex items-center gap-2 bg-purple-50 border border-purple-200 text-purple-700 px-3 py-1 rounded-full text-xs cursor-pointer hover:bg-purple-100"
->
-  <span>
-    {chip.displayName} {chip.value === "asc" ? "↑" : "↓"}
-  </span>
+    {Array.isArray(groupedChips.group) &&
+ groupedChips.group.length > 0 && (
+  <div className="flex flex-wrap items-center gap-2">
+    <span className="text-xs font-bold text-gray-600 mr-2">
+      GROUPING:
+    </span>
 
-  <button
-    onClick={(e) => {
-      e.stopPropagation();
-      removeChip(chip);
-    }}
-    className="text-red-500 hover:text-red-700"
-  >
-    ✕
-  </button>
-</div>
-      ))}
+    {groupedChips.group.map((chip, i) => (
+      <div
+        key={`${chip.column}-${i}`}
+        onClick={() => toggleChipDirection(chip)}
+        className="flex items-center gap-2 bg-purple-50 border border-purple-200 text-purple-700 px-3 py-1 rounded-full text-xs cursor-pointer hover:bg-purple-100"
+      >
+        <span>
+          {chip.displayName} {chip.value === "asc" ? "↑" : "↓"}
+        </span>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            removeChip(chip);
+          }}
+          className="text-red-500 hover:text-red-700"
+        >
+          ✕
+        </button>
+      </div>
+    ))}
+  </div>
+)}
+
+
     </div>
   )}
 
@@ -4993,7 +4927,14 @@ onDrop={() => handleDrop(col.column_name)}
 
   {/* SMALL BUTTON → MENU */}
   <button
-    className="text-gray-400 hover:text-gray-700 px-1"
+    className=" absolute right-0
+                h-5 w-5
+                flex items-center justify-center
+                rounded-md
+               
+                text-gray-400
+                hover:bg-blue-100
+                transition"
     onClick={(e) => {
       e.stopPropagation();
 
@@ -5007,80 +4948,77 @@ onDrop={() => handleDrop(col.column_name)}
     {/* DROPDOWN MENU */}
     {openMenu === col.column_name && createPortal(
       <div
-        className="fixed mt-1 w-56 bg-white border shadow-xl rounded-lg z-[9999]"
+        className="fixed mt-1 absolute top-9 right-0
+        w-[275px]
+        bg-white
+        rounded-xl
+        shadow-[0_15px_45px_rgba(0,0,0,0.16)]
+        border border-gray-100
+        z-[99999]
+        overflow-hidden"
         style={{ top: menuPosition.top, left: menuPosition.left }}
         onClick={(e) => e.stopPropagation()}
       >
         <button
           onClick={() => handleSearch(col.column_name, col.display_name)}
-          className="w-full text-left px-3 py-2 hover:bg-gray-100"
+          className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
         >
-          🔍 Search
+           Search
         </button>
-
-        <button
+        <div className="border-t border-gray-100" />
+       <button
           onClick={() => handlePinColumn(col.column_name)}
-          className="w-full text-left px-3 py-2 hover:bg-gray-100"
+          className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
         >
-          {pinnedColumns.includes(col.column_name)
-            ? "📌 Unpin Column"
-            : "📍 Pin Column"}
+          {pinnedColumns.includes(col.column_name) ? (
+            <>
+              <PinOff className="w-4 h-4" />
+              <span>Unpin Column</span>
+            </>
+          ) : (
+            <>
+              <Pin className="w-4 h-4" />
+              <span>Pin Column</span>
+            </>
+          )}
         </button>
-
+        <div className="border-t border-gray-100" />
         <button
           onClick={() =>
             handleSort(col.column_name, "asc", col.display_name)
           }
-          className="w-full text-left px-3 py-2 hover:bg-gray-100"
+          className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
         >
           Sort by Ascending
         </button>
-
+        <div className="border-t border-gray-100" />
         <button
           onClick={() => {
             console.log("Sorting by column:", col, "with direction: desc");
             handleSort(col.column_name, "desc", col.display_name);
           }}
-          className="w-full text-left px-3 py-2 hover:bg-gray-100"
+          className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
         >
           Sort by Descending
         </button>
-
+        <div className="border-t border-gray-100" />
         <button
           onClick={() => {
-            console.log("Grouping by column:", col, "with direction: asc");
             handleGroup(col.column_name, "asc", col.display_name);
           }}
-          className="w-full text-left px-3 py-2 hover:bg-gray-100"
+          className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
         >
           Group by Ascending
         </button>
-
+        <div className="border-t border-gray-100" />
         <button
           onClick={() =>
             handleGroup(col.column_name, "desc", col.display_name)
           }
-          className="w-full text-left px-3 py-2 hover:bg-gray-100"
+          className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
         >
           Group by Descending
         </button>
-
-        <hr />
-
-        {/* <button
-          onClick={() => {
-            setHidePopupColumn(col.column_name);
-
-            setTempHideColumns(
-              visibleColumns.map((c) => c.column_name)
-            );
-
-            setShowHidePopup(true);
-          }}
-          className="w-full text-left px-3 py-2 hover:bg-red-50 text-red-600"
-        >
-          Show & Hide Columns
-        </button> */}
       </div>,
       document.body
     )}
@@ -5125,10 +5063,6 @@ onDrop={() => handleDrop(col.column_name)}
 
                             const isAmount =
                               col.data_type?.toLowerCase().includes("decimal");
-
-                            // =========================
-                            // DISPLAY VALUE
-                            // =========================
                             const fieldValue = inputValues[col.column_name];
 
                             const displayValue =
@@ -5455,23 +5389,89 @@ onDrop={() => handleDrop(col.column_name)}
 
                         </tr>
                       )}
-                    {(groupedByRows || []).map((groupObj) => (
+                    {(paginatedGroupedRows || []).map((groupObj) => (
   <React.Fragment key={groupObj.group || "default"}>
 
-    {groupBy?.key && (
-      <tr className="bg-blue-100 sticky top-0 z-30">
-        <td
-          colSpan={totalColumns}
-          className="px-4 py-2 font-semibold text-blue-900 border-y"
-        >
-          {visibleColumns.find(
-            c => c.column_name === groupBy.key
-          )?.display_name || groupBy.key}
-          : {groupObj.group}
-          ({groupObj.rows.length})
-        </td>
-      </tr>
-    )}
+    {groupBy?.length > 0 && (
+<tr className="sticky top-0 z-30">
+  <td colSpan={totalColumns} className="p-0">
+    <div
+      className="
+        flex items-center justify-between
+        px-5 py-2.5
+        bg-white
+        border-y border-gray-200
+        shadow-sm
+      "
+    >
+      <div className="flex items-center gap-3">
+
+        {/* Accent line */}
+        <div
+          className="
+            w-2 h-8
+            rounded-full
+            bg-blue-600
+          "
+        />
+
+        <div className="flex flex-col">
+
+          {/* Group columns */}
+          <div
+            className="
+              text-[11px]
+              uppercase
+              tracking-wider
+              text-gray-500
+            "
+          >
+            {groupBy.map(g => g.displayName).join(" • ")}
+          </div>
+
+
+          {/* Group value + row count */}
+          <div className="flex items-center gap-2">
+
+            <div
+              className="
+                text-sm
+                font-semibold
+                text-gray-800
+              "
+            >
+              {groupObj.group}
+            </div>
+
+
+            {/* Row count badge */}
+            <span
+              className="
+                px-2
+                py-0.5
+                rounded-full
+                bg-blue-50
+                border border-blue-200
+                text-blue-700
+                text-[11px]
+                font-semibold
+              "
+            >
+              {groupObj.rows.length} rows
+            </span>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </td>
+</tr>
+
+)}
+
 
     {groupObj.rows.map((row, i) => (
       <tr
