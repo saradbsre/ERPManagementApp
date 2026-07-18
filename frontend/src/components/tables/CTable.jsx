@@ -386,7 +386,7 @@ function getCurrentMonth() {
   };
 }
 
-const handleDragEnd = (event) => {
+const handleDragEnd = async (event) => {
   const { active, over } = event;
 
   if (!over || active.id === over.id) return;
@@ -401,15 +401,36 @@ const handleDragEnd = (event) => {
 
   const reordered = arrayMove(columns, oldIndex, newIndex);
 
-  // ❌ DO NOT re-sort again
+  // Update UI immediately
   setColumns(reordered);
 
-  // keep selection stable
+  // Save reordered visible columns
+  const reorderedVisible = reordered
+    .filter((col) => selectedColumns.includes(col.column_name))
+    .map((col) => col.column_name);
+
+  setVisibleColumnsState(reorderedVisible);
+  setSelectedColumns(reorderedVisible);
+  setSavedTableColumns(reorderedVisible);
+
+  // Keep selection stable
   setTempSelectedColumns((prev) =>
-    reordered
-      .map((c) => c.column_name)
-      .filter((name) => prev.includes(name))
+    reorderedVisible.filter((name) => prev.includes(name))
   );
+
+  // Save to DB
+  try {
+    await upsertCustomizedColumns(
+      currentModule?.module_id,
+      activeUserEmail,
+      {
+        visibleColumns: reorderedVisible,
+        pinnedColumns,
+      }
+    );
+  } catch (err) {
+    console.error("Failed to save column order:", err);
+  }
 };
 
 
@@ -617,7 +638,7 @@ const fetchCustomizedColumns = async () => {
     );
 
     const savedColumns = res?.data?.data?.columns;
-
+    console.log("Fetched customized columns:", savedColumns);
     if (Array.isArray(savedColumns)) {
       return { visibleColumns: savedColumns, pinnedColumns: [] };
     }
@@ -731,59 +752,7 @@ useEffect(() => {
   workflowAuth();
 }, []);
 
-// const toFilterKey = (masterName, rawVal) => {
-//   const input = String(rawVal ?? "").trim().toLowerCase();
-//   if (!input) return rawVal;
 
-//   if (masterName === "currency") {
-//     const hit = currencies.find((c) => {
-//       const code = String(c.currency_code ?? "").trim().toLowerCase();
-//       const name = String(c.currency ?? "").trim().toLowerCase();
-//       return code === input || name === input;
-//     });
-
-//     return hit?.currency_code ?? rawVal;
-//   }
-
-//   const options = masterDataMap?.[masterName] || [];
-//   const hit = options.find((o) => {
-//     const key = String(o?.key ?? o?.id ?? o?.value ?? "").trim().toLowerCase();
-//     const val = String(o?.value ?? o ?? "").trim().toLowerCase();
-//     return input === key || input === val;
-//   });
-
-//   return hit ? (hit.key ?? hit.id ?? hit.value) : rawVal;
-// };
-
-// const saveFiltersAsKeys = filters.map((filter) => ({
-//   ...filter,
-//   values: (filter.values || []).map((val) => toFilterKey(filter.master, normalize(val))),
-// }));
-// const handleSaveFilter = async () => {
-//   if (!saveFilterName.trim()) {
-//     alert("Filter name is required");
-//     return;
-//   }
-
-//  const payload = {
-//   filterName: saveFilterName.trim(),
-//   userId: activeUser?.email,
-//   module_id: currentModule?.module_id,
-//   filterData: {
-//     search,
-//     filters: saveFiltersAsKeys,
-//     dateFilters
-//   }
-// };
-
-//   //console.log("Saving filter:", payload);
-
-//   await upsertSavedFilter(payload);
-
-//   setSaveFilterName("");
-//   setShowSaveFilter(false);
-//   loadSavedFilters();
-// };
 
 useEffect(() => {
   if (isFilterActive) {
@@ -980,10 +949,6 @@ useEffect(() => {
 
 const getVisibleColumns = () => {
   let cols = [...orderedColumns];
-
-  // =========================
-  // currency filter (keep)
-  // =========================
   const currencyFilter = filters.find(f => f.master === "currency");
 
  if (currencyFilter?.values?.length) {
@@ -1013,9 +978,6 @@ const getVisibleColumns = () => {
   });
 }
 
-  // =========================
-  // 🔥 USE FETCHED CUSTOMIZED ORDER ONLY
-  // =========================
   const visibleOrder = (visibleColumnsState || []).map(v =>
     typeof v === "string" ? v : v.column_name
   );
@@ -1033,10 +995,6 @@ const getVisibleColumns = () => {
   } else {
     cols = orderColumnsByConfig(cols);
   }
-
-  // =========================
-  // pinned override (optional)
-  // =========================
   if (pinnedColumns.length) {
     const pinnedSet = new Set(pinnedColumns);
 
@@ -1685,9 +1643,30 @@ const loadModule = async (
     );
 
     setRows(dataRes.data || []);
-    setColumns(orderColumnsByConfig(
-      (mod?.columns || []).filter(c => c.is_active !== false)
-    ));
+    const cols = (mod?.columns || []).filter(c => c.is_active !== false);
+
+const settings = await fetchCustomizedColumns();
+const savedOrder = settings?.visibleColumns || [];
+
+if (savedOrder.length > 0) {
+  const map = new Map(cols.map(c => [c.column_name, c]));
+
+  const ordered = savedOrder
+    .map(name => map.get(name))
+    .filter(Boolean);
+
+  const remaining = cols.filter(
+    c => !savedOrder.includes(c.column_name)
+  );
+
+  setColumns([...ordered, ...remaining]);
+
+  setVisibleColumnsState(savedOrder);
+  setSelectedColumns(savedOrder);
+  setSavedTableColumns(savedOrder);
+} else {
+  setColumns(orderColumnsByConfig(cols));
+}
   }
 
   setLoading(false);
@@ -3690,7 +3669,7 @@ const orderedVisibleColumns = useMemo(() => {
 
   return [...pinned, ...unpinned];
 }, [visibleColumns, pinnedColumns]);
-//console.log("Ordered visible columns:", orderedVisibleColumns.map(c => c.column_name));
+console.log("Ordered visible columns:", orderedVisibleColumns.map(c => c.column_name));
 
 
 const printableGroupedRows = React.useMemo(() => {
@@ -4506,31 +4485,41 @@ const normalizedFilters = nextFilters.map((filter) => ({
   views={views}
   activeViewId={activeViewId}
   setActiveViewId={setActiveViewId}
-  onMainViewClick={() => {
-    const defaults = getCurrentMonth();
+  onMainViewClick={async () => {
+  const defaults = getCurrentMonth();
 
-    setSearch("");
-    setSearchColumnKey(null);
+  setSearch("");
+  setSearchColumnKey(null);
 
-    setFilters([]);
-    setAppliedFilters([]);
+  setFilters([]);
+  setAppliedFilters([]);
 
-    setDateFilters(defaults);
-    setActiveDateFilter("");
+  setDateFilters(defaults);
+  setActiveDateFilter("");
 
-    setSortConfig([]);
-    setGroupBy([]);
-    setColumnChips([]);
+  setSortConfig([]);
+  setGroupBy([]);
+  setColumnChips([]);
 
-    setTableColumnMode("default");
-    setHasViewChanges(false);
+  // 🔽 ADD THIS
+  const settings = await fetchCustomizedColumns();
 
-    refreshRowsByView({
-      search: "",
-      dateFilters: defaults,
-      appliedFilters: [],
-    });
-  }}
+  const savedColumns = settings?.visibleColumns || [];
+
+  setVisibleColumnsState(savedColumns);
+  setSelectedColumns(savedColumns);
+  setSavedTableColumns(savedColumns);
+
+  setTableColumnMode("custom");
+
+  setHasViewChanges(false);
+
+  refreshRowsByView({
+    search: "",
+    dateFilters: defaults,
+    appliedFilters: [],
+  });
+}}
   onTableViewClick={() => {
     setActiveViewId("table");
     setHasViewChanges(false);
