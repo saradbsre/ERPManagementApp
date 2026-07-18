@@ -610,10 +610,6 @@ const formatDateForInput = (dateValue) => {
   // Remove ordinal suffix: 1st, 2nd, 3rd, 14th
   value = value.replace(/(\d{1,2})(st|nd|rd|th)/gi, "$1");
 
-  // Replace dot/comma separators with space
-  // Example: 14.Jul.2026 => 14 Jul 2026
-  value = value.replace(/[.,]/g, " ").replace(/\s+/g, " ").trim();
-
   const monthMap = {
     jan: "01",
     january: "01",
@@ -641,7 +637,8 @@ const formatDateForInput = (dateValue) => {
     december: "12",
   };
 
-  // yyyy-MM-dd / yyyy/MM/dd
+  // yyyy-MM-dd or yyyy/MM/dd
+  // Example: 2026-07-14
   const yyyyMmDd = value.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
   if (yyyyMmDd) {
     const [, year, monthRaw, dayRaw] = yyyyMmDd;
@@ -649,23 +646,71 @@ const formatDateForInput = (dateValue) => {
     const month = String(monthRaw).padStart(2, "0");
     const day = String(dayRaw).padStart(2, "0");
 
-    return `${year}-${month}-${day}`;
+    if (
+      Number(month) >= 1 &&
+      Number(month) <= 12 &&
+      Number(day) >= 1 &&
+      Number(day) <= 31
+    ) {
+      return `${year}-${month}-${day}`;
+    }
+
+    return "";
   }
 
   // dd/MM/yyyy or dd-MM-yyyy
-  const ddMmYyyy = value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-  if (ddMmYyyy) {
-    const [, dayRaw, monthRaw, year] = ddMmYyyy;
+  // Example: 14/07/2026 or 14-07-2026
+ const slashDashDate = value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
 
-    const day = String(dayRaw).padStart(2, "0");
-    const month = String(monthRaw).padStart(2, "0");
+if (slashDashDate) {
+  const [, firstRaw, secondRaw, year] = slashDashDate;
 
-    return `${year}-${month}-${day}`;
+  const first = Number(firstRaw);
+  const second = Number(secondRaw);
+
+  let day;
+  let month;
+
+  if (first > 12 && second <= 12) {
+    // dd/MM/yyyy
+    day = first;
+    month = second;
+  } else if (second > 12 && first <= 12) {
+    // MM/DD/yyyy
+    month = first;
+    day = second;
+  } else {
+    // Ambiguous date like 07/08/2026
+    // Default to dd/MM/yyyy for UAE/common invoice format
+    day = first;
+    month = second;
   }
+
+  if (
+    day >= 1 &&
+    day <= 31 &&
+    month >= 1 &&
+    month <= 12
+  ) {
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
+  return "";
+}
+
+  // Normalize month-name date separators
+  // 14-Jul-2026, 14.Jul.2026, 14 Jul 2026 => 14 Jul 2026
+  const normalizedMonthDate = value
+    .replace(/[.\-\/,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
   // dd MMM yyyy
   // Example: 14 Jul 2026
-  const ddMmmYyyy = value.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})$/);
+  const ddMmmYyyy = normalizedMonthDate.match(
+    /^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})$/
+  );
+
   if (ddMmmYyyy) {
     const [, dayRaw, monthNameRaw, year] = ddMmmYyyy;
 
@@ -679,7 +724,10 @@ const formatDateForInput = (dateValue) => {
 
   // MMM dd yyyy
   // Example: Jul 14 2026
-  const mmmDdYyyy = value.match(/^([A-Za-z]{3,})\s+(\d{1,2})\s+(\d{4})$/);
+  const mmmDdYyyy = normalizedMonthDate.match(
+    /^([A-Za-z]{3,})\s+(\d{1,2})\s+(\d{4})$/
+  );
+
   if (mmmDdYyyy) {
     const [, monthNameRaw, dayRaw, year] = mmmDdYyyy;
 
