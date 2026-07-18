@@ -465,6 +465,8 @@ const processSinglePdfFile = async (pdfFile, index, totalFiles) => {
     //console.log("Sorted invoice results:", sortedResults);
     setExtractedInvoices(sortedResults);
 const editableRows = buildEditableInvoiceRows(sortedResults);
+console.log("Extracted invoice raw data:", sortedResults);
+console.log("Editable invoice rows after date format:", editableRows);
 //console.log("Editable invoice rows:", editableRows);
 setInvoiceRows(editableRows);
     if (sortedResults.length === 1) {
@@ -600,28 +602,118 @@ const loadDropdownData = async () => {
 const formatDateForInput = (dateValue) => {
   if (!dateValue) return "";
 
-  // Already correct format: yyyy-MM-dd
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-    return dateValue;
+  let value = String(dateValue).trim();
+
+  // Remove time part
+  value = value.split("T")[0].trim();
+
+  // Remove ordinal suffix: 1st, 2nd, 3rd, 14th
+  value = value.replace(/(\d{1,2})(st|nd|rd|th)/gi, "$1");
+
+  // Replace dot/comma separators with space
+  // Example: 14.Jul.2026 => 14 Jul 2026
+  value = value.replace(/[.,]/g, " ").replace(/\s+/g, " ").trim();
+
+  const monthMap = {
+    jan: "01",
+    january: "01",
+    feb: "02",
+    february: "02",
+    mar: "03",
+    march: "03",
+    apr: "04",
+    april: "04",
+    may: "05",
+    jun: "06",
+    june: "06",
+    jul: "07",
+    july: "07",
+    aug: "08",
+    august: "08",
+    sep: "09",
+    sept: "09",
+    september: "09",
+    oct: "10",
+    october: "10",
+    nov: "11",
+    november: "11",
+    dec: "12",
+    december: "12",
+  };
+
+  // yyyy-MM-dd / yyyy/MM/dd
+  const yyyyMmDd = value.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (yyyyMmDd) {
+    const [, year, monthRaw, dayRaw] = yyyyMmDd;
+
+    const month = String(monthRaw).padStart(2, "0");
+    const day = String(dayRaw).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
   }
 
-  const date = new Date(dateValue);
+  // dd/MM/yyyy or dd-MM-yyyy
+  const ddMmYyyy = value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (ddMmYyyy) {
+    const [, dayRaw, monthRaw, year] = ddMmYyyy;
 
-  if (isNaN(date.getTime())) {
-    return "";
+    const day = String(dayRaw).padStart(2, "0");
+    const month = String(monthRaw).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
   }
 
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  // dd MMM yyyy
+  // Example: 14 Jul 2026
+  const ddMmmYyyy = value.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})$/);
+  if (ddMmmYyyy) {
+    const [, dayRaw, monthNameRaw, year] = ddMmmYyyy;
 
-  return `${year}-${month}-${day}`;
+    const day = String(dayRaw).padStart(2, "0");
+    const month = monthMap[monthNameRaw.toLowerCase()];
+
+    if (!month) return "";
+
+    return `${year}-${month}-${day}`;
+  }
+
+  // MMM dd yyyy
+  // Example: Jul 14 2026
+  const mmmDdYyyy = value.match(/^([A-Za-z]{3,})\s+(\d{1,2})\s+(\d{4})$/);
+  if (mmmDdYyyy) {
+    const [, monthNameRaw, dayRaw, year] = mmmDdYyyy;
+
+    const month = monthMap[monthNameRaw.toLowerCase()];
+    const day = String(dayRaw).padStart(2, "0");
+
+    if (!month) return "";
+
+    return `${year}-${month}-${day}`;
+  }
+
+  return "";
 };
-
 const buildEditableInvoiceRows = (invoices) => {
   const rows = [];
 
   invoices.forEach((invoice) => {
+
+    const invoiceDateValue =
+  invoice.invoiceDate ||
+  invoice.invoice_date ||
+  invoice.date ||
+  invoice.invoice_date_value ||
+  "";
+
+const expiryDateValue =
+  invoice.expiryDate ||
+  invoice.expiry_date ||
+  "";
+
+const deliveryDateValue =
+  invoice.deliveryDate ||
+  invoice.delivery_date ||
+  "";
     const products = Array.isArray(invoice.products) ? invoice.products : [];
 
     if (products.length > 0) {
@@ -629,15 +721,15 @@ const buildEditableInvoiceRows = (invoices) => {
         const amount = product.amount ?? "";
 
         rows.push({
-          invoiceDate: formatDateForInput(invoice.invoiceDate),
+          invoiceDate: formatDateForInput(invoiceDateValue),
           invoiceNumber: invoice.invoiceNumber || "",
           itRequestNum: "",
           requestedBy: "",
           qty: product.qty ?? "",
           lpoNo: "",
           lpoDate: "",
-          expiryDate: formatDateForInput(invoice.expiryDate),
-          deliveryDate: formatDateForInput(invoice.deliveryDate),
+          expiryDate: formatDateForInput(expiryDateValue),
+          deliveryDate: formatDateForInput(deliveryDateValue),
           amount,
            vatAmount: "",
           totalAmount: "",
@@ -661,15 +753,15 @@ const buildEditableInvoiceRows = (invoices) => {
       });
     } else {
      rows.push({
-  invoiceDate: formatDateForInput(invoice.invoiceDate),
+  invoiceDate: formatDateForInput(invoiceDateValue),
   invoiceNumber: invoice.invoiceNumber || "",
   itRequestNum: "",
   requestedBy: "",
   qty: "",
   lpoNo: "",
   lpoDate: "",
-  expiryDate: formatDateForInput(invoice.expiryDate),
-  deliveryDate: formatDateForInput(invoice.deliveryDate),
+  expiryDate: formatDateForInput(expiryDateValue),
+  deliveryDate: formatDateForInput(deliveryDateValue),
   amount: invoice.cost ?? "",
   vatAmount: "",
   totalAmount: "",
@@ -1410,7 +1502,7 @@ console.log("Saving transactions:", validRows);
     await createPaymentTransactions(
       {
         rows: validRows.map((row) => ({
-          invoiceDate: row.invoiceDate || null,
+          invoiceDate: formatDateForInput(row.invoiceDate) || null,
           vendorName: row.vendorName || null,
           product: row.product || null,
           productType: row.productType || null,
@@ -1422,7 +1514,7 @@ console.log("Saving transactions:", validRows);
           currency: row.currency || null,
           amount: Number(row.amount || 0),
           totalAmountAED: Number(row.totalAmountAED || 0),
-          expiryDate: row.expiryDate || null,
+         expiryDate: formatDateForInput(row.expiryDate) || null,
           costCenter: row.costCenter || null,
           remarks: row.remarks || null,
           vatAmount: Number(row.vatAmount || 0),
@@ -1434,9 +1526,14 @@ console.log("Saving transactions:", validRows);
           requestedBy: row.requestedBy || null,
           qty: Number(row.qty || 0),
           lpoNo: row.lpoNo || null,
-          lpoDate: row.lpoDate || null,
-          deliveryDate: row.deliveryDate || null,
+         lpoDate: formatDateForInput(row.lpoDate) || null,
+
+         deliveryDate: formatDateForInput(row.deliveryDate) || null,
+
           prfRequired: row.prfRequired || false,
+
+
+          
         })),
       },
       activeUserEmail
