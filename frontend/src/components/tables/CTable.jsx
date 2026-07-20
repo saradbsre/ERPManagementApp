@@ -638,7 +638,7 @@ const fetchCustomizedColumns = async () => {
     );
 
     const savedColumns = res?.data?.data?.columns;
-    console.log("Fetched customized columns:", savedColumns);
+    //console.log("Fetched customized columns:", savedColumns);
     if (Array.isArray(savedColumns)) {
       return { visibleColumns: savedColumns, pinnedColumns: [] };
     }
@@ -1199,7 +1199,7 @@ const handleGenerate = async () => {
     verified_by: form.verified_by,
     signed_by: form.signed_by,
     approved_by: form.approved_by,
-    exchange_rate: formatNumber(covertedExchangeRate),
+    exchange_rate: covertedExchangeRate,
     userid: activeUserEmail,
     is_advertising: isAdvertising ? 1 : 0,
     remarks: form.remarks,
@@ -1288,7 +1288,7 @@ const handleDraftPreviewFromModal = () => {
   );
 
   const covertedExchangeRate = 1 / exchange_rate;
-
+  console.log("Exchange Rate:", exchange_rate, "Converted:", covertedExchangeRate);
   const previewDetails = {
     prf_num: prfNumber,
     receipt_number: form.receipt_number || "",
@@ -1301,7 +1301,7 @@ const handleDraftPreviewFromModal = () => {
     verified_by: form.verified_by || "",
     signed_by: form.signed_by || "",
     approved_by: form.approved_by || "",
-    exchange_rate: formatNumber(covertedExchangeRate),
+    exchange_rate: covertedExchangeRate,
     prf_date: new Date().toISOString(),
     sysdate: new Date().toISOString(),
     is_advertising: isAdvertising ? 1 : 0,
@@ -2603,7 +2603,7 @@ const isTotalColumn = (col) => {
   const name = col.column_name.toLowerCase();
    //console.log("Checking columns from raw data:", name);
   return (
-    name.includes("total")
+    name.includes("total_amount_aed")
   );
 };
 
@@ -2637,9 +2637,6 @@ const getGroupKey = (row, groupBy) => {
 };
 
 const grandTotals = {};
-
-//console.log("Current groupBy:", groupBy);
-//console.log("Current printableGroupedRows:", printableGroupedRows);
 
 const generateTableHTML = (cols, groupedData) => {
   const rows = groupedData.flatMap((g) => g.rows);
@@ -2739,13 +2736,38 @@ const reportTitle =
     ...currencyCols,
   ]);
 
-  const printableCols = sortedCols.map((col) => ({
+  const productCols = [
+  "prd_code",
+  "prdtype_code",
+  "plan_code",
+];
+
+const printableCols = sortedCols
+  .filter(
+    (col) => !productCols.includes(col.column_name)
+  )
+  .map((col) => ({
     ...col,
     display_name:
       col.master === "credit_card"
         ? "Payment Method"
         : col.display_name,
   }));
+
+// Insert Product Description where Product was
+const productIndex = sortedCols.findIndex(
+  (c) => c.column_name === "prd_code"
+);
+
+printableCols.splice(
+  productIndex >= 0 ? productIndex : 0,
+  0,
+  {
+    column_name: "product_description",
+    display_name: "Product Description",
+    isProductDescription: true,
+  }
+);
 
   const firstTotalIndex = printableCols.findIndex(isTotalColumn);
   const totalColSpan = firstTotalIndex >= 0 ? firstTotalIndex + 1 : 1;
@@ -2767,6 +2789,54 @@ const reportTitle =
       }, 0);
     }
   });
+
+  const getColumnWidth = (col) => {
+  const name = (col.column_name || "").toLowerCase();
+
+  if ( name.includes("com_code") ) return "160px";
+  
+
+  if (col.isProductDescription) return "80px";
+
+  if (
+    name.includes("date") ||
+    name.includes("podate") ||
+    name.includes("expiry") ||
+    name.includes("start") ||
+    name.includes("end") ||
+    name.includes("trntype") ||
+    name.includes("number") ||
+    name.includes("dep_code")
+  ) {
+    return "45px";
+  }
+  if ( name.includes("billcycle_code") || name.includes("curr_code") ) {
+    return "27px";
+  }
+  if (name.includes("prf")) {
+    return "35px";
+  }
+
+  if (
+    name.includes("amount") ||
+    name.includes("price") ||
+    name.includes("total")
+  ) {
+    return "30px";
+  }
+
+  if (
+    name.includes("vend_code") ||
+    // name.includes("description") ||
+    name.includes("narr")
+  ) {
+    return "100px";
+  }
+
+  
+
+  return "70px";
+};
 
   return `
 <!DOCTYPE html>
@@ -3147,7 +3217,9 @@ ${groupedRows
             ${printableCols
               .map(
                 (col) => `
-                  <th>${col.display_name}</th>
+                  <th style="width:${getColumnWidth(col)}">
+                    ${col.display_name}
+                  </th>
                 `
               )
               .join("")}
@@ -3163,14 +3235,30 @@ ${groupedRows
 
                   ${printableCols
                     .map((col) => {
-                      const value = toDisplayValue(row, col);
+                      let value;
+
+if (col.isProductDescription) {
+ // console.log("Generating product description for row:", row);
+  const product = row.prd_code;
+
+  const productType = row.prdtype_code;
+
+  const plan = row.plan_code;
+
+  value = [product, productType, plan]
+    .filter(Boolean)
+    .join(" - ");
+} else {
+  value = toDisplayValue(row, col);
+}
 
                       const isNumber =
                         isNumericColumn(col) ||
                         col.isDynamicCurrency;
 
                       return `
-                        <td class="${isNumber ? "num" : ""}">
+                        <td class="${isNumber ? "num" : ""}"
+                         style="width:${getColumnWidth(col)}">
                           ${value}
                         </td>
                       `;
@@ -3784,7 +3872,7 @@ const sortedAllRows = React.useMemo(() => {
 
 }, [filteredRows, sortConfig, groupBy]);
 
-console.log("Sorted all rows:", sortedAllRows);
+//console.log("Sorted all rows:", sortedAllRows);
 const groupedByRows = React.useMemo(() => {
    const groups = {};
 
@@ -3803,7 +3891,7 @@ const groupedByRows = React.useMemo(() => {
       groups[key].push(row);
    });
 
-   console.log("Grouped rows:", groups);
+  // console.log("Grouped rows:", groups);
    return Object.entries(groups).map(([group, rows]) => ({
       group,
       rows
@@ -3846,7 +3934,7 @@ const paginatedGroupedRows = React.useMemo(() => {
   return result;
 
 }, [groupedByRows, page, pageSize]);
-console.log("Paginated grouped rows:", paginatedGroupedRows);
+//console.log("Paginated grouped rows:", paginatedGroupedRows);
 
 
 
@@ -3878,7 +3966,7 @@ const orderedVisibleColumns = useMemo(() => {
 
   return [...pinned, ...unpinned];
 }, [visibleColumns, pinnedColumns]);
-console.log("Ordered visible columns:", orderedVisibleColumns.map(c => c.column_name));
+//console.log("Ordered visible columns:", orderedVisibleColumns.map(c => c.column_name));
 
 
 const printableGroupedRows = React.useMemo(() => {
@@ -5361,9 +5449,9 @@ onDrop={() => handleDrop(col.column_name)}
                             }
                             return matched;
                           })?.id
-                        
+                          
                         });
-
+                        //console.log("totals for amount aed", totals);
                         setNewRow(prev => ({
                           ...prev,
                           amount: val,

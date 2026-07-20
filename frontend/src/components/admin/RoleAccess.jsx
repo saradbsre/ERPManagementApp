@@ -19,7 +19,7 @@ export default function RoleAccess() {
   const [expandedRole, setExpandedRole] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
-
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [roleName, setRoleName] = useState("");
   const [permissions, setPermissions] = useState(defaultPermissions);
   const [selectedRoleId, setSelectedRoleId] = useState(null);
@@ -121,20 +121,40 @@ export default function RoleAccess() {
     />
 
     {/* Header */}
-    <div className="flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-center mb-6">
+<div className="flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-center mb-6">
 
-      <h1 className="text-xl sm:text-2xl font-bold">
-        Role Management
-      </h1>
+  <div>
+    <h1 className="text-xl sm:text-2xl font-bold text-gray-800">
+      Role Management
+    </h1>
 
-      <button
-        onClick={handleCreate}
-        className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-      >
-        + Create Role
-      </button>
+    <p className="text-sm text-gray-500 mt-1">
+      Manage roles and permissions
+    </p>
+  </div>
 
-    </div>
+
+  <button
+    onClick={handleCreate}
+    className="
+      w-full sm:w-auto
+      px-5 py-2.5
+      rounded-xl
+      border border-blue-200
+      bg-blue-50
+      text-blue-600
+      font-semibold
+      hover:bg-blue-100
+    "
+  >
+    ＋ Create Role
+  </button>
+
+</div>
+
+
+
+
 
 
     {/* Table */}
@@ -189,98 +209,222 @@ export default function RoleAccess() {
 </div>
 
 
+{/* Mobile Role Cards */}
+{/* MOBILE DRAWER STYLE */}
+<div className="md:hidden">
 
-{/* Mobile Cards */}
-{/* Mobile Role Drawer */}
-<div className="md:hidden space-y-3">
-
-  {roles.map((r) => (
+  {roles.map((r)=>(
 
     <div
       key={r.id}
-      className="bg-white rounded-xl shadow border overflow-hidden"
+      style={{
+        marginBottom:12,
+        background:"#fff",
+        border:"1px solid #e5e7eb",
+        borderRadius:16,
+        overflow:"hidden"
+      }}
     >
 
-      {/* Role Header */}
-      <button
+      {/* ROLE HEADER */}
+      <div
         onClick={() =>
           setExpandedRole(
             expandedRole === r.id ? null : r.id
           )
         }
-        className="w-full flex justify-between items-center p-4"
+        style={{
+          padding:"16px",
+          display:"flex",
+          justifyContent:"space-between",
+          alignItems:"center",
+          cursor:"pointer"
+        }}
       >
 
-        <div className="text-left">
-          <h3 className="font-semibold text-lg">
-            {r.role}
-          </h3>
+        <div
+          style={{
+            display:"flex",
+            alignItems:"center",
+            gap:12
+          }}
+        >
 
-          <p className="text-xs text-gray-500">
-            Tap to view permissions
-          </p>
+          {/* ICON */}
+          <div
+            style={{
+              width:46,
+              height:46,
+              borderRadius:"50%",
+              background:"#eff6ff",
+              color:"#2563eb",
+              display:"flex",
+              justifyContent:"center",
+              alignItems:"center",
+              fontWeight:700,
+              fontSize:18
+            }}
+          >
+            {r.role?.charAt(0)?.toUpperCase()}
+          </div>
+
+
+          <div>
+
+            <h3
+              style={{
+                margin:0,
+                fontSize:16,
+                fontWeight:700
+              }}
+            >
+              {r.role}
+            </h3>
+
+
+            <p
+              style={{
+                margin:"3px 0 0",
+                color:"#6b7280",
+                fontSize:12
+              }}
+            >
+              Tap to manage permissions
+            </p>
+
+          </div>
+
+
         </div>
 
 
-        <span className="text-gray-500 text-xl">
+        <div
+          style={{
+            width:32,
+            height:32,
+            borderRadius:"50%",
+            background:"#f8fafc",
+            display:"flex",
+            alignItems:"center",
+            justifyContent:"center",
+            color:"#64748b",
+            fontSize:20
+          }}
+        >
           {expandedRole === r.id ? "−" : "+"}
-        </span>
-
-      </button>
+        </div>
 
 
+      </div>
 
-      {/* Drawer Content */}
+
+
+      {/* DRAWER CONTENT */}
       {expandedRole === r.id && (
 
-        <div className="border-t p-4 bg-gray-50">
-
-          <div className="grid grid-cols-2 gap-3">
-
-
-            <div className="flex justify-between items-center bg-white p-2 rounded">
-              <span>Access</span>
-              {renderPermission(r.access)}
-            </div>
+        <div
+          style={{
+            borderTop:"1px solid #e5e7eb",
+            background:"#f8fafc",
+            padding:16
+          }}
+        >
 
 
-            <div className="flex justify-between items-center bg-white p-2 rounded">
-              <span>Add</span>
-              {renderPermission(r.add)}
-            </div>
+          <div
+            style={{
+              background:"#fff",
+              borderRadius:14,
+              padding:12,
+              marginBottom:14
+            }}
+          >
+
+            <h4
+              style={{
+                margin:"0 0 12px",
+                fontSize:14,
+                fontWeight:700,
+                color:"#374151"
+              }}
+            >
+              Permissions
+            </h4>
 
 
-            <div className="flex justify-between items-center bg-white p-2 rounded">
-              <span>Modify</span>
-              {renderPermission(r.modify)}
-            </div>
+
+            {[
+              ["Access",r.access],
+              ["Add",r.add],
+              ["Modify",r.modify],
+              ["Delete",r.delete],
+              ["Print",r.print],
+              ["Export",r.export]
+            ].map(([name,value])=>(
 
 
-            <div className="flex justify-between items-center bg-white p-2 rounded">
-              <span>Delete</span>
-              {renderPermission(r.delete)}
-            </div>
+              <div
+                key={name}
+                style={{
+                  display:"flex",
+                  justifyContent:"space-between",
+                  alignItems:"center",
+                  padding:"10px 0",
+                  borderBottom:"1px solid #f1f5f9"
+                }}
+              >
+
+                <span
+                  style={{
+                    color:"#475569",
+                    fontSize:14
+                  }}
+                >
+                  {name}
+                </span>
 
 
-            <div className="flex justify-between items-center bg-white p-2 rounded">
-              <span>Print</span>
-              {renderPermission(r.print)}
-            </div>
+                <span
+                  style={{
+                    padding:"4px 12px",
+                    borderRadius:999,
+                    fontSize:12,
+                    fontWeight:600,
+                    background:value
+                    ?"#ecfdf5"
+                    :"#fef2f2",
+                    color:value
+                    ?"#16a34a"
+                    :"#dc2626"
+                  }}
+                >
+                  {value ? "Yes":"No"}
+                </span>
 
 
-            <div className="flex justify-between items-center bg-white p-2 rounded">
-              <span>Export</span>
-              {renderPermission(r.export)}
-            </div>
+              </div>
+
+
+            ))}
 
 
           </div>
 
 
-          {/* Edit Button */}
+
+          {/* ACTION AREA */}
           <button
-            onClick={() => handleEdit(r)}
-            className="mt-4 w-full py-2 border rounded bg-white hover:bg-gray-100"
+            onClick={()=>handleEdit(r)}
+            style={{
+              width:"100%",
+              padding:"12px",
+              borderRadius:12,
+              border:"1px solid #bfdbfe",
+              background:"#eff6ff",
+              color:"#2563eb",
+              fontWeight:600,
+              fontSize:14
+            }}
           >
             Edit Role
           </button>
@@ -290,6 +434,7 @@ export default function RoleAccess() {
 
       )}
 
+
     </div>
 
   ))}
@@ -298,88 +443,289 @@ export default function RoleAccess() {
 
 
 
-    {/* MODAL */}
-    {modalOpen && (
-
-      <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4">
-
-        <div className="bg-white p-5 sm:p-6 rounded-xl w-full max-w-[500px] max-h-[90vh] overflow-y-auto">
 
 
-          <h2 className="text-lg font-bold mb-4">
-            {editMode ? "Edit Role" : "Create Role"}
-          </h2>
+  {/* MODAL - MOBILE DRAWER STYLE */}
+{modalOpen && (
+
+<div
+style={{
+position:"fixed",
+inset:0,
+background:"rgba(0,0,0,.35)",
+zIndex:50,
+display:"flex",
+alignItems:isMobile ? "flex-end" : "center",
+justifyContent:"center"
+}}
+>
 
 
-
-          {/* Role Name */}
-          <input
-            value={roleName}
-            onChange={(e) => setRoleName(e.target.value)}
-            placeholder="Role Name"
-            className="w-full p-2 border rounded mb-4"
-            disabled={editMode}
-          />
-
-
-
-          {/* Permissions */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-
-            {Object.keys(permissions).map((key) => (
-
-              <div
-                key={key}
-                className="flex justify-between items-center bg-gray-50 p-2 rounded"
-              >
-
-                <span className="capitalize">
-                  {key}
-                </span>
+<div
+style={{
+background:"#fff",
+width:isMobile ? "100%" : "500px",
+maxHeight:isMobile ? "90vh" : "85vh",
+borderRadius:isMobile ? "24px 24px 0 0" : "18px",
+padding:isMobile ? 20 : 28,
+overflowY:"auto",
+boxShadow:"0 10px 30px rgba(0,0,0,.15)"
+}}
+>
 
 
-                <input
-                  type="checkbox"
-                  checked={permissions[key]}
-                  onChange={() => togglePermission(key)}
-                />
+{/* MOBILE HANDLE */}
 
-              </div>
+{isMobile && (
 
-            ))}
+<div
+style={{
+width:45,
+height:5,
+background:"#d1d5db",
+borderRadius:20,
+margin:"0 auto 18px"
+}}
+/>
 
-          </div>
+)}
 
 
 
-          {/* Actions */}
-          <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 mt-5">
+{/* HEADER */}
+
+<div
+style={{
+display:"flex",
+justifyContent:"space-between",
+alignItems:"center",
+marginBottom:20
+}}
+>
+
+<div>
+
+<h2
+style={{
+margin:0,
+fontSize:isMobile ? 20 : 22,
+fontWeight:700,
+color:"#111827"
+}}
+>
+{editMode ? "Edit Role" : "Create Role"}
+</h2>
 
 
-            <button
-              onClick={() => setModalOpen(false)}
-              className="px-4 py-2 border rounded w-full sm:w-auto"
-            >
-              Cancel
-            </button>
+<p
+style={{
+margin:"5px 0 0",
+fontSize:13,
+color:"#6b7280"
+}}
+>
+Manage role permissions
+</p>
+
+</div>
 
 
-            <button
-              onClick={handleSave}
-              className="px-4 py-2 bg-blue-600 text-white rounded w-full sm:w-auto"
-            >
-              {editMode ? "Update" : "Create"}
-            </button>
+
+<button
+onClick={()=>setModalOpen(false)}
+style={{
+width:34,
+height:34,
+borderRadius:"50%",
+border:"none",
+background:"#f3f4f6",
+color:"#6b7280",
+fontSize:18,
+cursor:"pointer"
+}}
+>
+✕
+</button>
 
 
-          </div>
+</div>
 
 
-        </div>
 
-      </div>
 
-    )}
+
+{/* ROLE NAME */}
+
+<label
+style={{
+fontSize:12,
+fontWeight:600,
+color:"#6b7280"
+}}
+>
+Role Name
+</label>
+
+
+<input
+value={roleName}
+onChange={(e)=>setRoleName(e.target.value)}
+placeholder="Enter role name"
+disabled={editMode}
+style={{
+width:"100%",
+marginTop:6,
+padding:"12px",
+borderRadius:12,
+border:"1px solid #e5e7eb",
+outline:"none",
+fontSize:14,
+background:editMode?"#f3f4f6":"#fff"
+}}
+/>
+
+
+
+
+
+{/* PERMISSIONS */}
+
+<h4
+style={{
+margin:"22px 0 12px",
+fontSize:15,
+fontWeight:700
+}}
+>
+Permissions
+</h4>
+
+
+
+<div
+style={{
+display:"grid",
+gridTemplateColumns:isMobile 
+? "1fr"
+: "1fr 1fr",
+gap:12
+}}
+>
+
+
+{Object.keys(permissions).map((key)=>(
+
+
+<div
+key={key}
+style={{
+display:"flex",
+justifyContent:"space-between",
+alignItems:"center",
+padding:"13px 14px",
+background:"#f8fafc",
+borderRadius:12,
+border:"1px solid #eef2f7"
+}}
+>
+
+
+<span
+style={{
+textTransform:"capitalize",
+fontSize:14,
+fontWeight:500,
+color:"#374151"
+}}
+>
+{key}
+</span>
+
+
+
+<input
+type="checkbox"
+checked={permissions[key]}
+onChange={()=>togglePermission(key)}
+style={{
+width:18,
+height:18,
+accentColor:"#2563eb"
+}}
+/>
+
+
+
+</div>
+
+
+))}
+
+
+</div>
+
+
+
+
+
+
+{/* ACTION BUTTONS */}
+
+<div
+style={{
+display:"flex",
+flexDirection:isMobile ? "row":"row",
+gap:12,
+marginTop:24
+}}
+>
+
+
+<button
+onClick={()=>setModalOpen(false)}
+style={{
+flex:1,
+padding:"12px",
+borderRadius:12,
+border:"1px solid #e5e7eb",
+background:"#fff",
+color:"#374151",
+fontWeight:600
+}}
+>
+Cancel
+</button>
+
+
+
+<button
+onClick={handleSave}
+style={{
+flex:1,
+padding:"12px",
+borderRadius:12,
+border:"none",
+background:"#2563eb",
+color:"#fff",
+fontWeight:600
+}}
+>
+{editMode ? "Update" : "Create"}
+</button>
+
+
+</div>
+
+
+
+</div>
+
+
+</div>
+
+)}
+
+
 
   </div>
 );

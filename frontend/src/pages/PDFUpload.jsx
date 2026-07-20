@@ -106,8 +106,8 @@ useEffect(() => {
 
   setInvoiceRows((prevRows) =>
     prevRows.map((row) => {
-      console.log("billing company from rows:", prevRows.map(row => row.billingCompany));
-      console.log("billing company from companies:", companyOptions);
+      // console.log("billing company from rows:", prevRows.map(row => row.billingCompany));
+      // console.log("billing company from companies:", companyOptions);
       const matchedProduct = findMatchingOption(row.product, productOptions);
       const matchedVendor = findMatchingOption(row.vendorName, vendorOptions);
       const matchedCurrency = findMatchingOption(row.currency, currencyOptions);
@@ -1221,7 +1221,7 @@ const calculateInvoiceAmounts = (row) => {
     : 0;
 
   const totalAmount = Number((amount + vatAmount).toFixed(2));
-
+  console.log("Calculating amounts for row:", "vatPercent:", vatPercent, "vatAmount:", vatAmount, "totalAmount:", totalAmount);
   let totalAmountAED = totalAmount;
 
   if (String(currencyCode).toUpperCase() !== "AED") {
@@ -1231,7 +1231,7 @@ const calculateInvoiceAmounts = (row) => {
     // So USD to AED = USD / 0.2723
     totalAmountAED = rate ? Number((totalAmount / rate).toFixed(2)) : totalAmount;
   }
-
+  console.log("totalAmountAED:", totalAmountAED, "currencyCode:", currencyCode, "rate:", getCurrencyRate(currencyCode));
   return {
     vatAmount,
     totalAmount,

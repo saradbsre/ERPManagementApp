@@ -52,7 +52,7 @@ export default function Admin() {
       </div>
 
       {/* ---------------- CONTENT ---------------- */}
-      <div className="mt-4">
+      <div >
         {tabs[activeTab].component}
       </div>
     </div>

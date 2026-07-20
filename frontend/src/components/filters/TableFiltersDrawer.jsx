@@ -19,51 +19,60 @@ export default function TableFiltersDrawer({
 }) {
   const masterList1 = [...(masterList || [])];
   const [selectedFilter, setSelectedFilter] = useState(null);
+  const [loadingMasters, setLoadingMasters] = useState({});
   useEffect(() => {
-    if (!open) return;
+  if (!open) return;
 
-    const loadMasters = async () => {
-      for (const item of masterList1) {
-        const master = item.master;
+  (filters || []).forEach((f) => {
+    fetchMaster(f.master);
+  });
+}, [open]);
 
-        if (masterDataMap?.[master]) continue;
+  const fetchMaster = async (master) => {
+  if (!master || masterDataMap?.[master]) return;
 
-        try {
-          const res = await getMasterValues(master);
-          // console.log(`Master Data for ${master}:`, res);
-          const pk = res?.data?.pk || "key";
-          // console.log(`Primary Key for ${master}:`, pk);
-          setMasterDataMap((prev) => ({
-          ...prev,
-          [master]: {
-            pk: res?.data?.pk,
-            data: res?.data?.data || [],
-          },
-        }));
-        } catch (err) {
-           console.error(err);
-        }
-      }
-    };
-  
-    loadMasters();
-  }, [open]);
+  try {
+    setLoadingMasters((prev) => ({
+      ...prev,
+      [master]: true,
+    }));
+
+    const res = await getMasterValues(master);
+
+    setMasterDataMap((prev) => ({
+      ...prev,
+      [master]: {
+        pk: res?.data?.pk,
+        data: res?.data?.data || [],
+      },
+    }));
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setLoadingMasters((prev) => ({
+      ...prev,
+      [master]: false,
+    }));
+  }
+};
  
   // // console.log("Master Data Map in Drawer:", masterDataMap);
   // ================= ADD FILTER =================
-  const addFilter = (master) => {
-    if (!master) return;
+const addFilter = async (master) => {
+  if (!master) return;
 
-    if (filters.some((f) => f.master === master)) return;
+  if (filters.some((f) => f.master === master)) return;
 
-    setFilters((prev) => [
-      ...prev,
-      {
-        master,
-        values: [],
-      },
-    ]);
-  };
+  setFilters((prev) => [
+    ...prev,
+    {
+      master,
+      values: [],
+    },
+  ]);
+
+  await fetchMaster(master);
+};
 
   // ================= REMOVE FILTER =================
   const removeFilter = (index) => {
@@ -318,8 +327,15 @@ const handleSearch = (overrideFilters) => {
 
                 {/* MULTI SELECT */}
                 <div className="flex-1">
-                  <Select
+                  <Select               
                     isMulti
+                    isLoading={loadingMasters[filter.master]}
+                    loadingMessage={() => "Loading..."}
+                    noOptionsMessage={() =>
+                      loadingMasters[filter.master]
+                        ? "Loading..."
+                        : "No options"
+                    }
                     closeMenuOnSelect={false}
                     placeholder="Select..."
                     options={options.map((opt) => ({
