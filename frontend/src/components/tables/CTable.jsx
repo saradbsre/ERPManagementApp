@@ -1492,7 +1492,19 @@ const getValue = (row, col) => {
 };
 
 const handleExcel = async () => {
-  const cols = orderedVisibleColumns;
+ const reportRowCount = getReportRowCount(printableGroupedRows);
+
+if (reportRowCount === 0) {
+  showNoRecordsPopup();
+  setShowReportHeaderModal(false);
+  setReportActionType(null);
+  return;
+}
+
+const cols = orderedVisibleColumns.map((col) => ({
+  ...col,
+  display_name: getColumnDisplayName(col),
+}));
 
  const moduleName =
   printModuleName ||
@@ -2336,18 +2348,60 @@ const handleClear = async () => {
       return () => window.removeEventListener("click", closeMenu);
     }, []);
 
-    const handlePrint = () => {
-  const cols = orderedVisibleColumns;
+    const isUpcomingRenewalsSelected = activeDateFilter === "upcomingRenewals";
 
-openPrintWindow({
-  content: generateTableHTML(
-    orderedVisibleColumns,
-    printableGroupedRows
-  ),
-  userName: activeUser?.name || "User",
-});
+const getColumnDisplayName = (col) => {
+  if (
+    isUpcomingRenewalsSelected &&
+    String(col.column_name || "").toLowerCase() === "expiry_date"
+  ) {
+    return "Renewal Date";
+  }
 
-  setColumns(cols); // optional UI sync
+  return col.display_name;
+};
+
+const getReportRowCount = (groups = []) => {
+  return (groups || []).reduce(
+    (count, group) => count + (group.rows?.length || 0),
+    0
+  );
+};
+
+const showNoRecordsPopup = () => {
+  setPopupMessage("No records found");
+  setPopupType("error");
+};
+
+
+
+
+
+
+
+const handlePrint = () => {
+  const reportRowCount = getReportRowCount(printableGroupedRows);
+
+  if (reportRowCount === 0) {
+    showNoRecordsPopup();
+    setShowReportHeaderModal(false);
+    setReportActionType(null);
+    return;
+  }
+
+  const cols = orderedVisibleColumns.map((col) => ({
+    ...col,
+    display_name: getColumnDisplayName(col),
+  }));
+
+  openPrintWindow({
+    content: generateTableHTML(
+      cols,
+      printableGroupedRows
+    ),
+    userName: activeUser?.name || "User",
+  });
+
   setShowPrintModal(false);
 };
 
@@ -2433,12 +2487,27 @@ const rowMatchesSearch = (row) => {
 
   let cols;
 
+  const reportRowCount = getReportRowCount(pdfRows);
+
+if (reportRowCount === 0) {
+  showNoRecordsPopup();
+  setShowReportHeaderModal(false);
+  setReportActionType(null);
+  return;
+}
+
   if (customCols && Array.isArray(customCols)) {
-    cols = pdfColumns.filter(col =>
-      customCols.includes(col.column_name)
-    );
+  cols = pdfColumns
+  .filter(col => customCols.includes(col.column_name))
+  .map((col) => ({
+    ...col,
+    display_name: getColumnDisplayName(col),
+  }));
   } else {
-    cols = pdfColumns;
+   cols = pdfColumns.map((col) => ({
+  ...col,
+  display_name: getColumnDisplayName(col),
+}));
   }
 
   const company =
@@ -2638,9 +2707,59 @@ const getGroupKey = (row, groupBy) => {
 
 const grandTotals = {};
 
+//console.log("Current groupBy:", groupBy);
+//console.log("Current printableGroupedRows:", printableGroupedRows);
+const generateBarcodeSvg = (value) => {
+  if (!value) return "";
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+
+  JsBarcode(svg, value, {
+    format: "CODE128",
+    width: 1.6,
+    height: 45,
+    displayValue: true,
+    fontSize: 10,
+    textMargin: 3,
+    margin: 0,
+  });
+
+  return new XMLSerializer().serializeToString(svg);
+};
+
+const getLastReportPrfInfo = (groupedData = []) => {
+  const reportRows = (groupedData || []).flatMap((group) => group.rows || []);
+
+  const rowsWithPrf = reportRows.filter(
+    (row) => row?.prf_num && String(row.prf_num).trim() !== ""
+  );
+
+  const lastRow =
+    rowsWithPrf.length > 0
+      ? rowsWithPrf[rowsWithPrf.length - 1]
+      : reportRows[reportRows.length - 1];
+
+  if (!lastRow) {
+    return {
+      prfNo: "",
+      invoiceDate: "",
+      barcodeValue: "",
+    };
+  }
+
+  const prfNo = lastRow.prf_num || "";
+  const invoiceDate = lastRow.date ? formatDate(lastRow.date) : "";
+
+  return {
+    prfNo,
+    invoiceDate,
+barcodeValue: prfNo,
+  };
+};
 const generateTableHTML = (cols, groupedData) => {
   const rows = groupedData.flatMap((g) => g.rows);
-
+const barcodeInfo = getLastReportPrfInfo(groupedData);
+const barcodeSvg = generateBarcodeSvg(barcodeInfo.barcodeValue);
   const groupedRows = Array.isArray(groupedData)
     ? groupedData
     : Object.entries(groupedData || {}).map(([group, rows]) => ({
@@ -2863,49 +2982,39 @@ printableCols.splice(
       font-size: 9px;
     }
 
-  .report-page {
-  width: 100%;
-  min-height: 190mm;
+
+.report-header {
+  border: 1px solid #1f2937;
+  border-radius: 5px;
+  padding: 6px 10px;
+  margin-bottom: 7px;
+  background: #ffffff;
   position: relative;
-  padding: 4px 8px 45mm 8px;
+  min-height: 58px;
 }
 
-    .report-header {
-      border: 1px solid #1f2937;
-      border-radius: 6px;
-      padding: 8px 12px;
-      margin-bottom: 8px;
-      background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-    }
+.report-header-text {
+  text-align: left;
+  padding-left: 160px;
+  padding-right: 210px;
+}
 
-    .company-name {
-      text-align: center;
-      font-size: 17px;
-      font-weight: bold;
-      letter-spacing: 0.4px;
-      color: #111827;
-      margin: 0;
-      text-transform: uppercase;
-    }
+.report-barcode {
+  position: absolute;
+  right: 14px;
+  top: 7px;
+  width: 190px;
+  height: 50px;
+  text-align: center;
+}
 
-    .report-title {
-      text-align: center;
-      font-size: 12px;
-      font-weight: bold;
-      color: #374151;
-      margin: 4px 0 0 0;
-      text-transform: uppercase;
-    }
+.report-barcode svg {
+  width: 185px !important;
+  height: 50px !important;
+}
 
-    .report-meta {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 6px;
-      padding-top: 5px;
-      border-top: 1px solid #d1d5db;
-      font-size: 8px;
-      color: #4b5563;
-    }
+
+   
 
     .summary-box {
       display: flex;
@@ -3017,13 +3126,7 @@ printableCols.splice(
 
 
 
-.report-header {
-  border: 1px solid #1f2937;
-  border-radius: 5px;
-  padding: 6px 10px;
-  margin-bottom: 7px;
-  background: #ffffff;
-}
+
 
 .company-name {
   text-align: center;
@@ -3078,6 +3181,22 @@ printableCols.splice(
   left: 8px;
   right: 8px;
   
+}
+
+.designed-by {
+  margin-top: 3px;
+  font-size: 7px;
+  color: #374151;
+  font-weight: bold;
+}
+
+.report-page {
+  width: 100%;
+  min-height: auto;
+  position: relative;
+  padding: 4px 8px 10px 8px !important;
+  page-break-after: avoid;
+  break-after: avoid;
 }
 
 .blank-space {
@@ -3188,10 +3307,24 @@ printableCols.splice(
         <tr>
           <td class="print-shell-header">
 
-            <div class="report-header">
-              ${company ? `<h1 class="company-name">${company}</h1>` : ""}
-              <h2 class="report-title">${reportTitle}</h2>
-            </div>
+           <div class="report-header">
+
+  <div class="report-header-text">
+    ${company ? `<h1 class="company-name">${company}</h1>` : ""}
+    <h2 class="report-title">${reportTitle}</h2>
+  </div>
+
+  ${
+    barcodeSvg
+      ? `
+        <div class="report-barcode">
+  ${barcodeSvg}
+</div>
+      `
+      : ""
+  }
+
+</div>
 
           </td>
         </tr>
@@ -3320,7 +3453,7 @@ if (col.isProductDescription) {
   )
   .join("")}
 
-<div class="print-footer-area" style="padding-top: 2px !important;">
+<div class="print-footer-area" style="padding-top: 10px !important;">
 
 
   <div class="approval-section">
@@ -4247,39 +4380,49 @@ const refreshRowsByView = async (savedFilters = null) => {
     setLoading(false);
   }
 };
-const handleDeleteView = async (view) => {
-  try {
-    if (!view?.id) return;
+const handleDeleteView = (view) => {
+  if (!view?.id) return;
 
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${view.view_name}" view?`
-    );
+  setConfirmData({
+    title: "Delete View",
+    message: `Are you sure you want to delete "${view.view_name}" view?`,
+    confirmText: "Delete",
+    cancelText: "Cancel",
+    type: "danger",
+    onConfirm: async () => {
+      try {
+        setLoading(true);
 
-    if (!confirmed) return;
+        await deleteModuleView(view.id);
 
-    await deleteModuleView(view.id);
+        if (String(activeViewId) === String(view.id)) {
+          setActiveViewId("main");
 
-    if (String(activeViewId) === String(view.id)) {
-      setActiveViewId("main");
+          const defaults = getCurrentMonth();
 
-      const defaults = getCurrentMonth();
+          await refreshRowsByView({
+            search: "",
+            dateFilters: defaults,
+            appliedFilters: [],
+          });
+        }
 
-      refreshRowsByView({
-        search: "",
-        dateFilters: defaults,
-        appliedFilters: [],
-      });
-    }
+        await loadViews();
 
-    await loadViews();
+        setPopupMessage("View deleted successfully.");
+        setPopupType("success");
+      } catch (err) {
+        console.error("Delete view failed:", err);
+        setPopupMessage(err.response?.data?.error || "Failed to delete view.");
+        setPopupType("error");
+      } finally {
+        setLoading(false);
+        setConfirmOpen(false);
+      }
+    },
+  });
 
-    setPopupMessage("View deleted successfully.");
-    setPopupType("success");
-  } catch (err) {
-    console.error("Delete view failed:", err);
-    setPopupMessage(err.response?.data?.error || "Failed to delete view.");
-    setPopupType("error");
-  }
+  setConfirmOpen(true);
 };
 const handleRenameView = (view) => {
   setEditingView(view);
@@ -4530,10 +4673,15 @@ const handleRequiresPrfChange = async (row, checked) => {
 <PermissionButton
   user={activeUser}
   permission="print"
-  onClick={() => {
-    setReportActionType("print");
-    setShowReportHeaderModal(true);
-  }}
+ onClick={() => {
+  if (getReportRowCount(printableGroupedRows) === 0) {
+    showNoRecordsPopup();
+    return;
+  }
+
+  setReportActionType("print");
+  setShowReportHeaderModal(true);
+}}
   className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
              hover:bg-gray-100 hover:border-gray-500 transition"
 >
@@ -4544,7 +4692,12 @@ const handleRequiresPrfChange = async (row, checked) => {
     user={activeUser}
     permission="export"
     // onClick={handleExcel}
-    onClick={() => {
+   onClick={() => {
+  if (getReportRowCount(printableGroupedRows) === 0) {
+    showNoRecordsPopup();
+    return;
+  }
+
   setReportActionType("excel");
   setShowReportHeaderModal(true);
 }}
@@ -4558,7 +4711,12 @@ const handleRequiresPrfChange = async (row, checked) => {
     user={activeUser}
     permission="export"
     // onClick={handlePdf}
-    onClick={() => {
+ onClick={() => {
+  if (getReportRowCount(printableGroupedRows) === 0) {
+    showNoRecordsPopup();
+    return;
+  }
+
   setReportActionType("pdf");
   setShowReportHeaderModal(true);
 }}
@@ -5209,7 +5367,7 @@ onDrop={() => handleDrop(col.column_name)}
     className="cursor-pointer flex-1 hover:bg-gray-200 px-1 py-1 rounded"
     onClick={() => handleHeaderSortToggle(col.column_name, col.display_name)}
   >
-    {col.display_name}
+     {getColumnDisplayName(col)}
   </span>
   
 
@@ -5677,6 +5835,16 @@ onDrop={() => handleDrop(col.column_name)}
 
                         </tr>
                       )}
+                      {!isCreating && paginatedGroupedRows.length === 0 && (
+  <tr>
+    <td
+      colSpan={totalColumns}
+      className="px-6 py-12 text-center text-gray-500 font-medium"
+    >
+      No records found
+    </td>
+  </tr>
+)}
                     {(paginatedGroupedRows || []).map((groupObj) => (
   <React.Fragment key={groupObj.group || "default"}>
 
