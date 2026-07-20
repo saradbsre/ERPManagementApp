@@ -3506,26 +3506,18 @@ const formatLocalDate = (date) => {
 const getUpcomingRenewalRange = () => {
   const now = new Date();
 
-  // Start = current date + 1
+  // Start = same current date of last month
   const start = new Date(
     now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 1
+    now.getMonth() - 1,
+    now.getDate()
   );
 
-  // Next month, same day as current date
-  const nextMonthLastDay = new Date(
-    now.getFullYear(),
-    now.getMonth() + 2,
-    0
-  ).getDate();
-
-  const targetDay = Math.min(now.getDate(), nextMonthLastDay);
-
+  // End = last date of current month
   const end = new Date(
     now.getFullYear(),
     now.getMonth() + 1,
-    targetDay
+    0
   );
 
   return {
@@ -3533,7 +3525,6 @@ const getUpcomingRenewalRange = () => {
     endDate: formatLocalDate(end),
   };
 };
-
 const normalizeValue = (value) => {
   if (value === null || value === undefined) return "";
 
@@ -3550,22 +3541,22 @@ const isUpcomingRenewalRow = (row, range) => {
   const term = normalizeValue(row.billcycle_code);
   const transactionType = normalizeValue(row.trntype_code);
 
-  const expiryDate = row.expiry_date
-    ? String(row.expiry_date).split("T")[0]
+  const invoiceDate = row.date
+    ? String(row.date).split("T")[0]
     : "";
 
   const isMonthly = term === "monthly";
 
-  const isInUpcomingRenewalRange =
-    expiryDate >= range.startDate &&
-    expiryDate <= range.endDate;
+  const isInvoiceDateInRange =
+    invoiceDate >= range.startDate &&
+    invoiceDate <= range.endDate;
 
   const isNotCancellation =
     !transactionType.includes("cancel") &&
     !transactionType.includes("cancellation") &&
     !transactionType.includes("cancelation");
 
-  return isMonthly && isInUpcomingRenewalRange && isNotCancellation;
+  return isMonthly && isInvoiceDateInRange && isNotCancellation;
 };
 
 
@@ -3605,8 +3596,9 @@ const applyUpcomingRenewalFilter = async () => {
       search,
       filters: JSON.stringify([]),
 
+      // Filter by invoice date field
       dateFilters: JSON.stringify({
-        expiry_date: {
+        date: {
           startDate: upcomingRange.startDate,
           endDate: upcomingRange.endDate,
         },
