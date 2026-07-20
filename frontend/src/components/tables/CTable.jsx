@@ -3355,8 +3355,82 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
   };
 }
 
-const handleQuickDateChange = (value) => {
+
+
+
+
+
+
+
+const getRowValue = (row, possibleKeys = []) => {
+  for (const key of possibleKeys) {
+    if (row?.[key] !== null && row?.[key] !== undefined && row?.[key] !== "") {
+      return row[key];
+    }
+  }
+
+  return "";
+};
+
+const isMonthlyTerm = (row) => {
+  const termValue = normalizeValue(
+    getRowValue(row, [
+      "billcycle_code",
+      "term",
+      "terms",
+      "billing_cycle",
+      "billing_cycle_name",
+    ])
+  );
+
+  return (
+    termValue === "monthly" ||
+    termValue.includes("monthly") ||
+    termValue.includes("month")
+  );
+};
+
+const isCancellationTransaction = (row) => {
+  const transactionValue = normalizeValue(
+    getRowValue(row, [
+      "trntype_code",
+      "transaction_type",
+      "transactionType",
+      "transaction_type_name",
+    ])
+  );
+
+  return (
+    transactionValue.includes("cancel") ||
+    transactionValue.includes("cancellation") ||
+    transactionValue.includes("cancelation")
+  );
+};
+
+const isExpiryDateInRange = (row, range) => {
+  const expiryRaw = getRowValue(row, [
+    "expiry_date",
+    "expiryDate",
+    "expiry",
+  ]);
+
+  if (!expiryRaw) return false;
+
+  const expiryDate = String(expiryRaw).split("T")[0];
+
+  return (
+    expiryDate >= range.startDate &&
+    expiryDate <= range.endDate
+  );
+};
+
+const handleQuickDateChange = async (value) => {
   setActiveDateFilter(value);
+
+  if (value === "upcomingRenewals") {
+    await applyUpcomingRenewalFilter();
+    return;
+  }
 
   const range = getDateRange(value);
 
@@ -3417,6 +3491,149 @@ const handleSearch = (key, displayName) => {
       }
     ];
   });
+};
+
+
+
+const formatLocalDate = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+
+  return `${y}-${m}-${d}`;
+};
+
+const getUpcomingRenewalRange = () => {
+  const now = new Date();
+
+  // Start = current date + 1
+  const start = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1
+  );
+
+  // Next month, same day as current date
+  const nextMonthLastDay = new Date(
+    now.getFullYear(),
+    now.getMonth() + 2,
+    0
+  ).getDate();
+
+  const targetDay = Math.min(now.getDate(), nextMonthLastDay);
+
+  const end = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    targetDay
+  );
+
+  return {
+    startDate: formatLocalDate(start),
+    endDate: formatLocalDate(end),
+  };
+};
+
+const normalizeValue = (value) => {
+  if (value === null || value === undefined) return "";
+
+  if (typeof value === "object") {
+    return String(value.value ?? value.key ?? value.id ?? "")
+      .trim()
+      .toLowerCase();
+  }
+
+  return String(value).trim().toLowerCase();
+};
+
+const isUpcomingRenewalRow = (row, range) => {
+  const term = normalizeValue(row.billcycle_code);
+  const transactionType = normalizeValue(row.trntype_code);
+
+  const expiryDate = row.expiry_date
+    ? String(row.expiry_date).split("T")[0]
+    : "";
+
+  const isMonthly = term === "monthly";
+
+  const isInUpcomingRenewalRange =
+    expiryDate >= range.startDate &&
+    expiryDate <= range.endDate;
+
+  const isNotCancellation =
+    !transactionType.includes("cancel") &&
+    !transactionType.includes("cancellation") &&
+    !transactionType.includes("cancelation");
+
+  return isMonthly && isInUpcomingRenewalRange && isNotCancellation;
+};
+
+
+
+const isNextMonthRenewalRow = (row, range) => {
+  const term = normalizeValue(row.billcycle_code);
+  const transactionType = normalizeValue(row.trntype_code);
+
+  const expiryDate = row.expiry_date
+    ? String(row.expiry_date).split("T")[0]
+    : "";
+
+  const isMonthly = term === "monthly";
+
+  // const isNextMonthExpiry =
+  //   expiryDate >= range.startDate &&
+  //   expiryDate <= range.endDate;
+
+  const isNotCancellation =
+    !transactionType.includes("cancel") &&
+    !transactionType.includes("cancellation") &&
+    !transactionType.includes("cancelation");
+
+  return isMonthly && isNotCancellation;
+};
+
+const applyUpcomingRenewalFilter = async () => {
+  try {
+    setLoading(true);
+
+    const upcomingRange = getUpcomingRenewalRange();
+
+    setDateFilters(upcomingRange);
+    setActiveDateFilter("upcomingRenewals");
+
+    const payload = {
+      search,
+      filters: JSON.stringify([]),
+
+      dateFilters: JSON.stringify({
+        expiry_date: {
+          startDate: upcomingRange.startDate,
+          endDate: upcomingRange.endDate,
+        },
+      }),
+    };
+
+    const res = await getModuleData(
+      id,
+      activeUserEmail,
+      payload,
+      userRole
+    );
+
+    const apiRows = res.data || [];
+
+    const upcomingRenewalRows = apiRows.filter((row) =>
+      isUpcomingRenewalRow(row, upcomingRange)
+    );
+
+    setRows(upcomingRenewalRows);
+    setPage(1);
+  } catch (err) {
+    console.error("Upcoming renewal filter failed:", err);
+    setRows([]);
+  } finally {
+    setLoading(false);
+  }
 };
 
 const handleGroup = (key, direction, displayName) => {
@@ -4635,7 +4852,7 @@ const normalizedFilters = nextFilters.map((filter) => ({
       cursor-pointer
     "
   >
-    <option value=""> Quick Range</option>
+    <option value="">Quick Range</option>
     <option value="today">Today</option>
     <option value="yesterday">Yesterday</option>
     <option value="tomorrow">Tomorrow</option>
@@ -4645,6 +4862,8 @@ const normalizedFilters = nextFilters.map((filter) => ({
     <option value="lastMonth">Last Month</option>
     <option value="thisYear">This Year</option>
     <option value="lastYear">Last Year</option>
+    <option value="upcomingRenewals">Upcoming Renewals</option>
+    
     {/* <option value="custom">Custom Range</option> */}
   </select>
 
