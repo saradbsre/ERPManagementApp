@@ -128,6 +128,18 @@ function SortableColumnItem({ col, checked, toggleTempColumn}) {
 }
 
 
+const getPdfUrl = (pdfPath) => {
+  if (!pdfPath) return "";
+
+  if (String(pdfPath).startsWith("http")) {
+    return pdfPath;
+  }
+
+  const baseUrl = import.meta.env.VITE_API_URL || "";
+
+  return `${baseUrl}${pdfPath}`;
+};
+
 
 
 
@@ -217,6 +229,7 @@ const [customPrintHeader] = useState("ABDULWAHED BIN SHABIB GROUP");
     const [prfNumber, setPrfNumber] = useState("");
     const [showPreview, setShowPreview] = useState(false);
     const [previewData, setPreviewData] = useState(null);
+    const [previewPdfUrl, setPreviewPdfUrl] = useState("");
     const [previewFromGenerateModal, setPreviewFromGenerateModal] = useState(false);
     const [workflow, setWorkflow] = useState({});
     const [availableProducts, setAvailableProducts] = useState([]);
@@ -4082,14 +4095,17 @@ const totalColumns = visibleColumns.length + 2;
 const rowIndexMap = React.useMemo(() => {
   const map = new Map();
 
-  paginatedGroupedRows.forEach((group) => {
-    group.rows.forEach((row, index) => {
-      map.set(row.id, index);
+  let serialNo = 0;
+
+  groupedByRows.forEach((group) => {
+    group.rows.forEach((row) => {
+      map.set(row.id, serialNo);
+      serialNo++;
     });
   });
 
   return map;
-}, [paginatedGroupedRows]);
+}, [groupedByRows]);
 
 const orderedVisibleColumns = useMemo(() => {
   // Main View -> use the default visible columns order
@@ -5995,7 +6011,16 @@ onDrop={() => handleDrop(col.column_name)}
         
                      <td className="px-4 py-3 whitespace-nowrap">
   <div className="flex items-center justify-end gap-2">
-
+    {row.pdf_path && (
+  <button
+    type="button"
+    onClick={() => setPreviewPdfUrl(getPdfUrl(row.pdf_path))}
+    title="View Uploaded PDF"
+    className="p-1 rounded hover:bg-blue-50 transition"
+  >
+    <EyeIcon className="w-5 h-5 text-gray-600" />
+  </button>
+)}
     {/* Always show PRF checkbox */}
     <input
       type="checkbox"
@@ -6006,6 +6031,8 @@ onDrop={() => handleDrop(col.column_name)}
       className="h-4 w-4 cursor-pointer shrink-0"
       title="PRF Required"
     />
+
+
 
     {editRowId === row.id ? (
       <>
@@ -7677,6 +7704,29 @@ localStorage.setItem("print_module_name", printModuleName || "");
 
     </div>
 
+  </div>
+)}
+
+{previewPdfUrl && (
+  <div className="fixed inset-0 z-[99999] bg-black/60 flex items-center justify-center p-5">
+    <div className="bg-white w-[90vw] h-[90vh] rounded-xl shadow-2xl overflow-hidden flex flex-col">
+      <div className="flex items-center justify-between px-4 py-3 border-b">
+        <h3 className="font-semibold text-gray-800">Uploaded PDF Preview</h3>
+
+        <button
+          onClick={() => setPreviewPdfUrl("")}
+          className="p-2 rounded-md hover:bg-red-50 text-red-600"
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      <iframe
+        src={previewPdfUrl}
+        title="Uploaded PDF Preview"
+        className="w-full flex-1"
+      />
+    </div>
   </div>
 )}
 

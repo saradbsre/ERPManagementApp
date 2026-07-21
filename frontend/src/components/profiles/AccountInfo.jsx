@@ -142,8 +142,9 @@ const AccountInfo = () => {
                 name="name"
                 value={user?.name || ""}
                 onChange={handleDetailsChange}
-                className="w-full border rounded-lg px-3 py-2"
+                className="w-full border rounded-lg px-3 py-2 bg-gray-100 cursor-not-allowed"
                 required
+                disabled
               />
             </div>
             <div>
@@ -153,7 +154,7 @@ const AccountInfo = () => {
                 name="role"
                 value={user?.role || ""}
                 onChange={handleDetailsChange}
-                className="w-full border rounded-lg px-3 py-2"
+                className="w-full border rounded-lg px-3 py-2 bg-gray-100 cursor-not-allowed"
                 required
                 disabled
               />
@@ -166,7 +167,7 @@ const AccountInfo = () => {
               name="email"
               value={user?.email}
               onChange={handleDetailsChange}
-              className="w-full border rounded-lg px-3 py-2"
+              className="w-full border rounded-lg px-3 py-2  bg-gray-100 cursor-not-allowed"
               required
               disabled
             />
@@ -178,7 +179,7 @@ const AccountInfo = () => {
                 type="text"
                 name="phone_number"
                 value={user?.phone_number || ""}
-                className="w-full border rounded-lg px-3 py-2 bg-gray-100"
+                className="w-full border rounded-lg px-3 py-2 bg-gray-100 cursor-not-allowed"
                 disabled
               />
             </div>
@@ -188,18 +189,18 @@ const AccountInfo = () => {
                 type="text"
                 name="created_at"
                 value={formatDate(user?.created_at)}
-                className="w-full border rounded-lg px-3 py-2 bg-gray-100"
+                className="w-full border rounded-lg px-3 py-2 bg-gray-100 cursor-not-allowed"
                 disabled
               />
             </div>
           </div>
-          <button
+          {/* <button
             type="submit"
             className="mt-4 bg-yellow-500 text-white px-6 py-2 rounded-lg font-medium hover:bg-yellow-600"
             disabled={loading}
           >
             Save
-          </button>
+          </button> */}
         </div>
       </form>
 
@@ -295,12 +296,12 @@ const AccountInfo = () => {
           </div>
         </div>
         <button
-          type="submit"
-          className="w-1/8 mt-2 bg-yellow-500 text-white px-6 py-2 rounded-lg font-medium hover:bg-yellow-600"
-          disabled={loading}
-        >
-          {loading ? "Updating..." : "Save"}
-        </button>
+  type="submit"
+  className="w-500px mt-2 bg-yellow-500 text-white px-6 py-2 rounded-lg font-medium hover:bg-yellow-600"
+  disabled={loading}
+>
+  {loading ? "Updating..." : "Save"}
+</button>
       </form>
     </div>
   );

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef  } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Upload, Loader, Trash2, ChevronDown  } from "lucide-react";
+import { ArrowLeft, Upload, Loader, Trash2, ChevronDown, Eye, X  } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import {
   getMasterData,
@@ -44,7 +44,8 @@ export default function PDFUpload() {
   const navigate = useNavigate();
   const { moduleId } = useParams();
 
-
+const [pdfPreviewUrls, setPdfPreviewUrls] = useState({});
+const [previewPdfUrl, setPreviewPdfUrl] = useState("");
 const [files, setFiles] = useState([]);
 const [extractedData, setExtractedData] = useState(null); // for single invoice
 const [extractedInvoices, setExtractedInvoices] = useState([]); // for multiple invoices
@@ -201,10 +202,18 @@ useEffect(() => {
   }
 
   setFiles(pdfFiles);
+  const previewMap = {};
+
+pdfFiles.forEach((pdfFile) => {
+  previewMap[pdfFile.name] = URL.createObjectURL(pdfFile);
+});
+
+setPdfPreviewUrls(previewMap);
   setExtractedData(null);
   setExtractedInvoices([]);
   setInvoiceRows([]);
   setPdfText("");
+  setPreviewPdfUrl("");
   setMessage({ type: "", text: "" });
 };
 
@@ -1553,6 +1562,7 @@ const handleSaveTransactions = async () => {
       });
       return;
     }
+
     if (!validateRows()) {
       setMessage({
         type: "error",
@@ -1575,46 +1585,56 @@ const handleSaveTransactions = async () => {
       });
       return;
     }
-console.log("Saving transactions:", validRows);
-    await createPaymentTransactions(
-      {
-        rows: validRows.map((row) => ({
-          invoiceDate: formatDateForInput(row.invoiceDate) || null,
-          vendorName: row.vendorName || null,
-          product: row.product || null,
-          productType: row.productType || null,
-          plan: row.plan || null,
-          department: row.department || null,
-          billingCompany: row.billingCompany || null,
-          term: row.term || null,
-          creditCard: row.creditCard || null,
-          currency: row.currency || null,
-          amount: Number(row.amount || 0),
-          totalAmountAED: Number(row.totalAmountAED || 0),
-         expiryDate: formatDateForInput(row.expiryDate) || null,
-          costCenter: row.costCenter || null,
-          remarks: row.remarks || null,
-          vatAmount: Number(row.vatAmount || 0),
-          totalAmount: Number(row.totalAmount || 0),
-          invoiceNumber: row.invoiceNumber || null,
-          transactionType: row.transactionType || null,
-          projects: row.projects || null,
-          itRequestNum: row.itRequestNum || null,
-          requestedBy: row.requestedBy || null,
-          qty: Number(row.qty || 0),
-          lpoNo: row.lpoNo || null,
-         lpoDate: formatDateForInput(row.lpoDate) || null,
 
-         deliveryDate: formatDateForInput(row.deliveryDate) || null,
+    const payloadRows = validRows.map((row) => ({
+      invoiceDate: formatDateForInput(row.invoiceDate) || null,
+      vendorName: row.vendorName || null,
+      product: row.product || null,
+      productType: row.productType || null,
+      plan: row.plan || null,
+      department: row.department || null,
+      billingCompany: row.billingCompany || null,
+      term: row.term || null,
+      creditCard: row.creditCard || null,
+      currency: row.currency || null,
+      amount: Number(row.amount || 0),
+      totalAmountAED: Number(row.totalAmountAED || 0),
+      expiryDate: formatDateForInput(row.expiryDate) || null,
+      costCenter: row.costCenter || null,
+      remarks: row.remarks || null,
+      vatAmount: Number(row.vatAmount || 0),
+      totalAmount: Number(row.totalAmount || 0),
+      invoiceNumber: row.invoiceNumber || null,
+      transactionType: row.transactionType || null,
+      projects: row.projects || null,
+      itRequestNum: row.itRequestNum || null,
+      requestedBy: row.requestedBy || null,
+      qty: Number(row.qty || 0),
+      lpoNo: row.lpoNo || null,
+      lpoDate: formatDateForInput(row.lpoDate) || null,
+      deliveryDate: formatDateForInput(row.deliveryDate) || null,
+      prfRequired: row.prfRequired || false,
 
-          prfRequired: row.prfRequired || false,
+      // important for saving PDF path in backend
+      pdfFileName: row.fileName || null,
+    }));
 
+    const formData = new FormData();
 
-          
-        })),
-      },
-      activeUserEmail
+    formData.append(
+      "payload",
+      JSON.stringify({
+        rows: payloadRows,
+      })
     );
+
+    files.forEach((pdfFile) => {
+      formData.append("pdfFiles", pdfFile, pdfFile.name);
+    });
+
+    console.log("Saving transactions:", payloadRows);
+
+    await createPaymentTransactions(formData, activeUserEmail);
 
     setMessage({
       type: "success",
@@ -1627,15 +1647,19 @@ console.log("Saving transactions:", validRows);
     setFiles([]);
     setPdfText("");
     setValidationErrors({});
+
     if (fileInputRef.current) {
-  fileInputRef.current.value = "";
-}
+      fileInputRef.current.value = "";
+    }
   } catch (error) {
     console.error("Save transaction error:", error);
 
     setMessage({
       type: "error",
-      text: error.response?.data?.error || error.message || "Failed to save transactions.",
+      text:
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to save transactions.",
     });
   }
 };
@@ -1764,8 +1788,11 @@ console.log("Saving transactions:", validRows);
       <table className="border-collapse text-xs min-w-[3800px] w-full">
                 <thead className="bg-slate-200 sticky top-0 z-30 text-gray-900">
                   <tr>
-                    <th className="border border-gray-400 px-3 py-2 min-w-[80px] bg-slate-200 text-center">
+                    <th className="border border-gray-400 px-3 py-2 min-w-[50px] bg-slate-200 text-center">
   Action
+</th>
+ <th className="border border-gray-400 px-3 py-2 min-w-[40px] bg-slate-200 text-center">
+  PRF Required
 </th>
                   <th className="border border-gray-400 px-3 py-2 min-w-[60px] bg-slate-200">
                     S.No
@@ -1806,9 +1833,19 @@ console.log("Saving transactions:", validRows);
                       key={rowIndex}
                       className={rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50"}
                     >
-                      <td className="border border-gray-400 text-center min-w-[100px]">
-  <div className="flex items-center justify-center gap-3">
+                      <td className="border border-gray-400 text-center min-w-[50px]">
+  <div className="flex items-center justify-center gap-1 p-1">
     {/* Delete Button */}
+    {row.fileName && pdfPreviewUrls[row.fileName] && (
+  <button
+    type="button"
+    onClick={() => setPreviewPdfUrl(pdfPreviewUrls[row.fileName])}
+    className="inline-flex items-center justify-center p-1.5 text-gray-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors"
+    title="Preview PDF"
+  >
+    <Eye size={16} />
+  </button>
+)}
     <button
       type="button"
       onClick={() => handleDeleteRow(rowIndex)}
@@ -1818,7 +1855,10 @@ console.log("Saving transactions:", validRows);
       <Trash2 size={16} />
     </button>
      {/* Modern Checkbox */}
-    <label className="inline-flex items-center cursor-pointer">
+   
+  </div>
+</td>
+<td className="border border-gray-400 px-3 py-2 text-center"> <label className="inline-flex items-center cursor-pointer">
       <input
         type="checkbox"
         checked={row.prfRequired || false}
@@ -1832,9 +1872,7 @@ console.log("Saving transactions:", validRows);
         className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer"
         title = "PRF Required"
       />
-    </label>
-  </div>
-</td>
+    </label></td>
                       <td className="border border-gray-400 px-3 py-2 text-center">
                         {rowIndex + 1}
                       </td>
@@ -1905,6 +1943,30 @@ console.log("Saving transactions:", validRows);
             </div>
           </div>
         )}
+
+          {previewPdfUrl && (
+          <div className="fixed inset-0 z-[99999] bg-black/60 flex items-center justify-center p-5">
+            <div className="bg-white w-[90vw] h-[90vh] rounded-xl shadow-2xl overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between px-4 py-3 border-b">
+                <h3 className="font-semibold text-gray-800">PDF Preview</h3>
+
+                <button
+                  onClick={() => setPreviewPdfUrl("")}
+                  className="p-2 rounded-md hover:bg-red-50 text-red-600"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <iframe
+                src={previewPdfUrl}
+                title="PDF Preview"
+                className="w-full flex-1"
+              />
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

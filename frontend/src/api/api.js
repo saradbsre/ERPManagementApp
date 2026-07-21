@@ -181,6 +181,10 @@ export const getMasterData = (masterName, activeUserEmail) => {
 export const createPaymentTransactions = (payload, activeUserEmail) => {
   return API.post("/payment-transactions", payload, {
     params: { activeUserEmail },
+    headers:
+      payload instanceof FormData
+        ? { "Content-Type": "multipart/form-data" }
+        : { "Content-Type": "application/json" },
   });
 };
 
