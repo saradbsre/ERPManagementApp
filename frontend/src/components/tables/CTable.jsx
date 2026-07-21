@@ -2719,9 +2719,7 @@ const generateBarcodeSvg = (value) => {
     format: "CODE128",
     width: 1.6,
     height: 45,
-    displayValue: true,
-    fontSize: 10,
-    textMargin: 3,
+    displayValue: false,
     margin: 0,
   });
 
@@ -2998,7 +2996,7 @@ printableCols.splice(
   margin-bottom: 7px;
   background: #ffffff;
   position: relative;
-  min-height: 58px;
+  min-height: 64px;
 }
 
 .report-header-text {
