@@ -47,6 +47,8 @@ export default function BoardViewsBar({
     return () => observer.disconnect();
   }, []);
 
+  
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (barRef.current && !barRef.current.contains(event.target)) {

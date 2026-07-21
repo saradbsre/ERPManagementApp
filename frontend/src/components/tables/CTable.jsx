@@ -231,6 +231,8 @@ const [customPrintHeader] = useState("ABDULWAHED BIN SHABIB GROUP");
     const [sortConfig, setSortConfig] = useState([]);
     const [groupByColumn, setGroupByColumn] = useState(null);
    // const [columnOrder, setColumnOrder] = useState(visibleColumns.map(c => c.column_name));
+
+   
     const orderColumnsByConfig = (cols = []) => {
       if (!Array.isArray(cols)) return [];
       if (!configOrder.length) return cols;
@@ -279,7 +281,6 @@ const [newViewVisibility, setNewViewVisibility] = useState("USER");
 
 const [hasViewChanges, setHasViewChanges] = useState(false);
 const [editingView, setEditingView] = useState(null);
-
 
 
 useEffect(() => {
@@ -4086,19 +4087,48 @@ const rowIndexMap = React.useMemo(() => {
 }, [paginatedGroupedRows]);
 
 const orderedVisibleColumns = useMemo(() => {
+  // Main View -> use the default visible columns order
+  if (activeViewId === "main") {
+    const pinned = [];
+    const unpinned = [];
+
+    visibleColumns.forEach((col) => {
+      if (pinnedColumns.includes(col.column_name)) {
+        pinned.push(col);
+      } else {
+        unpinned.push(col);
+      }
+    });
+
+    return [...pinned, ...unpinned];
+  }
+
+  // Saved View -> use the saved/reordered column order
+  const reordered = tempHideColumns
+    .map((columnName) =>
+      visibleColumns.find((c) => c.column_name === columnName)
+    )
+    .filter(Boolean);
+
+  const remaining = visibleColumns.filter(
+    (c) => !tempHideColumns.includes(c.column_name)
+  );
+
+  const ordered = [...reordered, ...remaining];
+
   const pinned = [];
   const unpinned = [];
 
-  for (const col of visibleColumns) {
+  ordered.forEach((col) => {
     if (pinnedColumns.includes(col.column_name)) {
       pinned.push(col);
     } else {
       unpinned.push(col);
     }
-  }
+  });
 
   return [...pinned, ...unpinned];
-}, [visibleColumns, pinnedColumns]);
+}, [activeViewId, visibleColumns, tempHideColumns, pinnedColumns]);
 //console.log("Ordered visible columns:", orderedVisibleColumns.map(c => c.column_name));
 
 
@@ -4233,11 +4263,17 @@ const openMenuEye = () => {
 
   setMenuPosition({
     top: rect.bottom + 5,
-    left: rect.left
+    left: rect.left,
   });
 
   setHidePopupColumn("__sno__");
-  setTempHideColumns(visibleColumns.map((c) => c.column_name));
+
+  setTempHideColumns(
+    activeViewId === "main"
+      ? visibleColumns.map((c) => c.column_name)
+      : [...tempHideColumns]
+  );
+
   setShowHidePopup(true);
 };
 
@@ -4252,10 +4288,7 @@ const buildCurrentViewPayload = () => {
     },
 
     columns: {
-      visibleColumns:
-        visibleColumnsState?.length > 0
-          ? visibleColumnsState
-          : selectedColumns || [],
+      visibleColumns: tempHideColumns || [],
       pinnedColumns: pinnedColumns || [],
     },
 
@@ -4299,7 +4332,7 @@ const safeJsonParse = (value, fallback) => {
 };
 
 const applySavedView = async (view) => {
-  console.log("Applying saved view:", view);  
+  // console.log("Applying saved view:", view);  
   const savedFilters = safeJsonParse(view.filters, {});
   const savedColumns = safeJsonParse(view.columns, {});
   const savedSort = safeJsonParse(view.sort_config, []);
@@ -4319,7 +4352,7 @@ const applySavedView = async (view) => {
 
   if (Array.isArray(savedColumns.visibleColumns)) {
     setSelectedColumns(savedColumns.visibleColumns);
-    setVisibleColumnsState?.(savedColumns.visibleColumns);
+    setTempHideColumns?.(savedColumns.visibleColumns);
     setSavedTableColumns(savedColumns.visibleColumns);
     setTableColumnMode("custom");
   }
@@ -4337,7 +4370,7 @@ const applySavedView = async (view) => {
 } else {
   setGroupBy([]);
 }
-  console.log("saved filters:", savedFilters);
+  //console.log("saved filters:", savedFilters);
   setHasViewChanges(false);
 
   await refreshRowsByView(savedFilters);
@@ -6812,7 +6845,26 @@ onDrop={() => handleDrop(col.column_name)}
       zIndex: 9999
     }}
   >
-    <ShowHideColumnsPopup
+    
+<ShowHideColumnsPopup
+  columns={columns}
+  tempHideColumns={tempHideColumns}
+  setTempHideColumns={setTempHideColumns}
+  onCancel={() => {
+    setShowHidePopup(false);
+    setHidePopupColumn(null);
+  }}
+  onSave={async (selectedColumnsFromDrag) => {
+    if (activeViewId === "main") {
+      await saveColumnSelection(selectedColumnsFromDrag);
+    }
+
+    setShowHidePopup(false);
+    setHidePopupColumn(null);
+  }}
+/>
+
+{/* <ShowHideColumnsPopup
       columns={columns}
       tempHideColumns={tempHideColumns}
       setTempHideColumns={setTempHideColumns}
@@ -6825,7 +6877,7 @@ onDrop={() => handleDrop(col.column_name)}
         setShowHidePopup(false);
         setHidePopupColumn(null);
       }}
-    />
+    /> */}
   </div>
 )}
                     </div>

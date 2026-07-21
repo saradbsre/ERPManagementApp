@@ -1,4 +1,75 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { DndContext, closestCenter } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+function SortableItem({
+  column,
+  tempHideColumns,
+  setTempHideColumns,
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: column.column_name,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+   <div
+  ref={setNodeRef}
+  style={style}
+  className={`flex items-center justify-between rounded-xl border p-1.5 mb-1 bg-white
+    ${
+      isDragging
+        ? "shadow-2xl border-blue-500 opacity-90 scale-105 z-50"
+        : "border-slate-200"
+    }`}
+>
+  <div className="flex items-center gap-3">
+
+    <input
+      type="checkbox"
+      checked={tempHideColumns.includes(column.column_name)}
+      onPointerDown={(e)=>e.stopPropagation()}
+      onClick={(e)=>e.stopPropagation()}
+      onChange={(e) => {
+        e.stopPropagation();
+
+        if (e.target.checked) {
+          setTempHideColumns((prev) => [...prev, column.column_name]);
+        } else {
+          setTempHideColumns((prev) =>
+            prev.filter((x) => x !== column.column_name)
+          );
+        }
+      }}
+    />
+
+    <span>{column.display_name}</span>
+
+  </div>
+
+  <button
+    type="button"
+    {...attributes}
+    {...listeners}
+    className="cursor-grab active:cursor-grabbing rounded-lg p-1 text-slate-400 hover:bg-slate-100"
+  >
+    ⋮⋮
+  </button>
+</div>
+  );
+}
 
 export default function ShowHideColumnsPopup({
   columns,
@@ -11,16 +82,36 @@ export default function ShowHideColumnsPopup({
   const [search, setSearch] = useState("");
   const panelRef = useRef(null);
   const allColumnNames = columns.map((c) => c.column_name);
+ // console.log("ShowHideColumnsPopup rendered with columns:", columns, "and tempHideColumns:", tempHideColumns);
+  // const [orderedColumns, setOrderedColumns] = useState(columns);
+  // //console.log("ShowHideColumnsPopup rendered with columns:", orderedColumns, "and tempHideColumns:", tempHideColumns);
+  // useEffect(() => {
+  //   setOrderedColumns(columns);
+  // }, [columns]);
 
   const filteredColumns = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return columns;
-    return columns.filter((c) =>
-      String(c.display_name || c.column_name || "")
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [columns, search]);
+  const selected = tempHideColumns
+    .map((colName) =>
+      columns.find((c) => c.column_name === colName)
+    )
+    .filter(Boolean);
+
+  const unselected = columns.filter(
+    (c) => !tempHideColumns.includes(c.column_name)
+  );
+
+  const allOrdered = [...selected, ...unselected];
+
+  const q = search.toLowerCase();
+
+  if (!q) return allOrdered;
+
+  return allOrdered.filter((c) =>
+    (c.display_name || '')
+      .toLowerCase()
+      .includes(q)
+  );
+}, [columns, tempHideColumns, search]);
 
   const panelWidth = 340;
   const gutter = 12;
@@ -47,6 +138,24 @@ export default function ShowHideColumnsPopup({
       document.removeEventListener("touchstart", handleOutsideClick);
     };
   }, [onCancel]);
+
+ const handleDragEnd = (event) => {
+  const { active, over } = event;
+
+  if (!over || active.id === over.id) return;
+
+  setTempHideColumns((prev) => {
+    const oldIndex = prev.indexOf(active.id);
+    const newIndex = prev.indexOf(over.id);
+
+    // Reorder only selected columns
+    if (oldIndex !== -1 && newIndex !== -1) {
+      return arrayMove(prev, oldIndex, newIndex);
+    }
+
+    return prev;
+  });
+};
 
   return (
     <div
@@ -96,41 +205,26 @@ export default function ShowHideColumnsPopup({
           </button>
         </div>
 
-        <div className="max-h-72 overflow-auto rounded-xl border border-slate-100 p-2">
-          {filteredColumns.map((c) => (
-            <label
-              key={c.column_id}
-              className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50"
-            >
-              <input
-                type="checkbox"
-                checked={tempHideColumns.includes(c.column_name)}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setTempHideColumns((prev) => [
-                      ...prev,
-                      c.column_name,
-                    ]);
-                  } else {
-                    setTempHideColumns((prev) =>
-                      prev.filter(
-                        (x) => x !== c.column_name
-                      )
-                    );
-                  }
-                }}
-              />
-
-              <span className="text-sm text-slate-700">{c.display_name}</span>
-            </label>
-          ))}
-
-          {filteredColumns.length === 0 && (
-            <div className="px-2 py-3 text-sm text-slate-500">
-              No columns found.
-            </div>
-          )}
-        </div>
+        <DndContext
+  collisionDetection={closestCenter}
+  onDragEnd={handleDragEnd}
+>
+  <SortableContext
+    items={filteredColumns.map(c => c.column_name)}
+    strategy={verticalListSortingStrategy}
+  >
+    <div className="max-h-72 overflow-auto rounded-xl border border-slate-100 p-2">
+      {filteredColumns.map((c) => (
+        <SortableItem
+          key={c.column_name}
+          column={c}
+          tempHideColumns={tempHideColumns}
+          setTempHideColumns={setTempHideColumns}
+        />
+      ))}
+    </div>
+  </SortableContext>
+</DndContext>
 
         <div className="flex justify-end gap-2 pt-1">
           <button
@@ -142,7 +236,7 @@ export default function ShowHideColumnsPopup({
 
           <button
             className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            onClick={onSave}
+           onClick={() => onSave(tempHideColumns)}
           >
             Save
           </button>
