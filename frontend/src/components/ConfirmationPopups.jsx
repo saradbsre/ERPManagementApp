@@ -37,7 +37,7 @@ export default function ConfirmModal({
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
 
-      <div className="w-[420px] bg-white rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div className="w-[440px] bg-white rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
 
         {/* Header */}
         <div className="px-6 pt-6 flex items-start gap-4">

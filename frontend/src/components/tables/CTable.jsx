@@ -1367,9 +1367,10 @@ const handlePreview = async (prfNum) => {
 };
 
 const handleUnpost = (prfNum) => {
+  const prfnum = decodeURIComponent(prfNum);
   setConfirmData({
     title: "Unpost PRF",
-    message: "Are you sure you want to unpost this PRF?",
+    message: `Are you sure you want to unpost this PRF ${prfnum}?`,
     confirmText: "Unpost",
     type: "warning",
     onConfirm: async () => {
@@ -1396,9 +1397,10 @@ const handleUnpost = (prfNum) => {
 };
 
 const handlePost = (prfNum) => {
+  const prfnum = decodeURIComponent(prfNum);
   setConfirmData({
     title: "Post PRF",
-    message: "Are you sure you want to post this PRF?",
+    message: `Are you sure you want to post this PRF ${prfnum}?`,
     confirmText: "Post",
     cancelText: "Cancel",
     type: "info", // or "success" if you want to style it differently
@@ -2629,6 +2631,7 @@ const isPrfBlockedProductType = (productTypeValue) => {
 
   return blockedTerms.some((term) => normalized.includes(term));
 };
+
 
 
 const filteredRows = rows.filter((row) => {
@@ -6194,7 +6197,8 @@ onDrop={() => handleDrop(col.column_name)}
 
                               const val = row[col.column_name];
                               const disablePrfCheckbox = isPrfBlockedProductType(row.product_types);
-                              const isCheckboxDisabled = disablePrfCheckbox || !isUserHavePrfAccess;
+                              const RequiredPRF = row.requires_prf_form === true
+                              const isCheckboxDisabled = disablePrfCheckbox || !isUserHavePrfAccess || !RequiredPRF;
                               //console.log("Row ID:", row.id, "Product Types:", row.product_types, "Disable PRF Checkbox:", disablePrfCheckbox);
                               //console.log("disablePrfCheckbox for row", row.id, "with product types", row.product_types, ":", disablePrfCheckbox);
                               if (val && String(val).trim() !== "") {
