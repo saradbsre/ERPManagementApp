@@ -2727,19 +2727,14 @@ const generateBarcodeSvg = (value) => {
   return new XMLSerializer().serializeToString(svg);
 };
 
-const getLastReportPrfInfo = (groupedData = []) => {
+const getLatestReportPrfInfo = (groupedData = []) => {
   const reportRows = (groupedData || []).flatMap((group) => group.rows || []);
 
   const rowsWithPrf = reportRows.filter(
     (row) => row?.prf_num && String(row.prf_num).trim() !== ""
   );
 
-  const lastRow =
-    rowsWithPrf.length > 0
-      ? rowsWithPrf[rowsWithPrf.length - 1]
-      : reportRows[reportRows.length - 1];
-
-  if (!lastRow) {
+  if (rowsWithPrf.length === 0) {
     return {
       prfNo: "",
       invoiceDate: "",
@@ -2747,18 +2742,30 @@ const getLastReportPrfInfo = (groupedData = []) => {
     };
   }
 
-  const prfNo = lastRow.prf_num || "";
-  const invoiceDate = lastRow.date ? formatDate(lastRow.date) : "";
+  const getPrfNumberValue = (prf) => {
+    const match = String(prf || "").match(/IT\/(\d+)/i);
+    return match ? Number(match[1]) : 0;
+  };
+
+  const latestRow = rowsWithPrf.reduce((latest, current) => {
+    const latestNo = getPrfNumberValue(latest.prf_num);
+    const currentNo = getPrfNumberValue(current.prf_num);
+
+    return currentNo > latestNo ? current : latest;
+  }, rowsWithPrf[0]);
+
+  const prfNo = latestRow.prf_num || "";
+  const invoiceDate = latestRow.date ? formatDate(latestRow.date) : "";
 
   return {
     prfNo,
     invoiceDate,
-barcodeValue: prfNo,
+    barcodeValue: prfNo,
   };
 };
 const generateTableHTML = (cols, groupedData) => {
   const rows = groupedData.flatMap((g) => g.rows);
-const barcodeInfo = getLastReportPrfInfo(groupedData);
+const barcodeInfo = getLatestReportPrfInfo(groupedData);
 const barcodeSvg = generateBarcodeSvg(barcodeInfo.barcodeValue);
   const groupedRows = Array.isArray(groupedData)
     ? groupedData
