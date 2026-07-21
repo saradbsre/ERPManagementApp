@@ -12,11 +12,11 @@ import { getTopExpensiveAssets, getMasterData } from "../../api/api";
 
 export default function ChartforTop5() {
   const [data, setData] = useState([]); // This will be the flattened data for charting
-  const [modules, setModules] = useState([]); // List of modules for dropdown
-  const [selectedModule, setSelectedModule] = useState("");
   const [serviceProviders, setServiceProviders] = useState([]);
   const activeUser = JSON.parse(localStorage.getItem("user"));
   const activeUserEmail = activeUser?.email;
+  const [productTypes, setProductTypes] = useState([]);
+  const [selectedProductType, setSelectedProductType] = useState("");
 
   useEffect(() => {
     getMasterData("products", activeUserEmail).then((res) => {
@@ -35,63 +35,50 @@ export default function ChartforTop5() {
     return map;
   }, [serviceProviders]);
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const result = await getTopExpensiveAssets();
-        // Defensive: result.data may be an object with a 'data' array
-        const modulesArr = Array.isArray(result?.data?.data) ? result.data.data : [];
+  fetchTopExpenses("");
+}, []);
 
-        // Flatten all asset data with module info for charting
-        const flatData = modulesArr.flatMap((mod) =>
-          (Array.isArray(mod.data) ? mod.data : []).map((item) => ({
-            ...item,
-            module_display_name: mod.module_display_name
-          }))
-        );
+const fetchTopExpenses = async (prdtype_code = "") => {
+  try {
+    const result = await getTopExpensiveAssets(prdtype_code);
 
-        setData(flatData);
-        setModules(modulesArr.map((mod) => ({
-          name: mod.module_display_name,
-          value: mod.module_display_name
-        })));
+    setData(result.data.transactions || []);
+    setProductTypes(result.data.productTypes || []);
 
-        if (modulesArr.length > 0) {
-          setSelectedModule(modulesArr[0].module_display_name);
-        }
-      } catch (err) {
-        console.error(err);
-        setData([]);
-        setModules([]);
-      }
-    };
-
-    fetchData();
-  }, []);
+  } catch (err) {
+    console.error(err);
+    setData([]);
+    setProductTypes([]);
+  }
+};
 
   // modules state is now set in useEffect
 
   // -----------------------------
   // FILTER DATA
   // -----------------------------
-  const chartData = useMemo(() => {
-    if (!Array.isArray(data)) return [];
+const chartData = useMemo(() => {
+  if (!Array.isArray(data)) return [];
 
-    return data
-      .filter((item) => item.module_display_name === selectedModule)
-      .map((item) => {
-        const code = String(item.prd_code || "").trim(); // e.g. PR010
-        return {
-          name: productNameByCode.get(code) || code, // show product_name
-          "total AED": Number(item.total_amount_aed) || 0
-        };
-      });
-  }, [data, selectedModule, productNameByCode]);
+  return data.map((item) => {
+    const code = String(item.prd_code || "").trim();
+    const fullName = productNameByCode.get(code) || code;
+
+    return {
+      name:
+        fullName.length > 20
+          ? `${fullName.substring(0, 20)}...`
+          : fullName,
+      "total AED": Number(item.total_amount_aed) || 0,
+    };
+  });
+}, [data, productNameByCode]);
 
   // -----------------------------
   // UI
   // -----------------------------
   return (
-    <div className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl shadow-lg border border-gray-100 w-full h-96 overflow-hidden">
+    <div className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl  w-full h-96 overflow-hidden">
 
       {/* HEADER */}
       <div className="flex justify-between items-start mb-4">
@@ -106,14 +93,25 @@ export default function ChartforTop5() {
         </div>
 
         {/* DROPDOWN */}
-        <select
-          className="bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          value={selectedModule}
-          onChange={(e) => setSelectedModule(e.target.value)}
+       <select
+          className="bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm text-sm"
+          value={selectedProductType}
+          onChange={(e) => {
+            const value = e.target.value;
+
+            setSelectedProductType(value);
+
+            fetchTopExpenses(value);
+          }}
         >
-          {modules.map((m, i) => (
-            <option key={i} value={m.value}>
-              {m.name}
+          <option value="">All Product Types</option>
+
+          {productTypes.map((type) => (
+            <option
+              key={type.prdtype_code}
+              value={type.prdtype_code}
+            >
+              {type.prdtype_name.trim()}
             </option>
           ))}
         </select>

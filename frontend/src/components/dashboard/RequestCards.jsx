@@ -34,7 +34,7 @@ export default function SignupRequestsCard() {
   };
 
   return (
-    <div className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl shadow-lg border border-gray-100">
+    <div className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl  w-full h-96 overflow-hidden">
 
       {/* HEADER */}
       <div className="flex justify-between items-center mb-4">

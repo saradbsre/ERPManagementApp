@@ -5,7 +5,7 @@ import { formatDate } from "../../utils/formatDate";
 
 export default function RecentTransactions() {
   const [data, setData] = useState([]);
-
+  
   const activeUserEmail =
     JSON.parse(localStorage.getItem("user"))?.email || "";
 
@@ -121,7 +121,7 @@ export default function RecentTransactions() {
         });
 
         setCurrencyMap(map);
-        console.log("Currency Map:", map);
+        //console.log("Currency Map:", map);
       } catch (err) {
         console.error(err);
       }
@@ -215,7 +215,7 @@ export default function RecentTransactions() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-lg font-semibold text-gray-800">
-            Recent Transactions
+            Recent Transactions Last 30 Days
           </h2>
           <p className="text-sm text-gray-400 mt-1">
             Latest payment activities
@@ -269,7 +269,7 @@ export default function RecentTransactions() {
       {/* LIST */}
       <div className={`space-y-3 ${
   filteredTransactions.length > 5
-    ? "max-h-[420px] overflow-y-auto pr-2"
+    ? "max-h-[850px] overflow-y-auto pr-2"
     : ""
 }`}>
 
@@ -302,7 +302,7 @@ export default function RecentTransactions() {
               {/* RIGHT */}
               <div className="text-right ml-2 flex-shrink-0">
                 <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-700">
-                  {currencyMap[item.currency] } {formatAmount(amount)}
+                  AED {formatAmount(amount)}
                 </div>
               </div>
             </div>

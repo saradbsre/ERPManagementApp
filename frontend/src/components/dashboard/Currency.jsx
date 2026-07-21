@@ -19,7 +19,7 @@ export default function CurrencyWidget() {
       setCurrencies(data);
 
       const base = data.find(c => c.curr_is_basecurr);
-      console.log("Base currency:", base);
+     // console.log("Base currency:", base);
       if (base) {
         setTo(base.curr_code);
         setFrom(data.find(c => c.curr_code !== base.curr_code)?.curr_code);
@@ -81,7 +81,7 @@ export default function CurrencyWidget() {
   };
 
   return (
-    <div className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl shadow-lg w-full max-w-md transition-all duration-300 hover:shadow-xl">
+    <div className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl  w-full h-96 overflow-hidden">
 
       {/* HEADER */}
       <h2 className="text-lg font-semibold mb-4">

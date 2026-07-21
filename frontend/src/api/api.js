@@ -235,13 +235,20 @@ export const deleteMasterData = (masterName, id, activeUserEmail) => {
   });
 }
 
-export const getTopExpensiveAssets = () => {
-  return API.get("/top-expensive-assets");
-}
+export const getTopExpensiveAssets = (prdtype_code = "") =>
+  API.get("/top-expensive-assets", {
+    params: {
+      prdtype_code
+    }
+  });
 
-export const getAlertData = () => {
-  return API.get("/alerts");
-}
+export const getAlertData = (filter = "today_tomorrow") => {
+  return API.get("/alerts", {
+    params: {
+      filter,
+    },
+  });
+};
 
 export const getRecentTransactions = () => {
   return API.get("/recent-transactions");
