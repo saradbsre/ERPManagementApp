@@ -21,8 +21,8 @@ export default function CurrencyWidget() {
       const base = data.find(c => c.curr_is_basecurr);
       console.log("Base currency:", base);
       if (base) {
-        setFrom(base.curr_code);
-        setTo(data.find(c => c.curr_code !== base.curr_code)?.curr_code);
+        setTo(base.curr_code);
+        setFrom(data.find(c => c.curr_code !== base.curr_code)?.curr_code);
       }
     };
 

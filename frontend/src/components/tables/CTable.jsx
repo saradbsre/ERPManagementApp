@@ -2393,7 +2393,7 @@ const handlePrint = () => {
     ...col,
     display_name: getColumnDisplayName(col),
   }));
-
+  //console.log("Printing with columns:", cols);
   openPrintWindow({
     content: generateTableHTML(
       cols,
@@ -2840,7 +2840,7 @@ const reportTitle =
 
   const normalCols = cols.filter((c) => {
     const name = String(c.column_name || "").toLowerCase();
-    return name !== "amount" && name !== "currency";
+    return name !== "currency";
   });
 
   const currencyCols = currencies.map((cur) => ({
@@ -2930,7 +2930,7 @@ printableCols.splice(
     return "45px";
   }
   if ( name.includes("billcycle_code") || name.includes("curr_code") ) {
-    return "27px";
+    return "29px";
   }
   if (name.includes("prf")) {
     return "35px";
@@ -5328,12 +5328,12 @@ const normalizedFilters = nextFilters.map((filter) => ({
                                   onClick={openMenuEye}
                                 >
                                   {/* TEXT (hide on hover) */}
-                                  <span className="group-hover:opacity-0 transition">
+                                  <span className="group-hover:opacity-0 transition" >
                                     S.No
                                   </span>
 
                                   {/* ICON (show only on hover) */}
-                                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition text-gray-500">
+                                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition text-gray-500" title="Show / Hide Columns">
                                   <EyeIcon className="w-6 h-6" />
                                 </span>
                                 </th>
@@ -6759,7 +6759,7 @@ onDrop={() => handleDrop(col.column_name)}
         col.column_name.toLowerCase().includes("amount");
 
       const isFirstAmountColumn = col.column_name === "amount"; // change if needed
-
+      //console.log("isFirstAmountColumn for", col.column_name, ":", isFirstAmountColumn);
       return (
         <React.Fragment key={col.column_id}>
 

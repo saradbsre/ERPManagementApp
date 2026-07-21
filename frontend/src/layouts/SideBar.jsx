@@ -261,13 +261,22 @@ const closeHoverMenuWithDelay = () => {
         <div className="flex flex-col h-full">
       
 {/* logo/header */}
-<div className="h-16 flex items-center justify-start px-3 border-b border-gray-200 relative">
+<div className="h-20 flex items-center justify-start px-3 border-b border-gray-200 relative">
   {!collapsed ? (
     <>
       <div className="min-w-0 mr-10">
-          <h1 className="text-lg font-bold text-[#264d86] truncate">
-          BIN SHABIB GROUP
-        </h1>
+          <h1
+  className="text-lg font-bold text-[#264d86]"
+  title="ABDULWAHED BIN SHABIB GROUP"
+  style={{
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+  }}
+>
+  ABDULWAHED BIN SHABIB GROUP
+</h1>
         <p className="text-xs text-gray-500 truncate">
           IT Asset Management
         </p>

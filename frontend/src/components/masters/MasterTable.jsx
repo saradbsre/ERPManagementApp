@@ -31,6 +31,8 @@ const Modal = ({ title, children, onClose }) => (
 
 export default function MasterTablePage() {
     const { masterName } = useParams();
+    const viewportWidth = window.innerWidth;
+    const isMobile = viewportWidth < 768;
     const location = useLocation();
     const [isCreating, setIsCreating] = useState(false);
     const [newRow, setNewRow] = useState({});
@@ -503,8 +505,9 @@ const getLabel = (key, value) => {
   return value ? "YES" : "NO";
 };
 
-    return (
-        <div className="h-full flex flex-col">
+const renderDesktop = () => (
+  <>
+    <div className="h-full flex flex-col">
            <ValidatePopups
                 type={popupType}
                 message={popupMessage}
@@ -534,48 +537,13 @@ const getLabel = (key, value) => {
    + New
   </PermissionButton>
 
-  {/* ICON BUTTONS */}
-  {/* <div className="flex items-center gap-3 text-2xl">
-
-    <button
-      //onClick={() => setShowImportModal(true)}
-      title="Import"
-      className="hover:text-green-600 transition"
-    >
-      ⬆️
-    </button>
-
-    <button
-     // onClick={() => setShowPrintModal(true)}
-      title="Print"
-      className="hover:text-gray-700 transition"
-    >
-      🖨️
-    </button>
-
-    <button
-      //onClick={() => setShowExcelModal(true)}
-      title="Excel"
-      className="hover:text-emerald-600 transition"
-    >
-      📊
-    </button>
-
-    <button
-     // onClick={() => setShowPdfModal(true)}
-      title="PDF"
-      className="hover:text-red-500 transition"
-    >
-      📄
-    </button>
-
-  </div> */}
+ 
 
 </div>
 
             </div>
 
-            {/* ================= HEADER ================= */}
+         
 
 
                    {/* ================= CONTROL BAR (LEFT ALIGNED) ================= */}
@@ -1488,5 +1456,131 @@ const getLabel = (key, value) => {
   onConfirm={confirmData.onConfirm}
 />
         </div>
-    );
+  </>
+);
+
+const renderMobile = () => (
+  <div
+    style={{
+      background: "#fff",
+      minHeight: "100vh",
+      display: "flex",
+      flexDirection: "column",
+    }}
+  >
+    {/* Header */}
+    <div
+      style={{
+        padding: "16px",
+        borderBottom: "1px solid #e5e7eb",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}
+    >
+      <h2 style={{ margin: 0 }}>
+        {master?.display_name || masterName}
+      </h2>
+
+      <PermissionButton
+        user={activeUser}
+        permission="add"
+        onClick={handleCreate}
+        className="px-3 py-2 rounded bg-green-600 text-white"
+      >
+        + New
+      </PermissionButton>
+    </div>
+
+    {/* Search */}
+    <div style={{ padding: 16 }}>
+      <input
+        placeholder="Search..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        style={{
+          width: "100%",
+          padding: 12,
+          border: "1px solid #ddd",
+          borderRadius: 10,
+        }}
+      />
+    </div>
+
+    {/* Records */}
+    <div style={{ flex: 1 }}>
+      {paginatedRows.map((row, index) => (
+        <div
+          key={row.id ?? index}
+          onClick={() => {
+            setEditRowId(row.id ?? index);
+            setEditRow(row);
+            setShowMobileDetails(true);
+          }}
+          style={{
+            padding: 16,
+            borderBottom: "1px solid #eee",
+            cursor: "pointer",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: 600,
+              fontSize: 16,
+            }}
+          >
+            {formatCard(row[columns[0].key], columns[0].key)}
+          </div>
+
+          {columns.slice(1, 3).map(col => (
+            <div
+              key={col.key}
+              style={{
+                color: "#6b7280",
+                fontSize: 13,
+              }}
+            >
+              {col.label}: {formatCard(row[col.key], col.key)}
+            </div>
+          ))}
+
+          <div
+            style={{
+              textAlign: "right",
+              color: "#9ca3af",
+              fontSize: 18,
+            }}
+          >
+            ›
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+   return (
+  <>
+    <ValidatePopups
+      type={popupType}
+      message={popupMessage}
+      onClose={() => {
+        setPopupMessage("");
+        setPopupType("success");
+      }}
+    />
+
+    {isMobile ? renderMobile() : renderDesktop()}
+
+    <ConfirmModal
+      open={confirmOpen}
+      title={confirmData.title}
+      message={confirmData.message}
+      confirmText={confirmData.confirmText}
+      cancelText={confirmData.cancelText}
+      type={confirmData.type}
+      onClose={() => setConfirmOpen(false)}
+      onConfirm={confirmData.onConfirm}
+    />
+  </>
+);
 }
