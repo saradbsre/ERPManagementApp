@@ -2938,7 +2938,7 @@ printableCols.splice(
     return "45px";
   }
   if ( name.includes("billcycle_code") || name.includes("curr_code") ) {
-    return "29px";
+    return "31px";
   }
   if (name.includes("prf")) {
     return "35px";
@@ -3129,7 +3129,7 @@ printableCols.splice(
       background: #e5e7eb;
       font-weight: bold;
       color: #111827;
-      border-top: 2px solid black;
+      
     }
 
 
@@ -3415,7 +3415,7 @@ if (col.isProductDescription) {
               ? `
                 <tr class="total-row">
                   <td colspan="${totalColSpan}" style="text-align:right;">
-                    TOTAL
+                    Total Amount AED
                   </td>
 
                   ${printableCols
