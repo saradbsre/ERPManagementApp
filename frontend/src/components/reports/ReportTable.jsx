@@ -1,6 +1,6 @@
 import React,{ useEffect, useState, useRef, useLayoutEffect, act, use, useMemo } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import {  getModuleData, getMasterValues, getReportData, fetchMasters, getDisplayName, reportPdf   } from "../../api/api";
+import {  getModuleData, getMasterValues, getReportData, fetchMasters, getDisplayName, reportPdf,getYearlyExpiryReport   } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -16,6 +16,10 @@ import { getDateRange } from "../../utils/dateRanges";
 import { formatAmount } from "../../utils/formatAmount";
 import CustomizeDrawer from "../tables/CustomizeDrawer";
 import TableFiltersDrawer from "../filters/TableFiltersDrawer";
+import { EyeIcon } from "@heroicons/react/24/outline";
+import { Funnel } from "lucide-react";
+import ShowHideColumnsPopup from "../tables/ShowHideColumnsPopup";
+import { createPortal } from "react-dom";
 
 export default function ReportTable() {
     const { id } = useParams();
@@ -66,7 +70,20 @@ export default function ReportTable() {
     const [creditCardMap, setCreditCardMap] = useState({});
     const [productMap, setProductMap] = useState({});
     const [reportType, setReportType] = useState("summary");
+    const [yearFilter, setYearFilter] = useState("currentYear");
+const [showHidePopup, setShowHidePopup] = useState(false);
+const [hidePopupColumn, setHidePopupColumn] = useState(null);
+const [tempHideColumns, setTempHideColumns] = useState([]);
+const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+const [columnOrder, setColumnOrder] = useState([]);
+const snoRef = useRef(null);
+const dragIndexRef = useRef(null);
+const isYearlyReport =
+  String(report?.report_id || "").toUpperCase() === "R011";
     const isSummary = report?.is_detailed === true;
+   
+const allowDetailed =
+  report?.is_detailed === true || isYearlyReport;
     const [masters, setMasters] = useState([]);
     const [displayNames, setDisplayNames] = useState({});
     const groupBy = report?.group_by || null;
@@ -108,10 +125,14 @@ useEffect(() => {
 useEffect(() => {
   if (!rows?.length) return;
 
+  // Do not rebuild columns for Yearly Detailed.
+  // Backend already returns payment transaction module columns.
+  if (isYearlyReport && reportType === "detailed") return;
+
   const dynamicCols = buildDynamicColumns(rows);
   setColumns(dynamicCols);
 
-}, [displayNames, rows]);
+}, [displayNames, rows, isYearlyReport, reportType]);
 
 
 
@@ -132,6 +153,43 @@ const getCurrentMonth = () => {
   return {
     startDate: format(start),
     endDate: format(end),
+  };
+};
+
+const getYearRange = (type = "currentYear") => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+
+  const format = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+
+  if (type === "lastYear") {
+    return {
+      startDate: `${currentYear - 1}-01-01`,
+      endDate: `${currentYear - 1}-12-31`,
+    };
+  }
+
+  if (type === "nextYear") {
+    return {
+      startDate: `${currentYear + 1}-01-01`,
+      endDate: `${currentYear + 1}-12-31`,
+    };
+  }
+
+  const currentMonthEnd = new Date(
+    currentYear,
+    now.getMonth() + 1,
+    0
+  );
+
+  return {
+    startDate: `${currentYear}-01-01`,
+    endDate: format(currentMonthEnd),
   };
 };
 
@@ -188,6 +246,26 @@ const onInputChange = (e) => {
   }));
 };
 
+const visibleColumns = useMemo(() => {
+  if (!columns?.length) return [];
+
+  if (!selectedColumns?.length) return columns;
+
+  return columns.filter((col) =>
+    selectedColumns.includes(col.column_name)
+  );
+}, [columns, selectedColumns]);
+
+
+const visibleDetailedColumns = useMemo(() => {
+  if (!visibleColumns?.length) return [];
+
+  if (reportType !== "detailed") return visibleColumns;
+
+  return visibleColumns.filter(
+    (col) => col.column_name !== report?.group_by
+  );
+}, [visibleColumns, reportType, report]);
 
 const getCurrentMonthRange = () => {
   const now = new Date();
@@ -282,23 +360,64 @@ const handleExcel = async () => {
 
 
 
+// useEffect(() => {
+//   setPage(1);
+
+//   if (id) {
+//     loadReport(id, dateFilters);
+//   }
+// }, [id]);
+
 useEffect(() => {
   setPage(1);
 
-  if (id) {
-    loadReport(id, dateFilters);
-  }
-}, [id]);
+  if (!id) return;
 
+  if (isYearlyReport) {
+    const currentYearRange = getYearRange("currentYear");
+
+    setYearFilter("currentYear");
+    setActiveDateFilter("currentYear");
+    setDateFilters(currentYearRange);
+
+    loadYearlyExpiryReport({
+      selectedYearFilter: "currentYear",
+      selectedReportType: "summary",
+    });
+
+    return;
+  }
+
+  loadReport(id, dateFilters);
+}, [id, isYearlyReport]);
 
 const handleSearch = async (appliedFilters) => {
   try {
     setLoading(true);
     setPage(1);
 
-    const reportId = report?.report_id || id;
-
     const payloadFilters = appliedFilters ?? filters ?? [];
+
+    // =========================
+    // YEARLY REPORT FILTER SEARCH
+    // =========================
+    if (isYearlyReport) {
+      setFilters(payloadFilters || []);
+
+      await loadYearlyExpiryReport({
+        selectedYearFilter: activeDateFilter || yearFilter || "",
+        selectedReportType: reportType,
+        customDateFilters: dateFilters,
+        customFilters: payloadFilters,
+      });
+
+      return;
+    }
+
+    // =========================
+    // NORMAL REPORT FILTER SEARCH
+    // =========================
+    const reportId = report?.report_id || id;
 
     const payload = {
       filters: JSON.stringify(payloadFilters || []),
@@ -314,17 +433,11 @@ const handleSearch = async (appliedFilters) => {
     const res = await getReportData(reportId, activeUserEmail, payload);
 
     let data = res.data || [];
-
-    // ✅ 1. normalize keys (IMPORTANT)
     data = data.map(normalizeKeys);
-
-    // ❗ 2. currency transformation (THIS WAS MISSING)
     data = transformCurrencyRows(data);
 
-    // ✅ 3. set rows
     setRows(data);
 
-    // ✅ 4. rebuild columns
     const dynamicCols = buildDynamicColumns(data);
     setColumns(dynamicCols);
 
@@ -387,7 +500,10 @@ const handleEquivalentReport = async () => {
 };
      
 const handleClear = async () => {
-  const defaults = getCurrentMonth();
+  // const defaults = getCurrentMonth();
+  const defaults = isYearlyReport
+  ? getYearRange("currentYear")
+  : getCurrentMonth();
 
   try {
     setLoading(true);
@@ -398,6 +514,18 @@ const handleClear = async () => {
     setFilters([]);
     setPage(1);
     setActiveDateFilter("");
+    if (isYearlyReport) {
+  setYearFilter("currentYear");
+  setActiveDateFilter("currentYear");
+  setDateFilters(defaults);
+
+  await loadYearlyExpiryReport({
+    selectedYearFilter: "currentYear",
+    selectedReportType: "summary",
+  });
+
+  return;
+}
 
     const reportId = report?.report_id || id;
 
@@ -509,8 +637,7 @@ const handlePrint = () => {
 
   
 const isDetailed =
-  reportType === "detailed" && report?.is_detailed === true;
-
+  reportType === "detailed" && allowDetailed;
 const isEquivalent =
   reportType === "equivalent" && report?.is_equivalent === true;
 
@@ -762,7 +889,7 @@ const grandTotal = buildTotalRow(
                   <td class="text-right">
                     ${
                       isLabel
-                        ? "GRAND TOTAL"
+                        ? "GRAND TOTALhhh"
                         : isNumericColumn(col)
                         ? formatAmount(
                             grandTotal[col.column_name]
@@ -998,8 +1125,34 @@ const handlePdf = async () => {
 
 
 
-const handleQuickDateChange = (value) => {
+// const handleQuickDateChange = (value) => {
+//   setActiveDateFilter(value);
+
+//   const range = getDateRange(value);
+
+//   if (range) {
+//     setDateFilters(range);
+//   }
+// };
+
+const handleQuickDateChange = async (value) => {
   setActiveDateFilter(value);
+
+  if (isYearlyReport) {
+    setYearFilter(value);
+
+    const range = getYearRange(value);
+    setDateFilters(range);
+    setPage(1);
+
+    await loadYearlyExpiryReport({
+      selectedYearFilter: value,
+      selectedReportType: reportType,
+      customDateFilters: null,
+    });
+
+    return;
+  }
 
   const range = getDateRange(value);
 
@@ -1035,10 +1188,30 @@ const buildDynamicColumns = (data = []) => {
       key !== "monthly_amount_aed" &&
       key !== "yearly_amount_aed"
   );
-
+const yearlyDisplayNames = {
+  expiry_year: "Year",
+  date: "Invoice Date",
+  expiry_date: "Expiry Date",
+  invoice_number: "Invoice No",
+  com_code: "Company",
+  vend_code: "Vendor",
+  prd_code: "Product",
+  prdtype_code: "Product Type",
+  plan_code: "Plan",
+  dep_code: "Department",
+  dv_code: "Cost Center",
+  billcycle_code: "Billing Cycle",
+  curr_code: "Currency",
+  amount: "Amount",
+  vat_amount: "VAT Amount",
+  total_amount: "Total Amount",
+  total_amount_aed: "Total Amount AED",
+  prf_num: "PRF No",
+  remarks: "Remarks",
+};
   const normalCols = baseKeys.map((key) => ({
     column_name: key,
-    display_name: displayNames?.[key] || key
+   display_name: yearlyDisplayNames[key] || displayNames?.[key] || key
   }));
 
   const currencies = Array.from(
@@ -1063,7 +1236,9 @@ const buildDynamicColumns = (data = []) => {
   ) {
     totalCols.push({
       column_name: "total_amount_aed",
-      display_name: displayNames?.total_amount_aed || "Total Amount (AED)"
+      display_name: isYearlyReport
+  ? "Total Amount AED"
+  : displayNames?.total_amount_aed || "Total Amount (AED)"
     });
   }
 
@@ -1169,16 +1344,115 @@ const getCellValue = (row, col, isTotalRow = false) => {
 
 
 
+// const handleReportTypeChange = async (type) => {
+//   if (type === reportType) return;
+
+//   resetFiltersState(); // ✅ ADD THIS
+
+//   setReportType(type);
+
+//   await loadReport(id, dateFilters, type);
+// };
+
 const handleReportTypeChange = async (type) => {
   if (type === reportType) return;
 
-  resetFiltersState(); // ✅ ADD THIS
-
   setReportType(type);
+  setPage(1);
+
+  if (isYearlyReport) {
+    await loadYearlyExpiryReport({
+      selectedYearFilter: activeDateFilter || yearFilter || "currentYear",
+      selectedReportType: type, // important
+      customDateFilters: dateFilters,
+      customFilters: filters,
+    });
+
+    return;
+  }
 
   await loadReport(id, dateFilters, type);
 };
 
+const loadYearlyExpiryReport = async ({
+  selectedYearFilter = yearFilter,
+  selectedReportType = reportType,
+  customDateFilters = null,
+  customFilters = filters,
+} = {}) => {
+  try {
+    setLoading(true);
+
+ const params = {
+  activeUserEmail,
+  reportType: selectedReportType,
+  yearFilter: selectedYearFilter,
+  search,
+  filters: JSON.stringify(customFilters || []),
+};  
+
+    if (customDateFilters) {
+      params.dateFilters = JSON.stringify({
+        date: {
+          startDate: customDateFilters.startDate,
+          endDate: customDateFilters.endDate,
+        },
+      });
+    }
+
+    const res = await getYearlyExpiryReport(params);
+
+    let data = res.data?.rows || [];
+    data = data.map(normalizeKeys);
+
+    setRows(data);
+
+    // =========================
+    // YEARLY DETAILED
+    // Use backend module_columns from module_id = 12
+    // =========================
+    if (selectedReportType === "detailed") {
+      const apiColumns = res.data?.columns || [];
+
+      const activeColumns = apiColumns.filter(
+        (c) => c.is_active !== false
+      );
+
+      setColumns(activeColumns);
+
+      const defaultVisible = activeColumns.map((c) => c.column_name);
+      setSelectedColumns(defaultVisible);
+    }
+
+    // =========================
+    // YEARLY SUMMARY
+    // Build Year + Total Amount AED columns
+    // =========================
+    else {
+      const dynamicCols = buildDynamicColumns(data);
+
+      setColumns(dynamicCols);
+
+      const defaultVisible = dynamicCols.map((c) => c.column_name);
+      setSelectedColumns(defaultVisible);
+    }
+
+    if (res.data?.startDate && res.data?.endDate) {
+      setDateFilters({
+        startDate: res.data.startDate,
+        endDate: res.data.endDate,
+      });
+    }
+
+    setPage(1);
+  } catch (err) {
+    console.error("Yearly expiry report failed:", err);
+    setRows([]);
+    setColumns([]);
+  } finally {
+    setLoading(false);
+  }
+};
 const loadReport = async (reportId, overrideDateFilters = dateFilters, type = reportType) => {
   try {
     setLoading(true);
@@ -1215,10 +1489,44 @@ const loadReport = async (reportId, overrideDateFilters = dateFilters, type = re
   }
 };
 
+// const applyDateFilter = async () => {
+//   try {
+//     setLoading(true);
+//     setPage(1);
+
+//     const reportId = report?.report_id || id;
+
+//     await loadReport(
+//       reportId,
+//       dateFilters,
+//       reportType
+//     );
+
+//   } catch (err) {
+//     console.error(err);
+//   } finally {
+//     setLoading(false);
+//   }
+// };
+
+
 const applyDateFilter = async () => {
   try {
     setLoading(true);
     setPage(1);
+
+    if (isYearlyReport) {
+      setYearFilter("");
+      setActiveDateFilter("");
+
+      await loadYearlyExpiryReport({
+        selectedYearFilter: "",
+        selectedReportType: reportType,
+        customDateFilters: dateFilters,
+      });
+
+      return;
+    }
 
     const reportId = report?.report_id || id;
 
@@ -1271,15 +1579,7 @@ const groupedRows = useMemo(() => {
   );
 }, [indexedRows, groupBy, report]);
 
-const visibleDetailedColumns = useMemo(() => {
-  if (!columns?.length) return [];
 
-  if (reportType !== "detailed") return columns;
-
-  return columns.filter(
-    (col) => col.column_name !== report?.group_by
-  );
-}, [columns, reportType, report]);
 
 
 
@@ -1493,8 +1793,72 @@ const resetFiltersState = () => {
   setDateFilters(defaults);
 };
 
+const yearlyVisibleColumns = useMemo(() => {
+  if (!columns?.length) return [];
+
+  if (!selectedColumns?.length) return columns;
+
+  return selectedColumns
+    .map((name) => columns.find((c) => c.column_name === name))
+    .filter(Boolean);
+}, [columns, selectedColumns]);
+
+const yearlyDetailedColumns = useMemo(() => {
+  if (!yearlyVisibleColumns?.length) return [];
+
+  return yearlyVisibleColumns.filter(
+    (col) => col.column_name !== report?.group_by
+  );
+}, [yearlyVisibleColumns, report]);
 
 
+const openColumnPopup = () => {
+  const rect = snoRef.current?.getBoundingClientRect();
+
+  if (!rect) return;
+
+  setMenuPosition({
+    top: rect.bottom + 5,
+    left: rect.left,
+  });
+
+  setHidePopupColumn("__sno__");
+
+  setTempHideColumns(
+    selectedColumns?.length
+      ? selectedColumns
+      : columns.map((c) => c.column_name)
+  );
+
+  setShowHidePopup(true);
+};
+
+const handleDragStart = (colName) => {
+  dragIndexRef.current = colName;
+};
+
+const handleDrop = (dropColName) => {
+  const dragColName = dragIndexRef.current;
+
+  if (!dragColName || dragColName === dropColName) return;
+
+  setSelectedColumns((prev) => {
+    const current =
+      prev?.length > 0 ? [...prev] : columns.map((c) => c.column_name);
+
+    const dragIndex = current.indexOf(dragColName);
+    const dropIndex = current.indexOf(dropColName);
+
+    if (dragIndex === -1 || dropIndex === -1) return current;
+
+    const [removed] = current.splice(dragIndex, 1);
+    current.splice(dropIndex, 0, removed);
+
+    return current;
+  });
+
+  dragIndexRef.current = null;
+};
 
     return (
         <div className="h-full flex flex-col">
@@ -1684,16 +2048,27 @@ const resetFiltersState = () => {
                   cursor-pointer
                 "
               >
-                <option value=""> Quick Range</option>
-                <option value="today">Today</option>
-                <option value="yesterday">Yesterday</option>
-                <option value="tomorrow">Tomorrow</option>
-                <option value="thisWeek">This Week</option>
-                <option value="lastWeek">Last Week</option>
-                <option value="thisMonth">This Month</option>
-                <option value="lastMonth">Last Month</option>
-                <option value="thisYear">This Year</option>
-                <option value="lastYear">Last Year</option>
+               {isYearlyReport ? (
+  <>
+    <option value="">Quick Range</option>
+    <option value="lastYear">Last Year</option>
+    <option value="currentYear">Current Year</option>
+    <option value="nextYear">Next Year</option>
+  </>
+) : (
+  <>
+    <option value="">Quick Range</option>
+    <option value="today">Today</option>
+    <option value="yesterday">Yesterday</option>
+    <option value="tomorrow">Tomorrow</option>
+    <option value="thisWeek">This Week</option>
+    <option value="lastWeek">Last Week</option>
+    <option value="thisMonth">This Month</option>
+    <option value="lastMonth">Last Month</option>
+    <option value="thisYear">This Year</option>
+    <option value="lastYear">Last Year</option>
+  </>
+)}
                 {/* <option value="custom">Custom Range</option> */}
               </select>
 
@@ -1740,8 +2115,9 @@ const resetFiltersState = () => {
            <div className="inline-flex items-center bg-gray-100 p-1 rounded-xl shadow-sm">
 
   <button
-    onClick={() => handleReportTypeChange("summary")}
-    disabled={!report.is_detailed}
+   
+  onClick={() => handleReportTypeChange("summary")}
+  disabled={!allowDetailed}
     className={`
       px-4 py-1.5 text-sm font-medium rounded-lg transition-all
       ${
@@ -1749,15 +2125,15 @@ const resetFiltersState = () => {
           ? "bg-white text-blue-600 shadow"
           : "text-gray-600 hover:text-gray-900"
       }
-      ${!report.is_detailed ? "opacity-40 cursor-not-allowed" : ""}
+      ${!allowDetailed ? "opacity-40 cursor-not-allowed" : ""}
     `}
   >
     Summary
   </button>
 
-  <button
-    onClick={() => handleReportTypeChange("detailed")}
-    disabled={!report.is_detailed}
+ <button
+  onClick={() => handleReportTypeChange("detailed")}
+  disabled={!allowDetailed}
     className={`
       px-4 py-1.5 text-sm font-medium rounded-lg transition-all
       ${
@@ -1765,7 +2141,7 @@ const resetFiltersState = () => {
           ? "bg-white text-blue-600 shadow"
           : "text-gray-600 hover:text-gray-900"
       }
-      ${!report.is_detailed ? "opacity-40 cursor-not-allowed" : ""}
+     ${!allowDetailed ? "opacity-40 cursor-not-allowed" : ""}
     `}
   >
     Detailed
@@ -1849,126 +2225,180 @@ const resetFiltersState = () => {
     <div className="flex justify-center items-center h-80">
       <Loader type="orbit" />
     </div>
-  ) : reportType === "detailed" && report.is_detailed === true ? (
-    /* ================= DETAILED ================= */
-    <div className="overflow-x-auto">
-      <table className="min-w-max w-full text-sm border-separate border-spacing-0">
-
-        {/* ❗ HEADER FIX (ADD THIS) */}
-        <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
-          <tr>
-            <th className="px-4 py-3 border-b text-left">S/N</th>
-            {visibleDetailedColumns.map((col) => (
-              <th
-                key={col.column_name}
-                className={`px-4 py-3 border-b text-left ${
-                  isRightAligned(col) ? "text-right" : "text-left"
-                }`}
-              >
-                {col.display_name}
-              </th>
-            ))}
-          </tr>
-        </thead>
-
-        <tbody>
-  {paginatedGroupedRows.map(([groupName, groupRows]) => {
-    const groupTotal = buildTotalRow(groupRows, visibleDetailedColumns);
-
-    return (
-      <React.Fragment key={groupName}>
-        {/* GROUP HEADER */}
+) : reportType === "detailed" && allowDetailed ? (
+  <div className="overflow-auto max-h-[calc(100vh-260px)]">
+    <table className="min-w-max w-full text-sm border-separate border-spacing-0">
+      <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
         <tr>
-          <td
-            colSpan={visibleDetailedColumns.length + 1}
-            className="bg-gray-200 font-bold px-4 py-3"
+          <th
+            ref={snoRef}
+            onClick={openColumnPopup}
+            className="group relative px-4 py-3 border-b text-left sticky left-0 z-40 bg-gray-100 w-16 min-w-16 border-r border-gray-200 cursor-pointer"
           >
-            {(displayNames?.[report?.group_by] ||
-              report?.group_by ||
-              "GROUP"
-            ).toUpperCase()}
-            {" : "}
-            {groupName}
-          </td>
+            <span className="group-hover:opacity-0 transition">
+              S.No
+            </span>
+
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition text-gray-500">
+              <EyeIcon className="w-6 h-6" />
+            </span>
+          </th>
+
+          {yearlyDetailedColumns.map((col) => (
+            <th
+              key={col.column_name}
+              draggable
+              onDragStart={() => handleDragStart(col.column_name)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleDrop(col.column_name)}
+              className={`px-4 py-3 border-b relative select-none cursor-move ${
+                isRightAligned(col) ? "text-right" : "text-left"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span>{col.display_name}</span>
+                <span className="text-gray-400">▾</span>
+              </div>
+            </th>
+          ))}
         </tr>
+      </thead>
 
-        {/* GROUP ROWS */}
-        {groupRows.map((row, i) => (
-          <tr key={i}>
-            <td className="px-4 py-3 border-b">
-              {row._sn}
+      <tbody className="divide-y">
+        {paginatedGroupedRows.length === 0 ? (
+          <tr>
+            <td
+              colSpan={yearlyDetailedColumns.length + 1}
+              className="px-6 py-12 text-left text-gray-500 font-medium"
+            >
+              No records found
             </td>
-
-            {visibleDetailedColumns.map((col) => (
-              <td
-                key={col.column_name}
-                className={`px-4 py-3 border-b ${
-                  isRightAligned(col)
-                    ? "text-right"
-                    : "text-left"
-                }`}
-              >
-                {getCellValue(row, col)}
-              </td>
-            ))}
           </tr>
-        ))}
+        ) : (
+          paginatedGroupedRows.map(([groupName, groupRows]) => {
+            const groupTotal = buildTotalRow(
+              groupRows,
+              yearlyDetailedColumns
+            );
 
-        {/* GROUP TOTAL */}
-    <tr className="bg-gray-100 font-bold">
-  <td></td>
+            return (
+              <React.Fragment key={groupName}>
+                {report?.group_by && (
+                  <tr>
+                    <td
+                      colSpan={yearlyDetailedColumns.length + 1}
+                      className="bg-gray-100 px-5 py-3 font-bold text-gray-800"
+                    >
+                      GROUP : {groupName}
+                    </td>
+                  </tr>
+                )}
 
-  {visibleDetailedColumns.map((col, index) => {
-    const isLabelColumn = index === firstAmountIndex - 1;
+                {groupRows.map((row, i) => (
+                  <tr
+                    key={row.id ?? i}
+                    className="group hover:bg-gray-50 transition-colors"
+                  >
+                    <td className="px-4 py-3 whitespace-nowrap sticky left-0 z-20 bg-white group-hover:bg-gray-50 w-16 min-w-16 border-r border-gray-200">
+                      {row._sn || i + 1}
+                    </td>
 
-    return (
-      <td
-        key={col.column_name}
-        className={`px-4 py-3 ${
-          isRightAligned(col) ? "text-right" : "text-left"
-        } ${isLabelColumn ? "font-bold" : ""}`}
-      >
-        {isLabelColumn
-          ? "TOTAL"
-          : isNumericColumn(col)
-          ? formatAmount(groupTotal[col.column_name])
-          : ""}
-      </td>
-    );
-  })}
-</tr>
-      </React.Fragment>
-    );
-  })}
+                    {yearlyDetailedColumns.map((col) => (
+                      <td
+                        key={col.column_name}
+                        className={`px-4 py-3 whitespace-nowrap border-b ${
+                          isRightAligned(col) ? "text-right" : "text-left"
+                        }`}
+                      >
+                        {getCellValue(row, col)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
 
-  {/* GRAND TOTAL - ONLY LAST PAGE */}
-  {page === totalPages && (
-    <tr className="bg-gray-100 font-bold">
-  <td></td>
+                <tr className="bg-gray-100 font-bold">
+                  <td></td>
 
-  {visibleDetailedColumns.map((col, index) => {
-    const isLabelColumn = index === totalLabelIndex;
+                  {yearlyDetailedColumns.map((col, index) => {
+                    const isLabelColumn = index === totalLabelIndex;
 
-    return (
-      <td
-        key={col.column_name}
-        className={`px-4 py-3 ${
-          isRightAligned(col) ? "text-right" : "text-left"
-        } ${isLabelColumn ? "font-bold" : ""}`}
-      >
-        {isLabelColumn
-          ? "GRAND TOTAL"
-          : isNumericColumn(col)
-          ? formatAmount(grandTotalRow[col.column_name])
-          : ""}
-      </td>
-    );
-  })}
-</tr>
-  )}
-</tbody>
-      </table>
-    </div>
+                    return (
+                      <td
+                        key={col.column_name}
+                        className={`px-4 py-3 ${
+                          isRightAligned(col) ? "text-right" : "text-left"
+                        }`}
+                      >
+                        {isLabelColumn
+                          ? "TOTAL"
+                          : isNumericColumn(col)
+                          ? formatAmount(groupTotal[col.column_name])
+                          : ""}
+                      </td>
+                    );
+                  })}
+                </tr>
+              </React.Fragment>
+            );
+          })
+        )}
+
+        {/* {page === totalPages && paginatedGroupedRows.length > 0 && (
+          <tr className="bg-gray-200 font-bold">
+            <td></td>
+
+            {yearlyDetailedColumns.map((col, index) => {
+              const isLabelColumn = index === totalLabelIndex;
+
+              return (
+                <td
+                  key={col.column_name}
+                  className={`px-4 py-3 ${
+                    isRightAligned(col) ? "text-right" : "text-left"
+                  }`}
+                >
+                  {isLabelColumn
+                    ? "GRAND TOTAL"
+                    : isNumericColumn(col)
+                    ? formatAmount(grandTotalRow[col.column_name])
+                    : ""}
+                </td>
+              );
+            })}
+          </tr>
+        )} */}
+      </tbody>
+    </table>
+
+    {showHidePopup && hidePopupColumn === "__sno__" &&
+      createPortal(
+        <div
+          style={{
+            position: "fixed",
+            top: menuPosition.top,
+            left: menuPosition.left,
+            zIndex: 9999,
+          }}
+        >
+          <ShowHideColumnsPopup
+            columns={columns}
+            tempHideColumns={tempHideColumns}
+            setTempHideColumns={setTempHideColumns}
+            onCancel={() => {
+              setShowHidePopup(false);
+              setHidePopupColumn(null);
+            }}
+            onSave={(selectedColumnsFromDrag) => {
+              setSelectedColumns(selectedColumnsFromDrag);
+              setTempHideColumns(selectedColumnsFromDrag);
+              setShowHidePopup(false);
+              setHidePopupColumn(null);
+            }}
+          />
+        </div>,
+        document.body
+      )}
+  </div>
 
   ) : (
     /* ================= SUMMARY ================= */
@@ -2049,7 +2479,7 @@ const resetFiltersState = () => {
       </>
     ) : (
       <tr>
-        <td colSpan={columns.length + 1} className="text-center py-10">
+        <td colSpan={columns.length + 1} className="text-left py-10">
           No records found
         </td>
       </tr>

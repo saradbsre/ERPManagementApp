@@ -5540,7 +5540,7 @@ onDrop={() => handleDrop(col.column_name)}
   <tr>
     <td
       colSpan={totalColumns}
-      className="px-6 py-12 text-center text-gray-500 font-medium"
+      className="px-6 py-12 text-left text-gray-500 font-medium"
     >
       No records found
     </td>
