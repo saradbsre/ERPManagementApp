@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { DndContext, closestCenter } from "@dnd-kit/core";
+import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import {
+  restrictToVerticalAxis,
+  restrictToParentElement,
+} from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 
 function SortableItem({
@@ -19,10 +23,12 @@ function SortableItem({
     id: column.column_name,
   });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+ const style = {
+  transform: CSS.Transform.toString(transform),
+  transition,
+  opacity: isDragging ? 0 : 1,
+};
+
 
   return (
    <div
@@ -80,6 +86,7 @@ export default function ShowHideColumnsPopup({
   anchorPosition,
 }) {
   const [search, setSearch] = useState("");
+  const [activeId, setActiveId] = useState(null);
   const panelRef = useRef(null);
   const allColumnNames = columns.map((c) => c.column_name);
  // console.log("ShowHideColumnsPopup rendered with columns:", columns, "and tempHideColumns:", tempHideColumns);
@@ -112,6 +119,11 @@ export default function ShowHideColumnsPopup({
       .includes(q)
   );
 }, [columns, tempHideColumns, search]);
+
+const activeColumn = columns.find(
+  (c) => c.column_name === activeId
+);
+
 
   const panelWidth = 340;
   const gutter = 12;
@@ -205,15 +217,29 @@ export default function ShowHideColumnsPopup({
           </button>
         </div>
 
-        <DndContext
+       <DndContext
   collisionDetection={closestCenter}
-  onDragEnd={handleDragEnd}
+  modifiers={[
+    restrictToVerticalAxis,
+    restrictToParentElement,
+  ]}
+  onDragStart={({ active }) => {
+    setActiveId(active.id);
+  }}
+  onDragEnd={(event) => {
+    handleDragEnd(event);
+    setActiveId(null);
+  }}
+  onDragCancel={() => {
+    setActiveId(null);
+  }}
 >
+
   <SortableContext
     items={filteredColumns.map(c => c.column_name)}
     strategy={verticalListSortingStrategy}
   >
-    <div className="max-h-72 overflow-auto rounded-xl border border-slate-100 p-2">
+    <div className="max-h-72 overflow-y-auto overflow-x-hidden rounded-xl border border-slate-100 p-2">
       {filteredColumns.map((c) => (
         <SortableItem
           key={c.column_name}
@@ -224,6 +250,26 @@ export default function ShowHideColumnsPopup({
       ))}
     </div>
   </SortableContext>
+  <DragOverlay>
+  {activeColumn ? (
+    <div
+      className="flex items-center justify-between rounded-xl border border-blue-500 bg-white p-2 shadow-2xl"
+      style={{ width: 280 }}
+    >
+      <div className="flex items-center gap-3">
+        <input
+          type="checkbox"
+          checked={tempHideColumns.includes(activeColumn.column_name)}
+          readOnly
+        />
+        <span>{activeColumn.display_name}</span>
+      </div>
+
+      <span className="text-slate-400">⋮⋮</span>
+    </div>
+  ) : null}
+</DragOverlay>
+
 </DndContext>
 
         <div className="flex justify-end gap-2 pt-1">

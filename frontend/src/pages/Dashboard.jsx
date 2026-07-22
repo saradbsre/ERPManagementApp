@@ -36,18 +36,15 @@ export default function Dashboard() {
 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
   {/* LEFT COLUMN */}
-  <div className="grid grid-rows-2 gap-6 h-[850px]">
-
-    <div className="bg-white rounded-xl  p-2">
-      {/* <h2 className="font-semibold mb-4">Top 5 Expenses</h2> */}
-      <ChartforTop5 />
-    </div>
-
-    <div className="bg-white rounded-xl  p-2">
-      {user?.role === "ADMIN" && <SignupRequestsCard />}
-    </div>
-
+<div className="flex flex-col gap-6">
+  <div className="bg-white rounded-xl shadow p-2 flex-1">
+    <ChartforTop5 />
   </div>
+
+  <div className="bg-white rounded-xl shadow p-2 flex-1">
+    {user?.role === "ADMIN" && <SignupRequestsCard />}
+  </div>
+</div>
 
   {/* MIDDLE COLUMN */}
   <div className="bg-white rounded-xl shadow p-6 h-[850px] flex flex-col">

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { isNumericColumn, handleNumericInput } from "../../utils/numberValidation";
 import Loader from "../Loader";
 
@@ -17,7 +17,7 @@ export default function EditRowPopup({
 }) {
   const [activeField, setActiveField] = useState(null);
   const [fieldSearch, setFieldSearch] = useState({});
-
+  //const popupRef = useRef(null);
   if (!editRow) return null;
 
   const formatForInput = (value) => {
@@ -113,6 +113,25 @@ export default function EditRowPopup({
     );
   };
 
+useEffect(() => {
+  const handleClick = (e) => {
+    const clickedInput = e.target.closest("input");
+    const clickedDropdown = e.target.closest("[data-popup-dropdown]");
+
+    // If clicked on another input or dropdown option, don't close here.
+    if (clickedInput || clickedDropdown) return;
+
+    // Otherwise close any open dropdown.
+    setActiveField(null);
+  };
+
+  document.addEventListener("mousedown", handleClick);
+
+  return () => {
+    document.removeEventListener("mousedown", handleClick);
+  };
+}, []);
+
   return (
     <div className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden">
@@ -187,48 +206,35 @@ export default function EditRowPopup({
                     <input
                       type={isNumericColumn(col.column_name) ? "number" : isDate ? "date" : "text"}
                       value={
-  isMaster && activeField === col.column_name
-    ? searchText
-    : currentValue
-}
-                      disabled={isDisabled}
-                      onChange={(e) => {
-  const value = e.target.value;
+                        isMaster && activeField === col.column_name
+                          ? searchText
+                          : currentValue
+                      }
+                                            disabled={isDisabled}
+                                            onChange={(e) => {
+                        const value = e.target.value;
 
-  if (isMaster) {
-    setFieldSearch((prev) => ({
-      ...prev,
-      [col.column_name]: value,
-    }));
+                        if (isMaster) {
+                          setFieldSearch((prev) => ({
+                            ...prev,
+                            [col.column_name]: value,
+                          }));
 
-    handleFieldChange(col, value);
+                          handleFieldChange(col, value);
 
-    if (activeField !== col.column_name) {
-      setActiveField(col.column_name);
-    }
-  } else {
-    handleFieldChange(col, value);
-  }
-}}
+                          if (activeField !== col.column_name) {
+                            setActiveField(col.column_name);
+                          }
+                        } else {
+                          handleFieldChange(col, value);
+                        }
+                      }}
                       onFocus={() => {
                         if (isMaster) {
                           handleFieldFocus(col);
                         }
                       }}
-                      onBlur={() => {
-                        setTimeout(() => {
-                          const dropdownEl = document.querySelector(
-                            `[data-popup-dropdown="${col.column_name}"]`
-                          );
-                          const activeEl = document.activeElement;
-
-                          if (dropdownEl && activeEl && dropdownEl.contains(activeEl)) {
-                            return;
-                          }
-
-                          setActiveField(null);
-                        }, 150);
-                      }}
+                     
                       placeholder={col.display_name}
                       className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100 disabled:text-gray-500"
                     />

@@ -5535,363 +5535,7 @@ onDrop={() => handleDrop(col.column_name)}
 
                         {/* TABLE BODY */}
                     <tbody className="divide-y">
-                      {isCreating && (
-                        <tr className="bg-blue-50">
-                          <td className="px-4 py-3 whitespace-nowrap sticky left-0 z-20 bg-blue-50 w-16 min-w-16 border-r border-gray-200"></td>
-                           {/* ACTIONS */}
-                          <td className="px-4 py-3 whitespace-nowrap flex gap-2 justify-end">
-
-                            <button
-                              onClick={handleSave}
-                              title="Save"
-                            >
-                              <SavePlus size={18} className="text-green-500"  />
-                            </button>
-
-                            <button
-                              onClick={handleCancel}
-                               title="Cancel"
-                            >
-                              <CircleX size={18} className="text-red-500" />
-                            </button>
-
-                          </td>
-
-                          {orderedVisibleColumns.map((col) => {
-                            
-                            const isMaster = !!col.master;
-
-                            const isDate =
-                              col.data_type?.toLowerCase().includes("date");
-
-                            const isAmount =
-                              col.data_type?.toLowerCase().includes("decimal");
-                            const fieldValue = inputValues[col.column_name];
-
-                            const displayValue =
-                              typeof fieldValue === "object"
-                                ? fieldValue.value
-                                : fieldValue ??
-                                  newRow[col.column_name] ??
-                                  "";
-                            
-                            return (
-
-                              <td
-                                key={col.column_id}
-                                className={`
-                                  px-4 py-2 whitespace-nowrap
-                                  ${getAlignClass(col.display_name)}
-                                  ${pinnedColumns.includes(col.column_name) ? "sticky z-20 bg-blue-50 border-r border-gray-200" : ""}
-                                  ${col.column_name === "company"
-                                    ? "min-w-[450px]"
-                                    : ""
-                                  }
-                                `}
-                                style={getPinnedLeft(col.column_name)}
-                              >
-
-                                <div className="relative">
-
-                                  {/* ================= INPUT ================= */}
-                                  <input
-                                    autoComplete="off"
-
-                                    type={
-                                      isNumericColumn(col)
-                                        ? "number"
-                                        : isDate
-                                        ? "date"
-                                        : "text"
-                                    }
-
-                                    className={`
-                                      rounded-xl
-                                      border border-gray-300
-                                      bg-white
-                                      px-3 py-2
-                                      text-sm
-                                      outline-none
-                                      transition-all duration-200
-                                      focus:border-blue-500
-                                      focus:ring-4
-                                      focus:ring-blue-100
-
-                                      ${
-                                        col.column_name === "company"
-                                          ? "w-[450px]"
-                                          : "w-full"
-                                      }
-                                    `}
-
-                                    value={
-                                      col.column_name === "total_amount_aed"
-                                        ? newRow.total_amount_aed || ""
-                                        : isDate
-                                        ? formatForInput(displayValue)
-                                        : displayValue
-                                    }
-
-                                    disabled={
-                                      col.column_name === "total_amount_aed" ||
-                                      col.column_name === "vat_amount" ||
-                                      col.column_name === "total_amount" ||
-                                      col.column_name === "prf_num"
-                                    }
-
-                                    onChange={(e) => {
-
-                                      let val = e.target.value;
-
-                                      // =========================
-                                      // NUMERIC
-                                      // =========================
-                                      if (isNumericColumn(col.column_name)) {
-                                        val = handleNumericInput(val);
-                                      }
-
-                                      if (col.column_name === "amount") {
-
-                        const totals = calculateRowTotals({
-                          amount: val,
-                          currency: newRow.currency || newRow.curr_code,
-                          service_provider_id: serviceProviders.find(sp => {
-                            //console.log("sp", sp.prd_code)
-                            //console.log("newRow.products", newRow)
-                            const matched = sp.prd_code === (newRow.prd_code?.value || newRow.prd_code);
-                            // console.log("Matched name for amount change:", serviceProviders.product, "with new row product:", newRow.products  );
-                            if (matched) {
-                            }
-                            return matched;
-                          })?.id
-                          
-                        });
-                        //console.log("totals for amount aed", totals);
-                        setNewRow(prev => ({
-                          ...prev,
-                          amount: val,
-                          vat_amount: totals.vat_amount,
-                          total_amount: totals.total_amount,
-                          total_amount_aed: totals.total_amount_aed
-                        }));
-                      }
-
-                                      // =========================
-                                      // MASTER FIELD
-                                      // =========================
-                                      if (isMaster) {
-
-                        setInputValues(prev => ({
-                          ...prev,
-                          [col.column_name]: {
-                            key: "",
-                            value: val
-                          }
-                        }));
-
-                        setActiveField(col.column_name);
-
-                      }
-
-                                      // =========================
-                                      // NORMAL FIELD
-                                      // =========================
-                                      else {
-
-                                        handleNewRowChange(
-                                          col.column_name,
-                                          val,
-                                          col.master
-                                        );
-
-                                      }
-
-                                    }}
-
-                                    onFocus={() => {
-
-                                      setActiveField(col.column_name);
-
-                                      if (col.master) {
-                                        fetchMasterDataForColumn(col.master);
-                                      }
-
-                                    }}
-
-                                    onBlur={(e) => {
-
-                                      if (isAmount && e.target.value !== "") {
-
-                                        handleNewRowChange(
-                                          col.column_name,
-                                          Number(e.target.value).toFixed(2),
-                                          col.master
-                                        );
-
-                                      }
-
-                                      setTimeout(() => {
-                                        setActiveField(null);
-                                      }, 150);
-
-                                    }}
-
-                                  />
-
-                                  {/* ================= LOADER ================= */}
-                                  {isMaster &&
-                                    loadingMaster === col.master && (
-                                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                        <Loader type="dots" />
-                                      </div>
-                                  )}
-
-                                  {/* ================= MASTER DROPDOWN ================= */}
-                                  {isMaster &&
-                                    activeField === col.column_name &&
-                                    loadingMaster !== col.master &&
-                                    (() => {
-
-                                      const typedValue =
-                                        typeof inputValues[col.column_name] === "object"
-                                          ? inputValues[col.column_name]?.value || ""
-                                          : inputValues[col.column_name] || "";
-
-                                      const rawOptions = getMasterOptions(
-                                        col,
-                                        typedValue,
-                                        newRow
-                                      );
-
-                                     
-
-                                      const filteredOptions =
-                                        rawOptions.filter((option) => {
-
-                                          const label =
-                                            typeof option === "object"
-                                              ? option.value
-                                              : option;
-
-                                          return String(label || "")
-                                            .toLowerCase()
-                                            .includes(
-                                              typedValue.toLowerCase()
-                                            );
-
-                                        });
-
-                                      return (
-
-                                        <div className="
-                                          absolute z-50 mt-2 w-full overflow-hidden
-                                          rounded-2xl border border-gray-200
-                                          bg-white shadow-xl
-                                          max-h-64 overflow-y-auto
-                                        ">
-
-                                          {/* OPTIONS */}
-                                          {filteredOptions.map((option, i) => {
-
-                                            const label =
-                                              typeof option === "object"
-                                                ? option.value
-                                                : option;
-
-                                            return (
-
-                                              <div
-                                                key={i}
-
-                                                className="
-                                                  px-4 py-3
-                                                  text-sm text-gray-700
-                                                  cursor-pointer
-                                                  hover:bg-blue-50
-                                                  border-b border-gray-100
-                                                "
-
-                                                  onMouseDown={async () => {
-
-                                                    const value =
-                                                      typeof option === "object"
-                                                        ? option.key ?? option.id ?? option.value
-                                                        : option;
-
-                                                    const label =
-                                                      typeof option === "object"
-                                                        ? option.value
-                                                        : option;
-
-                                                    // ✅ 1. update NEW ROW FIRST (source of truth)
-                                                  setNewRow(prev => ({
-                                                    ...prev,
-                                                    [col.column_name]: value,
-                                                    ...(col.column_name === "products"
-                                                      ? { product_types: "" }
-                                                      : {})
-                                                  }));
-
-                                                    // ✅ 2. UI state
-                                                    setInputValues(prev => ({
-                                                      ...prev,
-                                                      [col.column_name]: { key: value, value: label }
-                                                    }));
-
-                                                    // ✅ 3. DB state
-                                                  if (col.column_name === "product_types") {
-                                                   
-                                                  }
-                                                    handleNewRowChange(col.column_name, value, col.master);
-
-                                                    // ✅ 4. load dependent data
-                                                    if (col.column_name === "products") {
-
-                                                      const matchedProvider = serviceProviders.find(sp =>
-                                                        String(sp.product || "").trim().toLowerCase() ===
-                                                        String(label || "").trim().toLowerCase()
-                                                      );
-
-                                                      await loadProviderPlans(matchedProvider?.id);
-                                                    }
-
-                                                    setActiveField(null);
-                                                  }}
-                                              >
-
-                                                {label}
-
-                                              </div>
-
-                                            );
-
-                                          })}
-
-                                          {/* EMPTY */}
-                                          {filteredOptions.length === 0 && (
-                                            <div className="px-4 py-3 text-sm text-gray-400 text-center">
-                                              No results found
-                                            </div>
-                                          )}
-
-                                        </div>
-
-                                      );
-
-                                    })()}
-
-                                </div>
-
-                              </td>
-
-                            );
-
-                          })}
-
-                         
-
-                        </tr>
-                      )}
+                     
                       {!isCreating && paginatedGroupedRows.length === 0 && (
   <tr>
     <td
@@ -6820,53 +6464,47 @@ onDrop={() => handleDrop(col.column_name)}
   <tr>
 
     {/* Serial No */}
-  
+  <td className="px-4 py-3"></td>
 
-    {orderedVisibleColumns.map((col) => {
-      const isNumeric =
-        col.data_type?.toLowerCase().includes("decimal") ||
-        col.column_name.toLowerCase().includes("amount");
+   {orderedVisibleColumns.map((col, index) => {
+  const isNumeric = col.column_name.toLowerCase().includes("amount");
 
-      const isFirstAmountColumn = col.column_name === "amount"; // change if needed
-      //console.log("isFirstAmountColumn for", col.column_name, ":", isFirstAmountColumn);
-      return (
-        <React.Fragment key={col.column_id}>
+  // Find the index of the Amount column
+  const amountIndex = orderedVisibleColumns.findIndex(
+    c => c.column_name === "amount"
+  );
 
-          {/* Toggle BEFORE Amount column */}
-          {isFirstAmountColumn && (
-            <td className="px-4 py-3 text-center">
-              <button
-                onClick={() => setShowTotals(!showTotals)}
-                className="px-3 py-1 rounded bg-blue-600 text-white text-xs"
-              >
-                {showTotals ? "Hide Total" : "Show Total"}
-              </button>
-            </td>
-          )}
-
-          {/* Actual Column */}
-          <td
-            className={`px-4 py-3 font-semibold ${getAlignClass(
-              col.display_name
-            )}`}
+  return (
+    <React.Fragment key={col.column_id}>
+      {index === amountIndex && (
+        <td className="px-4 py-3 text-center">
+          <button
+            onClick={() => setShowTotals(!showTotals)}
+            className="px-3 py-1 rounded bg-blue-600 text-white text-xs"
           >
-            {showTotals && isNumeric
-              ? Number(grandTotal[col.column_name] || 0).toLocaleString(
-                  undefined,
-                  {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  }
-                )
-              : ""}
-          </td>
+            {showTotals ? "Hide Total" : "Show Total"}
+          </button>
+        </td>
+      )}
 
-        </React.Fragment>
-      );
-    })}
+      <td
+        className={`px-4 py-3 font-semibold ${getAlignClass(
+          col.display_name
+        )}`}
+      >
+        {showTotals && isNumeric
+          ? Number(grandTotal[col.column_name] || 0).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })
+          : ""}
+      </td>
+    </React.Fragment>
+  );
+})}
 
     {/* Action */}
-    <td className="px-4 py-3"></td>
+    
 
   </tr>
 </tfoot>

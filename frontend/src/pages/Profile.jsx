@@ -1,7 +1,9 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import UserProfileCard from "../components/profiles/PersInfo";
 import Settings from "../components/profiles/Settings";
 import AccountCenter from "../components/profiles/AccountInfo";
+import { ArrowLeft } from "lucide-react";
 
 
 
@@ -13,9 +15,23 @@ const tabs = [
 
 export default function Profile() {
     const [activeTab, setActiveTab] = useState(0);
+    const navigate = useNavigate();
 
     return (
-        <div>
+            <div className="min-h-screen bg-gray-50 p-6">
+      {/* Header */}
+      <div className="mb-2 flex items-center gap-4">
+        <button
+          onClick={() => navigate(-1)}
+          className="p-2 hover:bg-gray-200 rounded-lg transition"
+        >
+          <ArrowLeft size={24} />
+        </button>
+
+       <h1 className="text-xl font-semibold text-gray-800">
+            Profile Settings
+</h1>
+      </div>
             {/* <h1 className="text-3xl font-bold mb-6">Admin Panel</h1> */}
             <div className="bg-white p-6 rounded shadow">
                 {/* Tabs */}
