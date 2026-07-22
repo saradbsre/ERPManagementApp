@@ -43,16 +43,13 @@ import CustomizeDrawer from "./CustomizeDrawer";
 import { EyeIcon } from "@heroicons/react/24/outline";
 import BoardViewsBar from "./BoardViewsBar";
 import CreateViewModal from "./CreateViewModal";
-import {
-  arrayMove,
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable
-} from "@dnd-kit/sortable";
+import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CircleX, SavePlus, SquarePen, Trash2, BookX , 
   RotateCcw, ScanEye, Send, Undo2, FileSearch, Pencil, X } from "lucide-react";
-
 import { CSS } from "@dnd-kit/utilities";
+import html2pdf from "html2pdf.js";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 
 const Modal = ({ title, children, onClose }) => (
@@ -2483,89 +2480,272 @@ const rowMatchesSearch = (row) => {
   });
 };
 
-// const finalRows = filteredRows;
+//   const handlePdf = async (
+//   mode,
+//   customCols = null,
+//   groupBy = "service",
+//   pdfColumns = orderedVisibleColumns,
+//   pdfRows = printableGroupedRows
+// ) => {
 
- 
+//   let cols;
+
+//   const reportRowCount = getReportRowCount(pdfRows);
+
+// if (reportRowCount === 0) {
+//   showNoRecordsPopup();
+//   setShowReportHeaderModal(false);
+//   setReportActionType(null);
+//   return;
+// }
+
+//   if (customCols && Array.isArray(customCols)) {
+//   cols = pdfColumns
+//   .filter(col => customCols.includes(col.column_name))
+//   .map((col) => ({
+//     ...col,
+//     display_name: getColumnDisplayName(col),
+//   }));
+//   } else {
+//    cols = pdfColumns.map((col) => ({
+//   ...col,
+//   display_name: getColumnDisplayName(col),
+// }));
+//   }
+
+//   const company =
+//   customPrintHeader ||
+//   localStorage.getItem("print_custom_header") ||
+//   selectedCompany ||
+//   localStorage.getItem("print_company") ||
+//   "";
+
+//   const moduleTitle =
+//     printModuleName || module?.display_name;
+
+//   try {
+//     const res = await exportPdf({
+//       rows: pdfRows,        // ✅ PRINT DATA USED HERE
+//       columns: cols,        // ✅ PRINT COLUMNS USED HERE
+//       userName: activeUser?.name || "User",
+
+//       moduleName: moduleTitle,
+//       companyName: company,
+//       groupBy
+//     });
+
+//     const url = window.URL.createObjectURL(new Blob([res.data]));
+
+//     const link = document.createElement("a");
+//     link.href = url;
+//     link.download = `${moduleTitle || "report"}.pdf`;
+
+//     document.body.appendChild(link);
+//     link.click();
+//     link.remove();
+
+//     window.URL.revokeObjectURL(url);
+
+//     setShowPdfModal(false);
+
+//   } catch (err) {
+//     console.error("PDF export failed:", err);
+//   }
+// };
 
 
-
-    // ================= PAGINATION =================
-
-  
-
-  const handlePdf = async (
+const handlePdf = async (
   mode,
   customCols = null,
   groupBy = "service",
   pdfColumns = orderedVisibleColumns,
   pdfRows = printableGroupedRows
 ) => {
+  const reportRowCount = getReportRowCount(pdfRows);
+
+  if (reportRowCount === 0) {
+    showNoRecordsPopup();
+    setShowReportHeaderModal(false);
+    setReportActionType(null);
+    return;
+  }
 
   let cols;
 
-  const reportRowCount = getReportRowCount(pdfRows);
-
-if (reportRowCount === 0) {
-  showNoRecordsPopup();
-  setShowReportHeaderModal(false);
-  setReportActionType(null);
-  return;
-}
-
   if (customCols && Array.isArray(customCols)) {
-  cols = pdfColumns
-  .filter(col => customCols.includes(col.column_name))
-  .map((col) => ({
-    ...col,
-    display_name: getColumnDisplayName(col),
-  }));
+    cols = pdfColumns
+      .filter((col) => customCols.includes(col.column_name))
+      .map((col) => ({
+        ...col,
+        display_name: getColumnDisplayName(col),
+      }));
   } else {
-   cols = pdfColumns.map((col) => ({
-  ...col,
-  display_name: getColumnDisplayName(col),
-}));
+    cols = pdfColumns.map((col) => ({
+      ...col,
+      display_name: getColumnDisplayName(col),
+    }));
   }
 
-  const company =
-  customPrintHeader ||
-  localStorage.getItem("print_custom_header") ||
-  selectedCompany ||
-  localStorage.getItem("print_company") ||
-  "";
-
-  const moduleTitle =
-    printModuleName || module?.display_name;
+  const moduleTitle = printModuleName || module?.display_name || "Report";
 
   try {
-    const res = await exportPdf({
-      rows: pdfRows,        // ✅ PRINT DATA USED HERE
-      columns: cols,        // ✅ PRINT COLUMNS USED HERE
-      userName: activeUser?.name || "User",
+    const tableHTML = generateTableHTML(cols, pdfRows);
 
-      moduleName: moduleTitle,
-      companyName: company,
-      groupBy
-    });
+    const container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.left = "-100000px";
+    container.style.top = "0";
+    container.style.width = "297mm";
+    container.style.background = "#ffffff";
+    container.style.zIndex = "-1";
 
-    const url = window.URL.createObjectURL(new Blob([res.data]));
+    container.innerHTML = tableHTML;
 
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${moduleTitle || "report"}.pdf`;
+    const pdfStyle = document.createElement("style");
+    pdfStyle.innerHTML = `
+      table {
+        border-collapse: collapse !important;
+      }
 
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+      td:not(.approval-table td) {
+  padding: 2px 4px 10px 4px !important;
+  line-height: 1.3 !important;
+  vertical-align: middle !important;
+}
 
-    window.URL.revokeObjectURL(url);
+th {
+  padding: 2px 4px 10px 4px !important;
+  line-height: 1.3 !important;
+  vertical-align: middle !important;
+}
 
-    setShowPdfModal(false);
+.approval-table td {
+  height: 100px !important;
+  border: 1px solid #111827;
+  padding: 0 !important;
+  text-align: center;
+  vertical-align: bottom !important;
+}
 
-  } catch (err) {
-    console.error("PDF export failed:", err);
-  }
+.approval-content {
+  padding-bottom: 8px;
+  font-size: 8px;
+  font-weight: bold;
+}
+
+.approval-dept {
+  margin-top: 3px !important;
+  font-size: 8px;
+  color: #4b5563;
+  font-weight: bold;
+}
+
+      .approval-title {
+        background: #e5e7eb;
+        color: #111827;
+        text-align: left !important;
+        font-size: 8px;
+        font-weight: bold;
+        padding: 2px 4px 10px 4px !important;
+        border: 1px solid #111827;
+      }
+        .approval-prepared td{
+       
+        padding: 0px !important;
+        border: 1px solid #111827;
+        }
+    `;
+
+    container.appendChild(pdfStyle);
+    document.body.appendChild(container);
+
+    const reportElement =
+      container.querySelector(".report-page") || container;
+
+   const options = {
+  margin: [7, 7, 12, 7], // extra bottom margin for footer
+
+  filename: `${moduleTitle || "report"}.pdf`,
+
+  image: {
+    type: "jpeg",
+    quality: 1,
+  },
+
+  html2canvas: {
+    scale: 3,
+    useCORS: true,
+    letterRendering: true,
+    scrollX: 0,
+    scrollY: 0,
+    backgroundColor: "#ffffff",
+  },
+
+  jsPDF: {
+    unit: "mm",
+    format: "a4",
+    orientation: "landscape",
+  },
+
+  pagebreak: {
+    mode: ["css", "legacy"],
+  },
 };
 
+const worker = html2pdf()
+  .set(options)
+  .from(reportElement)
+  .toPdf();
+
+const pdf = await worker.get("pdf");
+
+const totalPages = pdf.internal.getNumberOfPages();
+
+const pageWidth = pdf.internal.pageSize.getWidth();
+const pageHeight = pdf.internal.pageSize.getHeight();
+
+const printedDate = new Date().toLocaleString("en-GB", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+for (let i = 1; i <= totalPages; i++) {
+  pdf.setPage(i);
+
+  pdf.setFont("times", "normal");
+  pdf.setFontSize(8);
+
+  // Bottom left
+pdf.text(
+  `User: ${activeUser?.name ? activeUser.name.charAt(0).toUpperCase() + activeUser.name.slice(1).toLowerCase() : "User"} | Printed: ${printedDate}`,
+  7,
+  pageHeight - 5
+);
+
+  // Bottom right
+  const pageText = `Page ${i} of ${totalPages}`;
+  const textWidth = pdf.getTextWidth(pageText);
+
+  pdf.text(
+    pageText,
+    pageWidth - textWidth - 7,
+    pageHeight - 5
+  );
+}
+
+await worker.save();
+
+document.body.removeChild(container);
+
+setShowPdfModal(false);
+
+  } catch (err) {
+    console.error("PDF generation failed:", err);
+  }
+};
 
     useEffect(() => {
     if (!isCreating) return;
@@ -3112,11 +3292,11 @@ printableCols.splice(
 
     td {
       border: 1px solid #9ca3af;
-      padding: 12px 2px !important;
+      padding: 4px 2px !important;
       font-size: 8px;
       text-align: center;
       vertical-align: middle;
-      line-height: 1;
+      line-height: 1.2;
       word-break: break-word;
     }
 
@@ -3268,16 +3448,16 @@ printableCols.splice(
 .approval-table td {
   height: 100px !important;
   border: 1px solid #111827;
-  padding: 3px 2px;
+  padding: 3px 2px 8px 2px !important;
   font-size: 8px !important;
   font-weight: bold;
   text-align: center;
-  vertical-align: bottom;
+  vertical-align: bottom !important;
   background: #f8fafc;
 }
 
 .approval-dept {
-  margin-top: 3px;
+  margin-top: 6px !important;
   font-size: 8px;
   color: #4b5563;
   font-weight: bold;
@@ -3497,33 +3677,40 @@ if (col.isProductDescription) {
         </tr>
       </thead>
 
-      <tbody>
+      <tbody class="approval-prepared">
         <tr>
           <td>
-            <div>${approvalData.prepared_by || "-"}</div>
-            <div class="approval-dept">IT DEPARTMENT</div>
+            <div class="approval-content">
+             <div>${approvalData.prepared_by ? approvalData.prepared_by.toUpperCase() : "-"}</div>
+              <div class="approval-dept">IT DEPARTMENT</div>
+            </div>
           </td>
-
-        
-
           <td>
-            <div>${approvalData.verified_by_it || "-"}</div>
-            <div class="approval-dept">IT DEPARTMENT</div>
-          </td>
-
-          <td>
-            <div>${approvalData.verified_by || "-"}</div>
-            <div class="approval-dept">ACCOUNTS</div>
+            <div class="approval-content">
+              <div>${approvalData.verified_by_it || "-"}</div>
+              <div class="approval-dept">IT DEPARTMENT</div>
+            </div>
           </td>
 
           <td>
-            <div>${approvalData.signed_by || "-"}</div>
-            <div class="approval-dept">FINANCE MANAGER</div>
+            <div class="approval-content">
+              <div>${approvalData.verified_by || "-"}</div>
+              <div class="approval-dept">ACCOUNTS</div>
+            </div>
           </td>
 
           <td>
-            <div>${approvalData.approved_by || "-"}</div>
-            <div class="approval-dept">FOUNDER & CEO</div>
+            <div class="approval-content">
+              <div>${approvalData.signed_by || "-"}</div>
+              <div class="approval-dept">FINANCE MANAGER</div>
+            </div>
+          </td>
+
+          <td>
+            <div class="approval-content">
+              <div>${approvalData.approved_by || "-"}</div>
+              <div class="approval-dept">FOUNDER & CEO</div>
+            </div>
           </td>
         </tr>
       </tbody>

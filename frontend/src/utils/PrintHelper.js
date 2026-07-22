@@ -35,6 +35,8 @@ export const openPrintWindow = ({
     return;
   }
 
+  const UserNameFormatted = userName.charAt(0).toUpperCase() + userName.slice(1).toLowerCase();
+
  
 
   printWindow.document.write(`
@@ -104,7 +106,7 @@ export const openPrintWindow = ({
               @page {
                 
                 @bottom-left {
-                  content: "User: ${userName} | Printed: ${printedDate}";
+                  content: "User: ${UserNameFormatted} | Printed: ${printedDate}";
                   font-size: 10px;
                   margin-bottom: 20mm;
                 }
