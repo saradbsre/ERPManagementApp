@@ -29,7 +29,7 @@ export default function ReportTable() {
     const [report, setReport] = useState(location.state?.report || null);
     const [showCustomizeDrawer, setShowCustomizeDrawer] = useState(false);
     const [columns, setColumns] = useState([]);
-
+const [appliedFilters, setAppliedFilters] = useState([]);
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
     const [showImportExport, setShowImportExport] = useState(false);
@@ -155,8 +155,7 @@ const getCurrentMonth = () => {
     endDate: format(end),
   };
 };
-
-const getYearRange = (type = "currentYear") => {
+const getYearRange = (type = "all") => {
   const now = new Date();
   const currentYear = now.getFullYear();
 
@@ -166,6 +165,13 @@ const getYearRange = (type = "currentYear") => {
     const d = String(date.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
   };
+
+  if (!type || type === "all") {
+    return {
+      startDate: `${currentYear - 1}-01-01`,
+      endDate: `${currentYear + 1}-12-31`,
+    };
+  }
 
   if (type === "lastYear") {
     return {
@@ -369,26 +375,39 @@ const handleExcel = async () => {
 // }, [id]);
 
 useEffect(() => {
-  setPage(1);
+  const initReport = async () => {
+    setPage(1);
 
-  if (!id) return;
+    if (!id) return;
 
-  if (isYearlyReport) {
-    const currentYearRange = getYearRange("currentYear");
+    if (isYearlyReport) {
+      const allYearRange = getYearRange("all");
 
-    setYearFilter("currentYear");
-    setActiveDateFilter("currentYear");
-    setDateFilters(currentYearRange);
+      setSearch("");
+      setSearchColumnKey(null);
+      setFilters([]);
+      setAppliedFilters([]);
 
-    loadYearlyExpiryReport({
-      selectedYearFilter: "currentYear",
-      selectedReportType: "summary",
-    });
+      setYearFilter("");
+      setActiveDateFilter("");
+      setDateFilters(allYearRange);
 
-    return;
-  }
+      setReportType("summary");
 
-  loadReport(id, dateFilters);
+      await loadYearlyExpiryReport({
+        selectedYearFilter: "all",
+        selectedReportType: "summary",
+        customDateFilters: allYearRange,
+        customFilters: [],
+      });
+
+      return;
+    }
+
+    await loadReport(id, dateFilters);
+  };
+
+  initReport();
 }, [id, isYearlyReport]);
 
 const handleSearch = async (appliedFilters) => {
@@ -500,77 +519,51 @@ const handleEquivalentReport = async () => {
 };
      
 const handleClear = async () => {
-  // const defaults = getCurrentMonth();
-  const defaults = isYearlyReport
-  ? getYearRange("currentYear")
-  : getCurrentMonth();
-
   try {
     setLoading(true);
 
-    // ================= RESET UI STATE =================
+    if (isYearlyReport) {
+      const allYearRange = getYearRange("all");
+
+      setSearch("");
+      setSearchColumnKey(null);
+      setFilters([]);
+      setAppliedFilters([]);
+
+      setYearFilter("");
+      setActiveDateFilter("");
+      setDateFilters(allYearRange);
+
+      setReportType("summary");
+      setPage(1);
+
+      await loadYearlyExpiryReport({
+        selectedYearFilter: "all",
+        selectedReportType: "summary",
+        customDateFilters: allYearRange,
+        customFilters: [],
+      });
+
+      return;
+    }
+
+    const defaults = getCurrentMonth();
+
     setSearch("");
     setSearchColumnKey(null);
     setFilters([]);
-    setPage(1);
-    setActiveDateFilter("");
-    if (isYearlyReport) {
-  setYearFilter("currentYear");
-  setActiveDateFilter("currentYear");
-  setDateFilters(defaults);
-
-  await loadYearlyExpiryReport({
-    selectedYearFilter: "currentYear",
-    selectedReportType: "summary",
-  });
-
-  return;
-}
-
-    const reportId = report?.report_id || id;
-
-    // ================= RESET DATE =================
+    setAppliedFilters([]);
     setDateFilters(defaults);
+    setActiveDateFilter("");
+    setPage(1);
 
-    // ================= API CALL =================
-    const payload = {
-      search: "",
-      filters: JSON.stringify([]),
-      dateFilters: JSON.stringify({
-        date: {
-          startDate: defaults.startDate,
-          endDate: defaults.endDate,
-        },
-      }),
-      reportType,
-    };
-
-    const res = await getReportData(reportId, activeUserEmail, payload);
-
-    let data = res.data || [];
-
-    // ================= IMPORTANT PIPELINE =================
-
-    // 1. normalize keys (fix case issues like Total_Amount_AED)
-    data = data.map(normalizeKeys);
-
-    // 2. transform currency columns (creates amount_AED, amount_USD, etc.)
-    data = transformCurrencyRows(data);
-
-    // ================= SET ROWS =================
-    setRows(data);
-
-    // ================= REBUILD COLUMNS =================
-    const dynamicCols = buildDynamicColumns(data);
-    setColumns(dynamicCols);
-
+    await loadReport(id, defaults, reportType);
   } catch (err) {
-    console.error("handleClear failed:", err);
+    console.error("Clear failed:", err);
   } finally {
     setLoading(false);
   }
 };
-
 
     useEffect(() => {
       const closeMenu = () => setOpenMenu(null);
@@ -1139,16 +1132,17 @@ const handleQuickDateChange = async (value) => {
   setActiveDateFilter(value);
 
   if (isYearlyReport) {
-    setYearFilter(value);
+    const range = getYearRange(value || "all");
 
-    const range = getYearRange(value);
+    setYearFilter(value || "");
     setDateFilters(range);
     setPage(1);
 
     await loadYearlyExpiryReport({
-      selectedYearFilter: value,
+      selectedYearFilter: value || "all",
       selectedReportType: reportType,
-      customDateFilters: null,
+      customDateFilters: range,
+      customFilters: filters,
     });
 
     return;
