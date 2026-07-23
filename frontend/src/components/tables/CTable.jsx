@@ -7506,7 +7506,41 @@ localStorage.setItem("print_module_name", printModuleName || "");
 {showPreview && (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
 
-    <div className="w-[95%] max-w-6xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl">
+    <div className="relative w-[95%] max-w-6xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl">
+
+      {/* CLOSE BUTTON */}
+    <button
+  type="button"
+  onClick={() => {
+    setShowPreview(false);
+
+    if (previewFromGenerateModal) {
+      setShowGenerateModal(true);
+    }
+  }}
+  className="
+    fixed
+    top-6
+    right-8
+    z-[99999]
+    h-10
+    w-10
+    rounded-full
+    bg-white
+    text-red-600
+    shadow-lg
+    border
+    border-gray-200
+    hover:bg-red-50
+    hover:text-red-700
+    flex
+    items-center
+    justify-center
+  "
+  title="Close"
+>
+  <X size={20} strokeWidth={2} />
+</button>
 
       {/* CLOSE BUTTON */}
       {/* <div className="flex justify-end p-3 border-b">
