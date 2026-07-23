@@ -325,12 +325,19 @@ export const getReportCustomizedColumns = (reportId, activeUserEmail, moduleId =
   });
 };
 
-export const upsertCustomizedColumns = (moduleId, userId, columns, reportId = null) => {
-  return API.post(`/custom-columns/${moduleId}`, {
+export const upsertCustomizedColumns = (
+  moduleId,
+  userId,
+  columns,
+  reportId = null
+) => {
+  const id = reportId || moduleId;
+
+  return API.post(`/custom-columns/${id}`, {
     module_id: moduleId,
-    user_id: userId,
     report_id: reportId,
-    columns
+    user_id: userId,
+    columns,
   });
 };
 

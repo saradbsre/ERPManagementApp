@@ -1,6 +1,6 @@
 import React,{ useEffect, useState, useRef, useLayoutEffect, act, use, useMemo } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import {  getModuleData, getMasterValues, getReportData, fetchMasters, getDisplayName, reportPdf,getYearlyExpiryReport   } from "../../api/api";
+import {  getModuleData, getMasterValues, getReportData, fetchMasters, getDisplayName, reportPdf, getYearlyExpiryReport, upsertCustomizedColumns ,getReportCustomizedColumns  } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -27,9 +27,10 @@ export default function ReportTable() {
     const location = useLocation();
     //console.log("ReportTable Location State:", location.state);
     const [report, setReport] = useState(location.state?.report || null);
+   // console.log("ReportTable report:", report);
     const [showCustomizeDrawer, setShowCustomizeDrawer] = useState(false);
     const [columns, setColumns] = useState([]);
-const [appliedFilters, setAppliedFilters] = useState([]);
+   const [appliedFilters, setAppliedFilters] = useState([]);
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
     const [showImportExport, setShowImportExport] = useState(false);
@@ -51,7 +52,8 @@ const [appliedFilters, setAppliedFilters] = useState([]);
     const activeUserName = activeUser?.name;
     const userRole = activeUser?.role;
     const [activeDateFilter, setActiveDateFilter] = useState(null);
-    const currentModule =  report?.report_id;
+    const currentModule =  null;
+    const currentReport =  report?.report_id;
     const [printModuleName, setPrintModuleName] = useState("");
     const [showMobileFilters, setShowMobileFilters] = useState(false);
     const searchInputRef = useRef(null);
@@ -71,6 +73,9 @@ const [appliedFilters, setAppliedFilters] = useState([]);
     const [productMap, setProductMap] = useState({});
     const [reportType, setReportType] = useState("summary");
     const [yearFilter, setYearFilter] = useState("currentYear");
+    const [pinnedColumns, setPinnedColumns] = useState([]);
+    const [visibleColumnsState, setVisibleColumnsState] = useState([]);
+    const [savedTableColumns, setSavedTableColumns] = useState([]);
 const [showHidePopup, setShowHidePopup] = useState(false);
 const [hidePopupColumn, setHidePopupColumn] = useState(null);
 const [tempHideColumns, setTempHideColumns] = useState([]);
@@ -87,10 +92,10 @@ const allowDetailed =
     const [masters, setMasters] = useState([]);
     const [displayNames, setDisplayNames] = useState({});
     const groupBy = report?.group_by || null;
-    console.log("report",report);
+    
     const equivalentReportId = report?.eqnt_report;
 const showEquivalent = report?.is_equivalent === true && equivalentReportId;
-console.log("ReportTable equivalentReportId:", equivalentReportId, "showEquivalent:", showEquivalent);
+
     useEffect(() => {
       const handleResize = () => {
         setIsMobile(window.innerWidth < 768);
@@ -606,6 +611,39 @@ const buildTotalRow = (rows, cols) => {
 
   return total;
 };
+   const buildGroupTotal = (rows, cols) => {
+      const total = {};
+      cols.forEach((col) => {
+        const key = col.column_name;
+        if (isNumeric(key)) {
+          total[key] = rows.reduce(
+            (sum, r) => sum + (Number(r[key]) || 0),
+            0
+          );
+        } else {
+          total[key] = "";
+        }
+      });
+      return total;
+    };
+
+        const buildGrandTotal = (groups, cols) => {
+      const total = {};
+      cols.forEach((col) => {
+        const key = col.column_name;
+        if (isNumeric(key)) {
+          total[key] = groups.reduce((acc, g) => {
+            return (
+              acc +
+              g.rows.reduce((s, r) => s + (Number(r[key]) || 0), 0)
+            );
+          }, 0);
+        } else {
+          total[key] = "";
+        }
+      });
+      return total;
+    };
 
 const formatPrintDate = (dateStr) => {
   if (!dateStr) return "";
@@ -617,399 +655,662 @@ const formatPrintDate = (dateStr) => {
   });
 };
 
+ const isNumeric = (key) =>
+      key?.toLowerCase().includes("cr") ||
+      key?.toLowerCase().includes("bc") ||
+      key?.toLowerCase().includes("cost") ||
+      key?.toLowerCase().includes("total") ||
+      key?.toLowerCase().includes("amount");
+
+    const dataRows = rows || [];
+    const isNumericColumn = (col) =>
+  col.column_name?.toLowerCase().includes("cr") ||
+  col.column_name?.toLowerCase().includes("bc") ||
+  col.column_name?.toLowerCase().includes("cost") ||
+  col.column_name?.toLowerCase().includes("total") ||
+  col.column_name?.toLowerCase().includes("amount");
+
+  const parseNum = (val) =>
+  isNaN(parseFloat((val ?? "0").toString().replace(/,/g, "")))
+    ? 0
+    : parseFloat((val ?? "0").toString().replace(/,/g, ""));
+
+const moduleName = report?.description || "Report";
+    const formattedTime = getFormattedDateTime();
+
+
+    const fromDate = formatPrintDate(dateFilters.startDate);
+    const toDate = formatPrintDate(dateFilters.endDate);
+    
+
+    
+  const isDetailed =
+    reportType === "detailed" && allowDetailed;
+  const isEquivalent =
+    reportType === "equivalent" && report?.is_equivalent === true;
+
+  const reportTypeLabel = isEquivalent
+    ? "Equivalent"
+    : isDetailed
+    ? "Detailed"
+    : "Summary";
+
+  const reportTitle = `${moduleName} ${reportTypeLabel} (${fromDate} to ${toDate})`;
+
+
 const handlePrint = () => {
   const printWindow = window.open("", "", "width=1200,height=900");
-  const printCompany =  localStorage.getItem("print-company") || "";
-  
-  const moduleName = report?.description || "Report";
-  const formattedTime = getFormattedDateTime();
+  if (!printWindow) return;
 
-  const fromDate = formatPrintDate(dateFilters.startDate);
-  const toDate = formatPrintDate(dateFilters.endDate);
-  
+  const reportTitle = getReportTitle();
+  const tableHtml = reportType === "detailed" && allowDetailed
+    ? generateDetailedTable()
+    : generateSummaryTable();
+  const approvalHtml = generateApprovalHtml();
+  const filterHtml = generateFilterHtml();
+  const blankSpaceHtml = generateBlankSpaceHtml();
+  const UserNameFormatted = activeUserName.charAt(0).toUpperCase() + activeUserName.slice(1).toLowerCase();
+  const printedDate = getFormattedDateTime();
 
-  
-const isDetailed =
-  reportType === "detailed" && allowDetailed;
-const isEquivalent =
-  reportType === "equivalent" && report?.is_equivalent === true;
-
-const reportTypeLabel = isEquivalent
-  ? "Equivalent"
-  : isDetailed
-  ? "Detailed"
-  : "Summary";
-
-const reportTitle = `${moduleName} ${reportTypeLabel} (${fromDate} to ${toDate})`;
-
-
-  console.log("filters applied for print:", filters);
- 
-  // ================= TOTAL HELPERS =================
-  const isNumeric = (key) =>
-    key?.toLowerCase().includes("cr") ||
-    key?.toLowerCase().includes("bc") ||
-    key?.toLowerCase().includes("cost") ||
-    key?.toLowerCase().includes("total") ||
-    key?.toLowerCase().includes("amount");
-
-  const dataRows = rows || [];
-
-const grandTotal = buildTotalRow(
-  dataRows,
-  visibleDetailedColumns
-);
-
-    const buildGroupTotal = (rows, cols) => {
-    const total = {};
-    cols.forEach((col) => {
-      const key = col.column_name;
-      if (isNumeric(key)) {
-        total[key] = rows.reduce(
-          (sum, r) => sum + (Number(r[key]) || 0),
-          0
-        );
-      } else {
-        total[key] = "";
-      }
-    });
-    return total;
-  };
-
-  const buildGrandTotal = (groups, cols) => {
-    const total = {};
-    cols.forEach((col) => {
-      const key = col.column_name;
-      if (isNumeric(key)) {
-        total[key] = groups.reduce((acc, g) => {
-          return (
-            acc +
-            g.rows.reduce((s, r) => s + (Number(r[key]) || 0), 0)
-          );
-        }, 0);
-      } else {
-        total[key] = "";
-      }
-    });
-    return total;
-  };
-
-  let tableHtml = "";
-
-  // ================= SUMMARY =================
-   if (!isDetailed) {
-    const totalRow = buildGroupTotal(rows, columns);
-
-    tableHtml = `
-      <table>
-        <thead>
-          <tr>
-            <th>S/N</th>
-            ${columns
-              .map(
-                (c) => `<th class="${
-                  isRightAligned(c) ? "text-right" : "text-left"
-                }">${c.display_name}</th>`
-              )
-              .join("")}
-          </tr>
-        </thead>
-
-        <tbody>
-          ${rows
-            .map(
-              (row, i) => `
-            <tr>
-              <td style="text-align:center">${i + 1}</td>
-              ${columns
-                .map(
-                  (c) => `
-                <td class="${
-                  isRightAligned(c) ? "text-right" : "text-left"
-                }">
-                  ${getCellValue(row, c)}
-                </td>
-              `
-                )
-                .join("")}
-            </tr>`
-            )
-            .join("")}
-
-          <!-- TOTAL ROW -->
-          <tr style="font-weight:bold;background:#e5e7eb;">
-            <td></td>
-
-            ${columns
-              .map((c, i) => {
-                const total = totalRow[c.column_name];
-
-                // ✅ LABEL BEFORE AMOUNT COLUMN
-                const isLabel =
-                  i ===
-                  columns.findIndex((x) =>
-                    x.column_name.toLowerCase().includes("amount")
-                  ) - 1;
-
-                return `
-                  <td class="text-right">
-                    ${isLabel ? "TOTAL" : isNumeric(c.column_name) ? formatAmount(total) : ""}
-                  </td>
-                `;
-              })
-              .join("")}
-          </tr>
-        </tbody>
-      </table>
-    `;
-  }
-
-  // ================= DETAILED =================
-  else {
-    const firstAmountIndex =
-      visibleDetailedColumns.findIndex((c) =>
-        c.column_name?.toLowerCase().startsWith("amount_")
-      );
-
-    const totalLabelIndex =
-      firstAmountIndex > 0 ? firstAmountIndex - 1 : 0;
-
-    tableHtml = `
-      <table>
-        <thead>
-          <tr>
-            <th>S/N</th>
-            ${visibleDetailedColumns
-              .map(
-                (col) => `
-                  <th class="${
-                    isRightAligned(col)
-                      ? "text-right"
-                      : "text-left"
-                  }">
-                    ${col.display_name}
-                  </th>
-                `
-              )
-              .join("")}
-          </tr>
-        </thead>
-
-        <tbody>
-          ${fullGroupedRows
-            .map(([groupName, groupRows]) => {
-             const groupTotal = buildTotalRow(
-  groupRows,
-  visibleDetailedColumns
-);
-
-              return `
-                <!-- GROUP HEADER -->
-                <tr>
-                  <td colspan="${
-                    visibleDetailedColumns.length + 1
-                  }"
-                    style="background:#e5e7eb;font-weight:bold;">
-                    ${(displayNames[report?.group_by] || report?.group_by || "GROUP").toUpperCase()} :
-                    ${groupName}
-                  </td>
-                </tr>
-
-                <!-- GROUP ROWS -->
-                ${groupRows
-                  .map(
-                    (row, i) => `
-                      <tr>
-                        <td style="text-align:center">${i + 1}</td>
-
-                        ${visibleDetailedColumns
-                          .map(
-                            (col) => `
-                              <td class="${
-                                isRightAligned(col)
-                                  ? "text-right"
-                                  : "text-left"
-                              }">
-                                ${getCellValue(row, col)}
-                              </td>
-                            `
-                          )
-                          .join("")}
-                      </tr>
-                    `
-                  )
-                  .join("")}
-
-                <!-- GROUP TOTAL -->
-                <tr style="font-weight:bold;background:#f1f5f9;">
-                  <td></td>
-
-                  ${visibleDetailedColumns
-                    .map((col, index) => {
-                      const isLabel =
-                        index === totalLabelIndex;
-
-                      return `
-                        <td class="text-right">
-                          ${
-                            isLabel
-                              ? "TOTAL"
-                              : isNumericColumn(col)
-                              ? formatAmount(
-                                  groupTotal[col.column_name]
-                                )
-                              : ""
-                          }
-                        </td>
-                      `;
-                    })
-                    .join("")}
-                </tr>
-              `;
-            })
-            .join("")}
-
-          <!-- ================= GRAND TOTAL ================= -->
-          <tr style="font-weight:bold;background:#e5e7eb;">
-            <td></td>
-
-            ${visibleDetailedColumns
-              .map((col, index) => {
-                const isLabel =
-                  index === totalLabelIndex;
-
-                return `
-                  <td class="text-right">
-                    ${
-                      isLabel
-                        ? "GRAND TOTALhhh"
-                        : isNumericColumn(col)
-                        ? formatAmount(
-                            grandTotal[col.column_name]
-                          )
-                        : ""
-                    }
-                  </td>
-                `;
-              })
-              .join("")}
-          </tr>
-        </tbody>
-      </table>
-    `;
-  }
-
-const hasFilters =
-  Array.isArray(filters) &&
-  filters.some(
-    (f) => f?.values && f.values.length > 0
-  );
-
-const filterHtml = hasFilters
-  ? `
-  <div style="margin-top:20px;">
-    <h4 style="margin-bottom:8px; font-size:11px;">Applied Filters</h4>
-
-    <table style="width:100%; border-collapse:collapse; font-size:10px;">
-      <tbody>
-        ${filters
-          .filter(f => f?.master !== "dateFilters") // 👈 extra safety
-          .map((filter) => `
-            <tr>
-              <td style="border:1px solid #ccc;padding:5px;font-weight:bold;">
-                ${filter.master.charAt(0).toUpperCase() + filter.master.slice(1)}
-              </td>
-
-              <td style="border:1px solid #ccc;padding:5px;">
-                ${(filter.values || [])
-                  .map(v => v.value)
-                  .join(", ")}
-              </td>
-            </tr>
-          `)
-          .join("")}
-      </tbody>
-    </table>
-  </div>
-`
-  : "";
-
-    const pageStyle = isDetailed
-    ? "size:A4 landscape; margin:10mm 10mm 20mm 10mm;"
-    : "size:A4 portrait; margin:10mm 10mm 20mm 10mm;";
-  // ================= PRINT STYLES =================
   printWindow.document.write(`
     <html>
       <head>
-        <style>
-          @page {
-            ${pageStyle}
-          }
-
-          body {
-            font-family: "Times New Roman", serif;
-            margin: 0;
-          }
-
-          table {
-            width: auto;
-            min-width: 100%;
-            border-collapse: collapse;
-            margin: 0 auto;
-          }
-
-          th, td {
-            border: 1px solid #ccc;
-            padding: 3px;
-            font-size: 9px;
-          }
-
-          th {
-            background: #f3f4f6;
-          }
-
-          .text-right { text-align: right; }
-          .text-left { text-align: left; }
-
-          h3 {
-            text-align: center;
-            margin-bottom: 10px;
-            font-size: 13px;
-          }
-
-          @media print {
-            @page {
-              @bottom-left {
-                content: "User: ${activeUser?.name || ""} • Printed: ${formattedTime}";
-                font-size: 9px;
-              }
-
-              @bottom-right {
-                content: "Page " counter(page) " of " counter(pages);
-                font-size: 9px;
-              }
-            }
-          }
-        </style>
+        ${getPrintStyles()}
       </head>
-
       <body>
-        <h3> ${printCompany}</h3>
-        <h3>${reportTitle}</h3>
+        ${generateHeader(reportTitle)}
         ${tableHtml}
+        ${approvalHtml}
         ${filterHtml}
+        ${blankSpaceHtml}
+         <script>
+        (function () {
+          const style = document.createElement('style');
+          style.textContent = \`
+            @media print {
+              @page {
+                
+                @bottom-left {
+                  content: "User: ${UserNameFormatted} | Printed: ${printedDate}";
+                  font-size: 10px;
+                  margin-bottom: 20mm;
+                }
+                @bottom-right {
+                  content: "Page " counter(page) " of " counter(pages);
+                  font-size: 10px;
+                  margin-bottom: 20mm;
+                }
+              }
+            }\`;
+          document.head.appendChild(style);
+        })();
+
+        window.onload = function() {
+          window.focus();
+          window.print();
+        }
+      </script>
       </body>
     </html>
   `);
 
   printWindow.document.close();
 
-  printWindow.onload = function () {
+  printWindow.onload = () => {
     printWindow.focus();
     printWindow.print();
     printWindow.close();
   };
 };
+
+const getReportTitle = () => {
+  const moduleName = report?.description || "Report";
+
+  const fromDate = formatPrintDate(dateFilters.startDate);
+  const toDate = formatPrintDate(dateFilters.endDate);
+
+  const isDetailed =
+    reportType === "detailed" && allowDetailed;
+
+  const isEquivalent =
+    reportType === "equivalent" && report?.is_equivalent;
+
+  const type = isEquivalent
+    ? "Equivalent"
+    : isDetailed
+    ? "Detailed"
+    : "Summary";
+
+  return `${moduleName} ${type} (${fromDate} to ${toDate})`;
+};
+
+const generateSummaryTable = () => {
+  const totalRow = buildGroupTotal(rows, columns);
+
+  return `
+    <table>
+      <tbody>
+        <tr>
+          <th class = "sno-col">S/N</th>
+          ${columns
+            .map(
+              (c) => `
+                <th class="${isRightAligned(c) ? "text-right" : "text-left"}">
+                  ${c.display_name}
+                </th>
+              `
+            )
+            .join("")}
+        </tr>
+
+        ${rows
+          .map(
+            (row, i) => `
+              <tr>
+                <td style="text-align:center">${i + 1}</td>
+
+                ${columns
+                  .map(
+                    (c) => `
+                      <td class="${isRightAligned(c) ? "text-right" : "text-left"}">
+                        ${getCellValue(row, c)}
+                      </td>
+                    `
+                  )
+                  .join("")}
+              </tr>
+            `
+          )
+          .join("")}
+
+        <tr style="font-weight:bold;background:#e5e7eb;">
+          <td></td>
+
+          ${columns
+            .map((c, i) => {
+              const total = totalRow[c.column_name];
+
+              const isLabel =
+                i ===
+                columns.findIndex((x) =>
+                  x.column_name.toLowerCase().includes("amount")
+                ) - 1;
+
+              return `
+                <td class="text-right">
+                  ${
+                    isLabel
+                      ? "TOTAL"
+                      : isNumeric(c.column_name)
+                      ? formatAmount(total)
+                      : ""
+                  }
+                </td>
+              `;
+            })
+            .join("")}
+        </tr>
+      </tbody>
+    </table>
+  `;
+};
+
+const generateDetailedTable = () => {
+  const isR011 = report?.report_id === "R011";
+
+  const grandTotal = buildTotalRow(rows || [], visibleDetailedColumns);
+
+  const firstAmountIndex = visibleDetailedColumns.findIndex((c) =>
+    c.column_name?.toLowerCase().startsWith("amount_")
+  );
+
+  const totalLabelIndex = firstAmountIndex > 0 ? firstAmountIndex - 1 : 0;
+
+  return `
+    <table>
+      <thead>
+        <tr>
+          <th>S/N</th>
+          ${visibleDetailedColumns
+            .map(
+              (col) => `
+                <th class="${isRightAligned(col) ? "text-right" : "text-left"}">
+                  ${col.display_name}
+                </th>
+              `
+            )
+            .join("")}
+        </tr>
+      </thead>
+
+      <tbody>
+
+        ${
+          isR011
+            ? `
+              ${rows
+                .map(
+                  (row, i) => `
+                    <tr>
+                      <td style="text-align:center">${i + 1}</td>
+
+                      ${visibleDetailedColumns
+                        .map(
+                          (col) => `
+                            <td class="${
+                              isRightAligned(col)
+                                ? "text-right"
+                                : "text-left"
+                            }">
+                              ${getCellValue(row, col)}
+                            </td>
+                          `
+                        )
+                        .join("")}
+                    </tr>
+                  `
+                )
+                .join("")}
+            `
+            : fullGroupedRows
+                .map(([groupName, groupRows]) => {
+                  const groupTotal = buildTotalRow(
+                    groupRows,
+                    visibleDetailedColumns
+                  );
+
+                  return `
+                    <tr>
+                      <td colspan="${visibleDetailedColumns.length + 1}"
+                          style="background:#e5e7eb;font-weight:bold;">
+                        ${(
+                          displayNames[report?.group_by] ||
+                          report?.group_by ||
+                          "GROUP"
+                        ).toUpperCase()} :
+                        ${groupName}
+                      </td>
+                    </tr>
+
+                    ${groupRows
+                      .map(
+                        (row, i) => `
+                          <tr>
+                            <td style="text-align:center">${i + 1}</td>
+
+                            ${visibleDetailedColumns
+                              .map(
+                                (col) => `
+                                  <td class="${
+                                    isRightAligned(col)
+                                      ? "text-right"
+                                      : "text-left"
+                                  }">
+                                    ${getCellValue(row, col)}
+                                  </td>
+                                `
+                              )
+                              .join("")}
+                          </tr>
+                        `
+                      )
+                      .join("")}
+
+                    <tr style="font-weight:bold;background:#f1f5f9;">
+                      <td></td>
+
+                      ${visibleDetailedColumns
+                        .map((col, index) => {
+                          const isLabel = index === totalLabelIndex;
+
+                          return `
+                            <td class="text-right">
+                              ${
+                                isLabel
+                                  ? "TOTAL"
+                                  : isNumericColumn(col)
+                                  ? formatAmount(groupTotal[col.column_name])
+                                  : ""
+                              }
+                            </td>
+                          `;
+                        })
+                        .join("")}
+                    </tr>
+                  `;
+                })
+                .join("")
+        }
+
+        <tr style="font-weight:bold;background:#e5e7eb;">
+          <td></td>
+
+          ${visibleDetailedColumns
+            .map((col, index) => {
+              const isLabel = index === totalLabelIndex;
+
+              return `
+                <td class="text-right">
+                  ${
+                    isLabel
+                      ? isR011
+                        ? "TOTAL"
+                        : "GRAND TOTAL"
+                      : isNumericColumn(col)
+                      ? formatAmount(grandTotal[col.column_name])
+                      : ""
+                  }
+                </td>
+              `;
+            })
+            .join("")}
+        </tr>
+
+      </tbody>
+    </table>
+  `;
+};
+
+const generateHeader = (reportTitle) => `
+<div class="report-page">
+<div class="print-shell">
+<div class="print-shell-header">
+<div class="report-header">
+  <div class="report-header-text">
+    <h1 class="company-name">
+      ABDULWAHED BIN SHABIB GROUP
+    </h1>
+
+    <h2 class="report-title">
+      ${reportTitle}
+    </h2>
+  </div>
+</div>
+</div>
+</div>
+</div>
+`;
+
+const generateFilterHtml = () => {
+  const appliedFilters = (filters || []).filter(
+    (f) => f.master !== "dateFilters" && f.values?.length
+  );
+
+  if (appliedFilters.length === 0) return "";
+
+  return `
+    <div style="margin-top:15px;font-size:10px;">
+      <div style="font-weight:bold;margin-bottom:6px;">
+        Applied Filters
+      </div>
+
+      ${appliedFilters
+        .map(
+          (f) => `
+            <div style="margin-bottom:3px;">
+              <span style="font-weight:bold;">
+                ${f.master.charAt(0).toUpperCase() + f.master.slice(1)}:
+              </span>
+              ${(f.values || [])
+                .map((v) => v.value || v)
+                .join(", ")}
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+};
+
+const generateApprovalHtml = () => `
+<div class="print-footer-area" style="padding-top:10px;">
+  <div class="approval-section">
+    <table class="approval-table">
+      <thead>
+        <tr>
+          <th colspan="5" class="approval-title">
+            APPROVALS
+          </th>
+        </tr>
+
+        <tr>
+          <th>PREPARED BY</th>
+          <th>VERIFIED BY</th>
+          <th>VERIFIED BY</th>
+          <th>SIGNED BY</th>
+          <th>APPROVED BY</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr>
+          <td>
+            <div class="approval-content">
+              <div>${activeUserName ? activeUserName.toUpperCase() : "-"}</div>
+              <div class="approval-dept">IT DEPARTMENT</div>
+            </div>
+          </td>
+
+          <td>
+            <div class="approval-content">
+              <div>SARAD N.V / AKBAR J.J</div>
+              <div class="approval-dept">IT DEPARTMENT</div>
+            </div>
+          </td>
+
+          <td>
+            <div class="approval-content">
+              <div></div>
+              <div class="approval-dept">ACCOUNTS</div>
+            </div>
+          </td>
+
+          <td>
+            <div class="approval-content">
+              <div>MR KUMAR</div>
+              <div class="approval-dept">FINANCE MANAGER</div>
+            </div>
+          </td>
+
+          <td>
+            <div class="approval-content">
+              <div>MR SHABIB</div>
+              <div class="approval-dept">FOUNDER & CEO</div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+`;
+
+const generateBlankSpaceHtml = () => `
+  <div class="blank-space">
+    *** SPACE INTENTIONALLY LEFT BLANK ***
+  </div>
+`;
+
+const getPrintStyles = () => `
+<style>
+
+@page{
+  ${
+    reportType === "detailed" && allowDetailed
+      ? "size:A4 landscape;"
+      : "size:A4 portrait;"
+  }
+   margin: 8mm 7mm 10mm 7mm;
+}
+
+ body {
+      font-family: "Times New Roman", serif;
+      color: #1f2933;
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      font-size: 9px;
+    }
+
+  table {
+   width: calc(100% - 2px);
+  margin: 0 auto;
+  border-collapse: collapse;
+  table-layout: fixed;
+    border-left: 1px solid #ccc;
+  border-right: 1px solid #ccc;
+  margin-bottom: 4px;
+  
+}
+
+th {
+      background: #e5e7eb !important;
+      color: #111827 !important;
+      border: 1px solid #111827;
+      padding: 4px 3px;
+      font-size: 8px;
+      font-weight: bold;
+      text-align: center;
+      vertical-align: middle;
+      line-height: 1.15;
+      word-break: break-word;
+    }
+
+    td {
+      border: 1px solid #9ca3af;
+      padding: 4px 2px !important;
+      font-size: 8px;
+      text-align: center;
+      vertical-align: middle;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+
+    tbody  {
+      background: #f8fafc;
+    } 
+
+.text-right{
+    text-align:right;
+}
+
+.text-left{
+    text-align:left;
+}
+    
+ .sno-col {
+      width: 20px !important;
+      font-weight: bold;
+    }
+.report-header {
+  border: 1px solid #1f2937;
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: #fff;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  min-height: 60px;
+}
+
+.company-name {
+  text-align: center;
+  font-size: 16px;
+  font-weight: bold;
+  letter-spacing: 0.3px;
+  color: #111827;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.report-title {
+  text-align: center;
+  font-size: 11px;
+  font-weight: bold;
+  color: #374151;
+  margin: 3px 0 0;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+  .print-shell {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.print-shell > thead {
+  display: table-header-group;
+}
+
+.print-shell > tbody {
+  display: table-row-group;
+}
+
+.print-shell > thead > tr > td,
+.print-shell > tbody > tr > td {
+  
+  padding: 0 !important;
+  background: #ffffff !important;
+}
+
+.print-shell-header {
+  padding-bottom: 3px !important;
+}
+
+.report-page {
+  width: 100%;
+  min-height: auto;
+  position: relative;
+  padding: 4px 0 10px 0 !important;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+.report-header-text {
+  text-align: center;
+  padding: 0 20px;
+}
+
+.approval-title {
+  background: #e5e7eb;
+  color: #111827;
+  text-align: left !important;
+  font-size: 8px;
+  font-weight: bold;
+  padding-left: 4px !important;
+  border: 1px solid #111827;
+}
+
+.approval-table td {
+  height: 100px !important;
+  border: 1px solid #111827;
+  padding: 0 !important;
+  text-align: center;
+  vertical-align: bottom !important;
+}
+
+.approval-content {
+  padding-bottom: 8px;
+  font-size: 8px;
+  font-weight: bold;
+}
+
+.approval-dept {
+  margin-top: 3px !important;
+  font-size: 8px;
+  color: #4b5563;
+  font-weight: bold;
+}
+  .blank-space {
+    display: block;
+    text-align: center;
+    font-size: 10px;
+    font-weight: bold;
+    margin: 10px 0;
+}
+</style>
+`;
 
 const handlePdf = async () => {
   try {
@@ -1377,7 +1678,7 @@ const loadYearlyExpiryReport = async ({
   try {
     setLoading(true);
 
- const params = {
+const params = {
   activeUserEmail,
   reportType: selectedReportType,
   yearFilter: selectedYearFilter,
@@ -1635,7 +1936,7 @@ const fullGroupedRows = useMemo(() => {
 //   reportType === "detailed"
 //     ? fullGroupedRows.length
 //     : Math.ceil(filteredRows.length / pageSize);
- const isRightAligned = (col) => {
+const isRightAligned = (col) => {
       const name = (col.column_name || "").toLowerCase();
       return name.includes("bc") || name.includes("cr") || name.includes("cost") || name.includes("total") || name.includes("amount");
     };
@@ -1682,18 +1983,8 @@ const enrichedRows = useMemo(() => {
   return grouped;
 }, [filteredRows, groupBy, reportType]);
 
-const isNumericColumn = (col) =>
-  col.column_name?.toLowerCase().includes("cr") ||
-  col.column_name?.toLowerCase().includes("bc") ||
-  col.column_name?.toLowerCase().includes("cost") ||
-  col.column_name?.toLowerCase().includes("total") ||
-  col.column_name?.toLowerCase().includes("amount");
 
-const parseNum = (val) =>
-  isNaN(parseFloat((val ?? "0").toString().replace(/,/g, "")))
-    ? 0
-    : parseFloat((val ?? "0").toString().replace(/,/g, ""));
-    
+
 const totalColIndex = columns.findIndex(col =>
   col.column_name?.toLowerCase().includes("total_amount_aed")
 );
@@ -1790,12 +2081,13 @@ const resetFiltersState = () => {
 const yearlyVisibleColumns = useMemo(() => {
   if (!columns?.length) return [];
 
-  if (!selectedColumns?.length) return columns;
+  // If nothing is saved, show all columns
+  if (!visibleColumnsState?.length) return columns;
 
-  return selectedColumns
+  return visibleColumnsState
     .map((name) => columns.find((c) => c.column_name === name))
     .filter(Boolean);
-}, [columns, selectedColumns]);
+}, [columns, visibleColumnsState]);
 
 const yearlyDetailedColumns = useMemo(() => {
   if (!yearlyVisibleColumns?.length) return [];
@@ -1854,6 +2146,71 @@ const handleDrop = (dropColName) => {
   dragIndexRef.current = null;
 };
 
+const saveColumnSelection = async (selectedCols = []) => {
+  try {
+    const columnSettings = {
+      visibleColumns: selectedCols,
+      pinnedColumns: pinnedColumns || [],
+    };
+
+    await upsertCustomizedColumns(
+      currentModule,
+      activeUserEmail,
+      columnSettings,
+      currentReport
+    );
+
+    // ✅ UPDATE UI IMMEDIATELY (NO REFRESH NEEDED)
+    setVisibleColumnsState(selectedCols);
+
+    setSelectedColumns(selectedCols);
+    setSavedTableColumns(selectedCols);
+    
+
+  } catch (err) {
+    console.error("Failed to save customized columns:", err);
+  }
+};
+
+const fetchCustomizedColumns = async () => {
+  try {
+    const res = await getReportCustomizedColumns(
+      currentReport,
+      activeUserEmail,
+      currentModule,
+    );
+
+    const savedColumns = res?.data?.data?.columns;
+    console.log("Fetched customized columns:", savedColumns);
+    if (Array.isArray(savedColumns)) {
+      return { visibleColumns: savedColumns, pinnedColumns: [] };
+    }
+    if (savedColumns && typeof savedColumns === "object") {
+      return {
+        visibleColumns: Array.isArray(savedColumns.visibleColumns) ? savedColumns.visibleColumns : [],
+        pinnedColumns: Array.isArray(savedColumns.pinnedColumns) ? savedColumns.pinnedColumns : [],
+      };
+    }
+    return { visibleColumns: [], pinnedColumns: [] };
+
+  } catch (err) {
+    console.error("Failed to load customized columns:", err);
+    return { visibleColumns: [], pinnedColumns: [] };
+  }
+};
+
+useEffect(() => {
+  const init = async () => {
+    const res = await fetchCustomizedColumns();
+
+    setVisibleColumnsState(res?.visibleColumns || []);
+    setPinnedColumns(res?.pinnedColumns || []);
+  };
+
+  init();
+}, [id, activeUserEmail]);
+
+
     return (
         <div className="h-full flex flex-col">
             
@@ -1862,14 +2219,14 @@ const handleDrop = (dropColName) => {
 
                 <h1 className="text-xl font-semibold text-gray-800 truncate">
                     {report?.description || "Loading..."}{" "}
-{reportType === "detailed"
-  ? "(Detailed)"
-  : reportType === "equivalent"
-  ? "(Equivalent)"
-  : "(Summary)"}
-                </h1>
+                    {reportType === "detailed"
+                      ? "(Detailed)"
+                      : reportType === "equivalent"
+                      ? "(Equivalent)"
+                      : "(Summary)"}
+                                    </h1>
 
-               {/* ================= ACTIONS ================= */}
+                                  {/* ================= ACTIONS ================= */}
 
             {/* DESKTOP VIEW (UNCHANGED ROW) */}
             <div className="hidden md:flex items-center gap-2">
@@ -2125,7 +2482,7 @@ const handleDrop = (dropColName) => {
     Summary
   </button>
 
- <button
+<button
   onClick={() => handleReportTypeChange("detailed")}
   disabled={!allowDetailed}
     className={`
@@ -2382,9 +2739,10 @@ const handleDrop = (dropColName) => {
               setShowHidePopup(false);
               setHidePopupColumn(null);
             }}
-            onSave={(selectedColumnsFromDrag) => {
+            onSave={ async (selectedColumnsFromDrag) => {
               setSelectedColumns(selectedColumnsFromDrag);
               setTempHideColumns(selectedColumnsFromDrag);
+              await saveColumnSelection(selectedColumnsFromDrag);
               setShowHidePopup(false);
               setHidePopupColumn(null);
             }}
@@ -2497,14 +2855,14 @@ const handleDrop = (dropColName) => {
   />
 
 </div>
-{console.log("company sening to customize drawer", company)}
+
 <CustomizeDrawer
   open={showCustomizeDrawer}
   onClose={() => setShowCustomizeDrawer(false)}
 
   // Columns (ONLY what is actually used)
   columns={columns}
- 
+
 
   // Header (Printer Custom)
   selectedCompany={selectedCompany}
@@ -2516,7 +2874,7 @@ const handleDrop = (dropColName) => {
   setPrintModuleName={setPrintModuleName}
 />
 
- <TableFiltersDrawer
+<TableFiltersDrawer
   open={showFilters}
   onClose={() => setShowFilters(false)}
   onSearch={handleSearch}
