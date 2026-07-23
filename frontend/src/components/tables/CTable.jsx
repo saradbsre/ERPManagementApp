@@ -593,6 +593,15 @@ const applyDateFilter = async () => {
   try {
     setLoading(true);
 
+    if (activeDateFilter === "upcomingRenewals") {
+  await applyUpcomingRenewalFilter({
+    startDate: dateFilters.startDate,
+    endDate: dateFilters.endDate,
+  });
+
+  return;
+}
+
     const payload = {
       search,
       filters: JSON.stringify(filters || []),
@@ -3936,17 +3945,17 @@ const formatLocalDate = (date) => {
 const getUpcomingRenewalRange = () => {
   const now = new Date();
 
-  // Start = same current date of last month
+  // Start = current date
   const start = new Date(
     now.getFullYear(),
-    now.getMonth() - 1,
+    now.getMonth(),
     now.getDate()
   );
 
-  // End = last date of current month
+  // End = last date of next month
   const end = new Date(
     now.getFullYear(),
-    now.getMonth() + 1,
+    now.getMonth() + 2,
     0
   );
 
@@ -3968,27 +3977,23 @@ const normalizeValue = (value) => {
 };
 
 const isUpcomingRenewalRow = (row, range) => {
-  const term = normalizeValue(row.billcycle_code);
   const transactionType = normalizeValue(row.trntype_code);
 
-  const invoiceDate = row.date
-    ? String(row.date).split("T")[0]
+  const expiryDate = row.expiry_date
+    ? String(row.expiry_date).split("T")[0]
     : "";
 
-  const isMonthly = term === "monthly";
-
-  const isInvoiceDateInRange =
-    invoiceDate >= range.startDate &&
-    invoiceDate <= range.endDate;
+  const isExpiryDateInRange =
+    expiryDate >= range.startDate &&
+    expiryDate <= range.endDate;
 
   const isNotCancellation =
     !transactionType.includes("cancel") &&
     !transactionType.includes("cancellation") &&
     !transactionType.includes("cancelation");
 
-  return isMonthly && isInvoiceDateInRange && isNotCancellation;
+  return isExpiryDateInRange && isNotCancellation;
 };
-
 
 
 const isNextMonthRenewalRow = (row, range) => {
@@ -4013,26 +4018,22 @@ const isNextMonthRenewalRow = (row, range) => {
   return isMonthly && isNotCancellation;
 };
 
-const applyUpcomingRenewalFilter = async () => {
+const applyUpcomingRenewalFilter = async (customRange = null) => {
   try {
     setLoading(true);
 
-    const upcomingRange = getUpcomingRenewalRange();
+    const upcomingRange = customRange || getUpcomingRenewalRange();
 
     setDateFilters(upcomingRange);
     setActiveDateFilter("upcomingRenewals");
 
     const payload = {
       search,
-      filters: JSON.stringify([]),
+      filters: JSON.stringify(filters || []),
 
-      // Filter by invoice date field
-      dateFilters: JSON.stringify({
-        date: {
-          startDate: upcomingRange.startDate,
-          endDate: upcomingRange.endDate,
-        },
-      }),
+      // Do not use normal invoice date filtering here.
+      // Upcoming Renewals must be filtered by expiry_date in frontend.
+      dateFilters: JSON.stringify({}),
     };
 
     const res = await getModuleData(
