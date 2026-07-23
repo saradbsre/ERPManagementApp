@@ -3149,7 +3149,7 @@ printableCols.splice(
     return "45px";
   }
   if ( name.includes("billcycle_code") || name.includes("curr_code") ) {
-    return "31px";
+    return "33px";
   }
   if (name.includes("prf")) {
     return "35px";
@@ -3565,7 +3565,7 @@ ${groupedRows
       <table>
         <thead>
           <tr>
-            <th class="sno-col">S/N</th>
+            <th class="sno-col" style="width:30px;">S/N</th>
             ${printableCols
               .map(
                 (col) => `

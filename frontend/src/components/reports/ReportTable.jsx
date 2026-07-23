@@ -278,6 +278,7 @@ const visibleDetailedColumns = useMemo(() => {
   );
 }, [visibleColumns, reportType, report]);
 
+
 const getCurrentMonthRange = () => {
   const now = new Date();
 
@@ -696,7 +697,50 @@ const moduleName = report?.description || "Report";
     : "Summary";
 
   const reportTitle = `${moduleName} ${reportTypeLabel} (${fromDate} to ${toDate})`;
+  const getColumnWidth = (col) => {
+  const name = (col.column_name || "").toLowerCase();
 
+  if ( name.includes("com_code") ) return "160px";
+
+  if (
+    name.includes("date") ||
+    name.includes("podate") ||
+    name.includes("expiry") ||
+    name.includes("start") ||
+    name.includes("end") ||
+    name.includes("trntype") ||
+    name.includes("number") ||
+    name.includes("dep_code")
+  ) {
+    return "45px";
+  }
+  if ( name.includes("billcycle_code") || name.includes("curr_code") ) {
+    return "33px";
+  }
+  if (name.includes("prf")) {
+    return "35px";
+  }
+
+  if (
+    name.includes("amount") ||
+    name.includes("price") ||
+    name.includes("total")
+  ) {
+    return "30px";
+  }
+
+  if (
+    name.includes("vend_code") ||
+    // name.includes("description") ||
+    name.includes("narr")
+  ) {
+    return "100px";
+  }
+
+  
+
+  return "70px";
+};
 
 const handlePrint = () => {
   const printWindow = window.open("", "", "width=1200,height=900");
@@ -857,24 +901,30 @@ const generateSummaryTable = () => {
 
 const generateDetailedTable = () => {
   const isR011 = report?.report_id === "R011";
+  //console.log("visible colmns",yearlyVisibleColumns)
+  const grandTotal = buildTotalRow(rows || [], yearlyVisibleColumns);
 
-  const grandTotal = buildTotalRow(rows || [], visibleDetailedColumns);
+const firstAmountIndex = yearlyVisibleColumns.findIndex((c) => {
+  const name = (c.column_name || "").toLowerCase();
 
-  const firstAmountIndex = visibleDetailedColumns.findIndex((c) =>
-    c.column_name?.toLowerCase().startsWith("amount_")
+  return (
+    name.includes("amount") ||
+    name.includes("price") ||
+    name.includes("total")
   );
+});
 
-  const totalLabelIndex = firstAmountIndex > 0 ? firstAmountIndex - 1 : 0;
-
+const totalLabelIndex =
+  firstAmountIndex > 0 ? firstAmountIndex - 1 : yearlyVisibleColumns.length - 1;
   return `
     <table>
       <thead>
         <tr>
-          <th>S/N</th>
-          ${visibleDetailedColumns
+          <th style="width:20px; min-width:20px; max-width:20px;">S/N</th>
+          ${yearlyVisibleColumns
             .map(
               (col) => `
-                <th class="${isRightAligned(col) ? "text-right" : "text-left"}">
+                <th class="${isRightAligned(col) ? "text-right" : "text-left"}" style="width:${getColumnWidth(col)}">
                   ${col.display_name}
                 </th>
               `
@@ -894,7 +944,7 @@ const generateDetailedTable = () => {
                     <tr>
                       <td style="text-align:center">${i + 1}</td>
 
-                      ${visibleDetailedColumns
+                      ${yearlyVisibleColumns
                         .map(
                           (col) => `
                             <td class="${
@@ -916,12 +966,12 @@ const generateDetailedTable = () => {
                 .map(([groupName, groupRows]) => {
                   const groupTotal = buildTotalRow(
                     groupRows,
-                    visibleDetailedColumns
+                    yearlyVisibleColumns
                   );
 
                   return `
                     <tr>
-                      <td colspan="${visibleDetailedColumns.length + 1}"
+                      <td colspan="${yearlyVisibleColumns.length + 1}"
                           style="background:#e5e7eb;font-weight:bold;">
                         ${(
                           displayNames[report?.group_by] ||
@@ -938,7 +988,7 @@ const generateDetailedTable = () => {
                           <tr>
                             <td style="text-align:center">${i + 1}</td>
 
-                            ${visibleDetailedColumns
+                            ${yearlyVisibleColumns
                               .map(
                                 (col) => `
                                   <td class="${
@@ -959,7 +1009,7 @@ const generateDetailedTable = () => {
                     <tr style="font-weight:bold;background:#f1f5f9;">
                       <td></td>
 
-                      ${visibleDetailedColumns
+                      ${yearlyVisibleColumns
                         .map((col, index) => {
                           const isLabel = index === totalLabelIndex;
 
@@ -985,7 +1035,7 @@ const generateDetailedTable = () => {
         <tr style="font-weight:bold;background:#e5e7eb;">
           <td></td>
 
-          ${visibleDetailedColumns
+          ${yearlyVisibleColumns
             .map((col, index) => {
               const isLabel = index === totalLabelIndex;
 
@@ -1588,66 +1638,69 @@ const transformCurrencyRows = (data = []) => {
 
 const getCellValue = (row, col, isTotalRow = false) => {
   const value = row[col.column_name];
+  const name = (col.column_name || "").toLowerCase();
 
-  // ================= TOTAL ROW OVERRIDE =================
+  // ================= TOTAL ROW =================
   if (isTotalRow) {
-    if (col.column_name.startsWith("CR") ||
-        col.column_name.startsWith("BC") ||
-        col.column_name.toLowerCase().includes("total")) {
-      return formatAmount(value) ?? "-";
+    if (
+      name.startsWith("cr") ||
+      name.startsWith("bc") ||
+      name.includes("amount") ||
+      name.includes("price") ||
+      name.includes("total") ||
+      name.includes("aed")
+    ) {
+      return formatAmount(value);
     }
 
-    // ❗ DO NOT mask payment method in total row
-    if (col.column_name.toLowerCase().includes("paymentmethod")) {
+    // Don't mask payment method in total row
+    if (name.includes("paymentmethod")) {
       return value ?? "-";
     }
 
     return value ?? "-";
   }
 
-  if(col.column_name.includes("date")) {
+  // ================= DATE =================
+  if (
+    name.includes("date") ||
+    name.includes("podate") ||
+    name.includes("start") ||
+    name.includes("end")
+  ) {
     return formatDate(value) ?? "-";
   }
 
-  // ================= NORMAL ROW LOGIC =================
-  if (col.column_name.startsWith("CR")) {
-    return formatAmount(value) ?? "-";
+  // ================= NUMERIC COLUMNS =================
+  if (
+    name.startsWith("cr") ||
+    name.startsWith("bc") ||
+    name.includes("amount") ||
+    name.includes("price") ||
+    name.includes("total") ||
+    name.includes("aed")
+  ) {
+    return formatAmount(value);
   }
 
-  if (col.column_name.startsWith("BC")) {
-    return formatAmount(value) ?? "-";
+  // ================= PAYMENT METHOD =================
+  if (name.includes("paymentmethod")) {
+    return value ? `**** ${value.slice(-4)}` : "-";
   }
 
-  if (col.column_name.toLowerCase().includes("aed")) {
-    return formatAmount(value) ?? "-";
-  }
-
-  if (col.column_name.toLowerCase().includes("paymentmethod")) {
-    return "**** " + (value || "").slice(-4);
-  }
-
-  if (col.column_name.toLowerCase().includes("monthly_amount_aed")) {
+  // ================= CUSTOM LABELS =================
+  if (name.includes("monthly_amount_aed")) {
     return "Monthly Amount (AED)";
   }
 
-  if (col.column_name.toLowerCase().includes("yearly_amount_aed")) {
+  if (name.includes("yearly_amount_aed")) {
     return "Yearly Amount (AED)";
   }
 
+  // ================= DEFAULT =================
   return value ?? "-";
 };
 
-
-
-// const handleReportTypeChange = async (type) => {
-//   if (type === reportType) return;
-
-//   resetFiltersState(); // ✅ ADD THIS
-
-//   setReportType(type);
-
-//   await loadReport(id, dateFilters, type);
-// };
 
 const handleReportTypeChange = async (type) => {
   if (type === reportType) return;
@@ -2089,6 +2142,12 @@ const yearlyVisibleColumns = useMemo(() => {
     .filter(Boolean);
 }, [columns, visibleColumnsState]);
 
+useEffect(() => {
+  setTempHideColumns(
+    yearlyVisibleColumns.map((c) => c.column_name)
+  );
+}, [yearlyVisibleColumns]);
+
 const yearlyDetailedColumns = useMemo(() => {
   if (!yearlyVisibleColumns?.length) return [];
 
@@ -2111,8 +2170,8 @@ const openColumnPopup = () => {
   setHidePopupColumn("__sno__");
 
   setTempHideColumns(
-    selectedColumns?.length
-      ? selectedColumns
+    yearlyVisibleColumns?.length
+      ? yearlyVisibleColumns.map((c) => c.column_name)
       : columns.map((c) => c.column_name)
   );
 
@@ -2741,6 +2800,8 @@ useEffect(() => {
             zIndex: 9999,
           }}
         >
+          {console.log("Rendering ShowHideColumnsPopup with columns:", yearlyVisibleColumns.map((c) => c.column_name))}
+          {console.log("Temp hide columns:", tempHideColumns)}
           <ShowHideColumnsPopup
             columns={columns}
             tempHideColumns={tempHideColumns}

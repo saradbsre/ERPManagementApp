@@ -88,33 +88,36 @@ const chartData = useMemo(() => {
             Top Expenses
           </h2>
           <p className="text-xs text-gray-400">
-            Provider wise spending analysis
+            Product wise spending analysis
           </p>
         </div>
 
         {/* DROPDOWN */}
        <select
-          className="bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm text-sm"
-          value={selectedProductType}
-          onChange={(e) => {
-            const value = e.target.value;
+  className="bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm text-sm"
+  value={selectedProductType}
+  onChange={(e) => {
+    const value = e.target.value;
+    setSelectedProductType(value);
+    fetchTopExpenses(value);
+  }}
+>
+  <option value="">All Product Types</option>
 
-            setSelectedProductType(value);
+  {productTypes.map((type) => {
+    const name = type.prdtype_name.trim();
 
-            fetchTopExpenses(value);
-          }}
-        >
-          <option value="">All Product Types</option>
-
-          {productTypes.map((type) => (
-            <option
-              key={type.prdtype_code}
-              value={type.prdtype_code}
-            >
-              {type.prdtype_name.trim()}
-            </option>
-          ))}
-        </select>
+    return (
+      <option
+        key={type.prdtype_code}
+        value={type.prdtype_code}
+        title={name} // Shows full name on hover (browser support varies)
+      >
+        {name.length > 25 ? `${name.slice(0, 25)}...` : name}
+      </option>
+    );
+  })}
+</select>
 
       </div>
 
