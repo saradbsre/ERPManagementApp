@@ -676,30 +676,30 @@ const fetchCustomizedColumns = async () => {
   }
 };
 
-useEffect(() => {
-let active = true;
+// useEffect(() => {
+// let active = true;
 
-const initSavedColumns = async () => {
-  const settings = await fetchCustomizedColumns();
-  if (!active) return;
+// const initSavedColumns = async () => {
+//   const settings = await fetchCustomizedColumns();
+//   if (!active) return;
 
-  setPinnedColumns(settings.pinnedColumns || []);
+//   setPinnedColumns(settings.pinnedColumns || []);
 
-  if ((settings.visibleColumns || []).length > 0) {
-    setSavedTableColumns(settings.visibleColumns);
-    setSelectedColumns(settings.visibleColumns);
-    setTableColumnMode("saved");
-  } else {
-    setTableColumnMode("default");
-  }
-};
+//   if ((settings.visibleColumns || []).length > 0) {
+//     setSavedTableColumns(settings.visibleColumns);
+//     setSelectedColumns(settings.visibleColumns);
+//     setTableColumnMode("saved");
+//   } else {
+//     setTableColumnMode("default");
+//   }
+// };
 
-initSavedColumns();
+// initSavedColumns();
 
-return () => {
-active = false;
-};
-}, [id, activeUserEmail]);
+// return () => {
+// active = false;
+// };
+// }, [id, activeUserEmail]);
 
 const addMasterValue = async (masterName, value) => { 
     try { 
@@ -956,16 +956,16 @@ useEffect(() => {
 
 }, []);
 
-useEffect(() => {
-  const init = async () => {
-    const res = await fetchCustomizedColumns();
+// useEffect(() => {
+//   const init = async () => {
+//     const res = await fetchCustomizedColumns();
 
-    setVisibleColumnsState(res?.visibleColumns || []);
-    setPinnedColumns(res?.pinnedColumns || []);
-  };
+//     setVisibleColumnsState(res?.visibleColumns || []);
+//     setPinnedColumns(res?.pinnedColumns || []);
+//   };
 
-  init();
-}, [id, activeUserEmail]);
+//   init();
+// }, [id, activeUserEmail]);
 
 const getVisibleColumns = () => {
   let cols = [...orderedColumns];
@@ -1651,13 +1651,8 @@ const loadModule = async (
   overrideDateFilters = dateFilters,
   appliedFilters = filters
 ) => {
-  setLoading(true);
-
-  const res = await fetchSections();
-  const mod = res.data.find(m => m.module_id == id);
-
-  if (mod) {
-    setModule(mod);
+  try {
+    setLoading(true);
 
     const payload = {
       filters: JSON.stringify(appliedFilters || []),
@@ -1669,43 +1664,56 @@ const loadModule = async (
       }),
     };
 
-    const dataRes = await getModuleData(
-      id,
-      activeUserEmail,
-      payload,
-      userRole
-    );
+    // Run API calls parallel instead of one by one
+    const [sectionsRes, dataRes, settings] = await Promise.all([
+      fetchSections(),
+      getModuleData(id, activeUserEmail, payload, userRole),
+      fetchCustomizedColumns(),
+    ]);
 
+    const mod = sectionsRes.data.find((m) => m.module_id == id);
+
+    if (!mod) {
+      setRows([]);
+      setColumns([]);
+      return;
+    }
+
+    setModule(mod);
     setRows(dataRes.data || []);
-    const cols = (mod?.columns || []).filter(c => c.is_active !== false);
 
-const settings = await fetchCustomizedColumns();
-const savedOrder = settings?.visibleColumns || [];
+    const cols = (mod?.columns || []).filter((c) => c.is_active !== false);
+    const savedOrder = settings?.visibleColumns || [];
 
-if (savedOrder.length > 0) {
-  const map = new Map(cols.map(c => [c.column_name, c]));
+    if (savedOrder.length > 0) {
+      const map = new Map(cols.map((c) => [c.column_name, c]));
 
-  const ordered = savedOrder
-    .map(name => map.get(name))
-    .filter(Boolean);
+      const ordered = savedOrder
+        .map((name) => map.get(name))
+        .filter(Boolean);
 
-  const remaining = cols.filter(
-    c => !savedOrder.includes(c.column_name)
-  );
+      const remaining = cols.filter(
+        (c) => !savedOrder.includes(c.column_name)
+      );
 
-  setColumns([...ordered, ...remaining]);
+      const finalColumns = [...ordered, ...remaining];
 
-  setVisibleColumnsState(savedOrder);
-  setSelectedColumns(savedOrder);
-  setSavedTableColumns(savedOrder);
-} else {
-  setColumns(orderColumnsByConfig(cols));
-}
+      setColumns(finalColumns);
+      setVisibleColumnsState(savedOrder);
+      setSelectedColumns(savedOrder);
+      setSavedTableColumns(savedOrder);
+      setTableColumnMode("custom");
+    } else {
+      setColumns(orderColumnsByConfig(cols));
+    }
+  } catch (err) {
+    console.error("Load module failed:", err);
+    setRows([]);
+    setColumns([]);
+  } finally {
+    setLoading(false);
   }
-
-  setLoading(false);
 };
-
 const isGenerated = rows.some(r => !!r.prf_num);
 //console.log("Is Generated row:", isGenerated);
 

@@ -17,10 +17,10 @@ import { formatAmount } from "../../utils/formatAmount";
 import CustomizeDrawer from "../tables/CustomizeDrawer";
 import TableFiltersDrawer from "../filters/TableFiltersDrawer";
 import { EyeIcon } from "@heroicons/react/24/outline";
-import { Funnel } from "lucide-react";
+
 import ShowHideColumnsPopup from "../tables/ShowHideColumnsPopup";
 import { createPortal } from "react-dom";
-
+import { Funnel, SearchX } from "lucide-react";
 export default function ReportTable() {
     const { id } = useParams();
     //console.log("ReportTable ID:", id);
@@ -2210,7 +2210,21 @@ useEffect(() => {
   init();
 }, [id, activeUserEmail]);
 
+            const NoRecordsRow = ({ colSpan }) => (
+  <tr>
+    <td colSpan={colSpan} className="p-0" style={{ padding: "20px 0px 0px 89px" }}>
+      <div className="h-[120px] flex flex-col items-left justify-left text-left bg-white">
+        
 
+        <div className="text-sm font-semibold text-gray-600">
+          No records found
+        </div>
+
+       
+      </div>
+    </td>
+  </tr>
+);
     return (
         <div className="h-full flex flex-col">
             
@@ -2617,20 +2631,16 @@ useEffect(() => {
 
       <tbody className="divide-y">
         {paginatedGroupedRows.length === 0 ? (
-          <tr>
-            <td
-              colSpan={yearlyDetailedColumns.length + 1}
-              className="px-6 py-12 text-left text-gray-500 font-medium"
-            >
-              No records found
-            </td>
-          </tr>
+         <NoRecordsRow colSpan={yearlyDetailedColumns.length + 1} />
         ) : (
           paginatedGroupedRows.map(([groupName, groupRows]) => {
             const groupTotal = buildTotalRow(
               groupRows,
               yearlyDetailedColumns
             );
+
+
+
 
             return (
               <React.Fragment key={groupName}>
@@ -2830,11 +2840,7 @@ useEffect(() => {
 </tr>
       </>
     ) : (
-      <tr>
-        <td colSpan={columns.length + 1} className="text-left py-10">
-          No records found
-        </td>
-      </tr>
+     <NoRecordsRow colSpan={columns.length + 1} />
     )}
   </tbody>
 

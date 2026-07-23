@@ -106,13 +106,13 @@ export const openPrintWindow = ({
               @page {
                 
                 @bottom-left {
-                  content: "User: ${UserNameFormatted} | Printed: ${printedDate}";
-                  font-size: 10px;
+                  content: "User: ${UserNameFormatted} | Printed: ${printedDate} | Designed by Abdulwahed Bin Shabib Group";
+                  font-size: 9px;
                   margin-bottom: 20mm;
                 }
                 @bottom-right {
                   content: "Page " counter(page) " of " counter(pages);
-                  font-size: 10px;
+                  font-size: 9px;
                   margin-bottom: 20mm;
                 }
               }
@@ -152,13 +152,13 @@ export const previewPrintContent = ({ content, userName = "kumar", title = "PRIN
               @page {
                 
                 @bottom-left {
-                  content: "User: ${userName} | Printed: ${printedDate}";
-                  font-size: 10px;
+                  content: "User: ${userName} | Printed: ${printedDate} | Designed by Abdulwahed Bin Shabib Group";
+                  font-size: 9px;
                   margin-bottom: 20mm;
                 }
                 @bottom-right {
                   content: "Page " counter(page) " of " counter(pages);
-                  font-size: 10px;
+                  font-size: 9px;
                   margin-bottom: 20mm;
                 }
               }
