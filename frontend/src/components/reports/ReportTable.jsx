@@ -216,11 +216,8 @@ const getYearRange = (type = "all") => {
 const compapny = async () => {
   try {
     const res = await getMasterValues("company");
-
     const companyData = res.data?.data || [];
-
     const formatted = companyData.map((item) => item.value);
-
     setCompany(formatted);
   } catch (err) {
     console.error(err);
@@ -1095,18 +1092,28 @@ const generateFilterHtml = () => {
       </div>
 
       ${appliedFilters
-        .map(
-          (f) => `
+        .map((f) => {
+          const master = masterDataMap[f.master];
+
+          const displayValues = (f.values || []).map((code) => {
+            if (!master?.data) return code;
+
+            const match = master.data.find(
+              (item) => item.key === code
+            );
+
+            return match ? match.value : code;
+          });
+
+          return `
             <div style="margin-bottom:3px;">
               <span style="font-weight:bold;">
                 ${f.master.charAt(0).toUpperCase() + f.master.slice(1)}:
               </span>
-              ${(f.values || [])
-                .map((v) => v.value || v)
-                .join(", ")}
+              ${displayValues.join(", ")}
             </div>
-          `
-        )
+          `;
+        })
         .join("")}
     </div>
   `;
@@ -2240,7 +2247,7 @@ const fetchCustomizedColumns = async () => {
     );
 
     const savedColumns = res?.data?.data?.columns;
-    console.log("Fetched customized columns:", savedColumns);
+    
     if (Array.isArray(savedColumns)) {
       return { visibleColumns: savedColumns, pinnedColumns: [] };
     }
@@ -2336,13 +2343,13 @@ useEffect(() => {
                 PDF
               </PermissionButton>
 
-              <button
+              {/* <button
                 onClick={() => setShowCustomizeDrawer(true)}
                 className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white 
                           hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition"
               >
                 Customize
-              </button>
+              </button> */}
 
               <button
               onClick={() => window.location.reload()}
