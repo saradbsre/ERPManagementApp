@@ -177,9 +177,8 @@ export default function DynamicTablePage() {
     const [selectedCompany, setSelectedCompany] = useState("");
     const [printLogo, setPrintLogo] = useState(null);
     const [showReportHeaderModal, setShowReportHeaderModal] = useState(false);
-const [reportActionType, setReportActionType] = useState(null);
-
-const [customPrintHeader] = useState("ABDULWAHED BIN SHABIB GROUP");
+    const [reportActionType, setReportActionType] = useState(null);
+    const [customPrintHeader] = useState("ABDULWAHED BIN SHABIB GROUP");
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email;
     const activeUserName = activeUser?.name;
@@ -191,7 +190,7 @@ const [customPrintHeader] = useState("ABDULWAHED BIN SHABIB GROUP");
     const [autoFilledFields, setAutoFilledFields] = useState({});
     const [planManuallyChanged, setPlanManuallyChanged] = useState(false);
     const [masters, setMasters] = useState([]);
-    const [showTotals, setShowTotals] = useState(false);
+    const [showTotals, setShowTotals] = useState(true);
     const [groupBy, setGroupBy] = useState([]);
     // const [groupBy, setGroupBy] = useState({
     //   key: null,
@@ -241,6 +240,7 @@ const [customPrintHeader] = useState("ABDULWAHED BIN SHABIB GROUP");
     const [sortConfig, setSortConfig] = useState([]);
     const [groupByColumn, setGroupByColumn] = useState(null);
    // const [columnOrder, setColumnOrder] = useState(visibleColumns.map(c => c.column_name));
+    const [printOption, setPrintOption] = useState("all"); // "all" | "prf"
 
    
     const orderColumnsByConfig = (cols = []) => {
@@ -397,52 +397,52 @@ function getCurrentMonth() {
   };
 }
 
-const handleDragEnd = async (event) => {
-  const { active, over } = event;
+// const handleDragEnd = async (event) => {
+//   const { active, over } = event;
 
-  if (!over || active.id === over.id) return;
+//   if (!over || active.id === over.id) return;
 
-  const oldIndex = columns.findIndex(
-    (c) => c.column_name === active.id
-  );
+//   const oldIndex = columns.findIndex(
+//     (c) => c.column_name === active.id
+//   );
 
-  const newIndex = columns.findIndex(
-    (c) => c.column_name === over.id
-  );
+//   const newIndex = columns.findIndex(
+//     (c) => c.column_name === over.id
+//   );
 
-  const reordered = arrayMove(columns, oldIndex, newIndex);
+//   const reordered = arrayMove(columns, oldIndex, newIndex);
 
-  // Update UI immediately
-  setColumns(reordered);
+//   // Update UI immediately
+//   setColumns(reordered);
 
-  // Save reordered visible columns
-  const reorderedVisible = reordered
-    .filter((col) => selectedColumns.includes(col.column_name))
-    .map((col) => col.column_name);
+//   // Save reordered visible columns
+//   const reorderedVisible = reordered
+//     .filter((col) => selectedColumns.includes(col.column_name))
+//     .map((col) => col.column_name);
 
-  setVisibleColumnsState(reorderedVisible);
-  setSelectedColumns(reorderedVisible);
-  setSavedTableColumns(reorderedVisible);
+//   setVisibleColumnsState(reorderedVisible);
+//   setSelectedColumns(reorderedVisible);
+//   setSavedTableColumns(reorderedVisible);
 
-  // Keep selection stable
-  setTempSelectedColumns((prev) =>
-    reorderedVisible.filter((name) => prev.includes(name))
-  );
+//   // Keep selection stable
+//   setTempSelectedColumns((prev) =>
+//     reorderedVisible.filter((name) => prev.includes(name))
+//   );
 
-  // Save to DB
-  try {
-    await upsertCustomizedColumns(
-      currentModule?.module_id,
-      activeUserEmail,
-      {
-        visibleColumns: reorderedVisible,
-        pinnedColumns,
-      }
-    );
-  } catch (err) {
-    console.error("Failed to save column order:", err);
-  }
-};
+//   // Save to DB
+//   try {
+//     await upsertCustomizedColumns(
+//       currentModule?.module_id,
+//       activeUserEmail,
+//       {
+//         visibleColumns: reorderedVisible,
+//         pinnedColumns,
+//       }
+//     );
+//   } catch (err) {
+//     console.error("Failed to save column order:", err);
+//   }
+// };
 
 
 
@@ -4353,10 +4353,16 @@ const orderedVisibleColumns = useMemo(() => {
 
 
 const printableGroupedRows = React.useMemo(() => {
-  const rows = sortedAllRows.filter(
-  (row) => row.requires_prf_form === true && row.prf_num
-);
- // console.log("Printable grouped rows (filtered):", rows);
+  const rows = sortedAllRows.filter((row) => {
+    // Print all rows
+    if (printOption === "all") {
+      return true;
+    }
+
+    // Only PRF Required
+    return row.requires_prf_form === true && row.prf_num;
+  });
+
   if (!groupBy?.key) {
     return [
       {
@@ -4387,7 +4393,7 @@ const printableGroupedRows = React.useMemo(() => {
     group,
     rows,
   }));
-}, [sortedAllRows, groupBy]);
+}, [sortedAllRows, groupBy, printOption]);
 
 
 
@@ -4927,10 +4933,10 @@ const handleRequiresPrfChange = async (row, checked) => {
   user={activeUser}
   permission="print"
  onClick={() => {
-  if (getReportRowCount(printableGroupedRows) === 0) {
-    showNoRecordsPopup();
-    return;
-  }
+  // if (getReportRowCount(printableGroupedRows) === 0) {
+  //   showNoRecordsPopup();
+  //   return;
+  // }
 
   setReportActionType("print");
   setShowReportHeaderModal(true);
@@ -4946,10 +4952,10 @@ const handleRequiresPrfChange = async (row, checked) => {
     permission="export"
     // onClick={handleExcel}
    onClick={() => {
-  if (getReportRowCount(printableGroupedRows) === 0) {
-    showNoRecordsPopup();
-    return;
-  }
+  // if (getReportRowCount(printableGroupedRows) === 0) {
+  //   showNoRecordsPopup();
+  //   return;
+  // }
 
   setReportActionType("excel");
   setShowReportHeaderModal(true);
@@ -4965,10 +4971,10 @@ const handleRequiresPrfChange = async (row, checked) => {
     permission="export"
     // onClick={handlePdf}
  onClick={() => {
-  if (getReportRowCount(printableGroupedRows) === 0) {
-    showNoRecordsPopup();
-    return;
-  }
+  // if (getReportRowCount(printableGroupedRows) === 0) {
+  //   showNoRecordsPopup();
+  //   return;
+  // }
 
   setReportActionType("pdf");
   setShowReportHeaderModal(true);
@@ -7464,6 +7470,37 @@ onDrop={() => handleDrop(col.column_name)}
       className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
     />
   </div>
+<div>
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+    Print Option
+  </label>
+
+  <div className="flex items-center gap-6">
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={printOption === "all"}
+        onChange={() => setPrintOption("all")}
+        className="h-4 w-4"
+      />
+      <span className="text-sm text-gray-700">
+        Print All Rows
+      </span>
+    </label>
+
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={printOption === "prf"}
+        onChange={() => setPrintOption("prf")}
+        className="h-4 w-4"
+      />
+      <span className="text-sm text-gray-700">
+        Only PRF Required
+      </span>
+    </label>
+  </div>
+</div>
 
 </div>
 
@@ -7482,25 +7519,37 @@ onDrop={() => handleDrop(col.column_name)}
 
         <button
           onClick={() => {
-          localStorage.setItem("print_custom_header", "ABDULWAHED BIN SHABIB GROUP");
-localStorage.setItem("print_module_name", printModuleName || "");
+          localStorage.setItem(
+            "print_custom_header",
+            "ABDULWAHED BIN SHABIB GROUP"
+          );
 
-            setShowReportHeaderModal(false);
+          localStorage.setItem(
+            "print_module_name",
+            printModuleName || ""
+          );
 
-            if (reportActionType === "print") {
-              handlePrint();
-            }
+          localStorage.setItem(
+            "print_option",
+            printOption
+          );
 
-            if (reportActionType === "excel") {
-              handleExcel();
-            }
+          setShowReportHeaderModal(false);
 
-            if (reportActionType === "pdf") {
-              handlePdf();
-            }
+          if (reportActionType === "print") {
+            handlePrint();
+          }
 
-            setReportActionType(null);
-          }}
+          if (reportActionType === "excel") {
+            handleExcel();
+          }
+
+          if (reportActionType === "pdf") {
+            handlePdf();
+          }
+
+          setReportActionType(null);
+        }}
           className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700"
         >
           Continue

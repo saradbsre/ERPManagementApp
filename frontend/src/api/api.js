@@ -425,11 +425,12 @@ export const getApprovalWorkflow = () => {
   return API.get("/approval-workflow");
 };
 
-export const getYearlyExpiryReport = (params) => {
-   return API.get("/reports/R011", {
-      params,
-    });
-  };
+export const getYearlyExpiryReport = (reportId, params) => {
+  return API.get(`/reports/${reportId}`, {
+    params,
+  });
+};
+
 
 
 

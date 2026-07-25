@@ -263,9 +263,11 @@ export const exportToExcel = async (
 
 export const reportToExcel = async (
   data,
+  printCompany,
+  printLable,
   columns,
   moduleName = "Report",
-  groupBy = "",
+  isR011 = false,
   allColumns = []
 ) => {
   if (!Array.isArray(data) || data.length === 0) return;
@@ -273,13 +275,21 @@ export const reportToExcel = async (
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Report");
 
-  // ================= TITLE =================
+  // ================= COMPANY TITLE =================
   worksheet.mergeCells(1, 1, 1, columns.length);
   const titleCell = worksheet.getCell(1, 1);
 
-  titleCell.value = moduleName;
+  titleCell.value = printCompany;
   titleCell.font = { bold: true, size: 14 };
   titleCell.alignment = { horizontal: "center" };
+
+  // ================= SUB HEADER =================
+  worksheet.mergeCells(2, 1, 2, columns.length);
+  const subTitleCell = worksheet.getCell(2, 1);
+
+  subTitleCell.value = printLable;
+  subTitleCell.font = { bold: true, size: 11 };
+  subTitleCell.alignment = { horizontal: "center" };
 
   worksheet.addRow([]);
 
@@ -308,6 +318,7 @@ export const reportToExcel = async (
 
   const parseValue = (val) => {
     if (val === "-" || val === "" || val == null) return 0;
+
     const num = Number(String(val).replace(/,/g, ""));
     return isNaN(num) ? 0 : num;
   };
@@ -320,6 +331,7 @@ export const reportToExcel = async (
   const labelIndex =
     firstAmountIndex > 0 ? firstAmountIndex - 1 : 0;
 
+
   // ================= TOTAL TRACKERS =================
   let grandTotals = {};
   let groupTotals = {};
@@ -330,112 +342,285 @@ export const reportToExcel = async (
     groupTotals[c] = 0;
   });
 
+
   const writeTotalRow = (label, totals) => {
+
     const row = columns.map((col, i) => {
+
       if (i === labelIndex) return label;
+
       if (i < labelIndex) return "";
-      return isNumericCol(col) ? (totals[col] || 0) : "";
+
+      return isNumericCol(col)
+        ? (totals[col] || 0)
+        : "";
+
     });
+
 
     const r = worksheet.addRow(row);
 
     r.font = { bold: true };
+
     r.fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: label === "GRAND TOTAL" ? "D9E1F2" : "E5E7EB" }
+      fgColor: {
+        argb:
+          label === "GRAND TOTAL"
+            ? "D9E1F2"
+            : "E5E7EB"
+      }
     };
 
+
     r.eachCell((cell, colIndex) => {
+
       const colName = columns[colIndex - 1];
+
       if (isNumericCol(colName)) {
-        cell.alignment = { horizontal: "right" };
+        cell.alignment = {
+          horizontal: "right"
+        };
       }
+
     });
+
   };
+
 
   // ================= DATA =================
   data.forEach((row) => {
-    // ===== GROUP HEADER =====
-    if (row.__type === "group_header") {
+
+
+    // ================= GROUP HEADER =================
+    if (!isR011 && row.__type === "group_header") {
+
+
       if (currentGroup !== null) {
-        writeTotalRow("TOTAL", groupTotals);
+        writeTotalRow(
+          "TOTAL",
+          groupTotals
+        );
       }
 
+
       groupTotals = {};
-      columns.forEach((c) => (groupTotals[c] = 0));
+
+      columns.forEach((c) => {
+        groupTotals[c] = 0;
+      });
+
 
       currentGroup = row.Group;
 
-      const r = worksheet.addRow([row.Group]);
-      worksheet.mergeCells(r.number, 1, r.number, columns.length);
-      r.font = { bold: true };
+
+      const r = worksheet.addRow([
+        row.Group
+      ]);
+
+
+      worksheet.mergeCells(
+        r.number,
+        1,
+        r.number,
+        columns.length
+      );
+
+
+      r.font = {
+        bold: true
+      };
+
+
       r.fill = {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: "E5E7EB" }
+        fgColor: {
+          argb: "E5E7EB"
+        }
       };
 
+
       return;
     }
 
-    if (row.__type === "group_footer") {
+
+
+    // ================= GROUP FOOTER =================
+    if (!isR011 && row.__type === "group_footer") {
+
       worksheet.addRow([]);
+
       return;
     }
 
-    // ===== NORMAL ROW =====
+
+
+    // Skip grouping rows completely for R011
+    if (
+      isR011 &&
+      (
+        row.__type === "group_header" ||
+        row.__type === "group_footer"
+      )
+    ) {
+      return;
+    }
+
+
+
+    // ================= NORMAL ROW =================
+
     const excelRow = columns.map((col) => {
+
       const key = getKey(col);
-      const value = row[col] ?? row[key] ?? "";
+
+      const value =
+        row[col] ??
+        row[key] ??
+        "";
+
 
       if (isNumericCol(col)) {
+
         const num = parseValue(value);
-        groupTotals[col] += num;
+
+
+        if (!isR011) {
+          groupTotals[col] += num;
+        }
+
+
         grandTotals[col] += num;
+
       }
 
+
       return value;
+
     });
+
+
 
     const r = worksheet.addRow(excelRow);
 
+
+
     r.eachCell((cell, colIndex) => {
+
       const colName = columns[colIndex - 1];
+
+
       if (isNumericCol(colName)) {
-        cell.alignment = { horizontal: "right" };
+
+        cell.alignment = {
+          horizontal: "right"
+        };
+
       }
+
     });
+
+
   });
 
-  // ================= LAST GROUP TOTAL =================
-  if (currentGroup !== null) {
-    writeTotalRow("TOTAL", groupTotals);
+
+
+  // ================= TOTALS =================
+
+  if (isR011) {
+
+    // Only one total for R011
+    writeTotalRow(
+      "TOTAL",
+      grandTotals
+    );
+
+
+  } else {
+
+
+    // Last group total
+    if (currentGroup !== null) {
+
+      writeTotalRow(
+        "TOTAL",
+        groupTotals
+      );
+
+    }
+
+
+    // Grand total
+    writeTotalRow(
+      "GRAND TOTAL",
+      grandTotals
+    );
+
   }
 
-  // ================= GRAND TOTAL =================
-  writeTotalRow("GRAND TOTAL", grandTotals);
+
 
   // ================= AUTO COLUMN WIDTH =================
+
   worksheet.columns.forEach((col) => {
+
     let maxLength = 10;
 
-    col.eachCell({ includeEmpty: true }, (cell) => {
-      const val = cell.value ? cell.value.toString() : "";
-      if (!val.startsWith("GROUP")) {
-        maxLength = Math.max(maxLength, val.length);
-      }
-    });
 
-    col.width = Math.min(Math.max(maxLength + 2, 10), 25);
+    col.eachCell(
+      { includeEmpty: true },
+      (cell) => {
+
+        const val =
+          cell.value
+            ? cell.value.toString()
+            : "";
+
+
+        if (!val.startsWith("GROUP")) {
+
+          maxLength = Math.max(
+            maxLength,
+            val.length
+          );
+
+        }
+
+      }
+    );
+
+
+    col.width =
+      Math.min(
+        Math.max(maxLength + 2, 10),
+        25
+      );
+
   });
+
+
 
   // ================= EXPORT =================
-  const buffer = await workbook.xlsx.writeBuffer();
 
-  const file = new Blob([buffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-  });
+  const buffer =
+    await workbook.xlsx.writeBuffer();
 
-  saveAs(file, `${moduleName}.xlsx`);
+
+
+  const file = new Blob(
+    [buffer],
+    {
+      type:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    }
+  );
+
+
+  saveAs(
+    file,
+    `${moduleName}.xlsx`
+  );
+
 };

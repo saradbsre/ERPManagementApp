@@ -17,10 +17,12 @@ import { formatAmount } from "../../utils/formatAmount";
 import CustomizeDrawer from "../tables/CustomizeDrawer";
 import TableFiltersDrawer from "../filters/TableFiltersDrawer";
 import { EyeIcon } from "@heroicons/react/24/outline";
-
 import ShowHideColumnsPopup from "../tables/ShowHideColumnsPopup";
 import { createPortal } from "react-dom";
 import { Funnel, SearchX } from "lucide-react";
+import html2pdf from "html2pdf.js";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 export default function ReportTable() {
     const { id } = useParams();
     //console.log("ReportTable ID:", id);
@@ -83,9 +85,11 @@ const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 const [columnOrder, setColumnOrder] = useState([]);
 const snoRef = useRef(null);
 const dragIndexRef = useRef(null);
+//console.log("savedTableColumns:", visibleColumnsState);
 const isYearlyReport =
-  String(report?.report_id || "").toUpperCase() === "R011";
-    const isSummary = report?.is_detailed === true;
+  ["R011", "R012"].includes(String(report?.report_id || "").toUpperCase());
+//console.log("isYearlyReport:", isYearlyReport, "report_id:", report?.report_id);
+const isSummary = report?.is_detailed === true;
    
 const allowDetailed =
   report?.is_detailed === true || isYearlyReport;
@@ -95,6 +99,21 @@ const allowDetailed =
     
     const equivalentReportId = report?.eqnt_report;
 const showEquivalent = report?.is_equivalent === true && equivalentReportId;
+
+useEffect(() => {
+  if (!report?.report_id) return;
+
+  const reportId = String(report.report_id).toUpperCase();
+
+  //console.log("Current Report ID:", reportId);
+
+  if (["R011", "R012"].includes(reportId)) {
+    loadYearlyExpiryReport();
+  } else {
+    loadReport(reportId);
+  }
+
+}, [report?.report_id]);
 
     useEffect(() => {
       const handleResize = () => {
@@ -290,78 +309,6 @@ const getCurrentMonthRange = () => {
 
 
 
-const handleExcel = async () => {
-  console.log("Exporting to Excel...");
-
-  const isDetailed =
-    reportType === "detailed" && report?.is_detailed === true;
-
-  const cols = isDetailed
-    ? visibleDetailedColumns
-    : columns;
-
-  const moduleName = report?.description || "Report";
-
-  const groups = isDetailed ? fullGroupedRows || [] : null;
-
-  const exportRows = []; // ✅ NEW SAFE ARRAY
-  let serialNo = 1;
-
-  // ================= SUMMARY =================
-  if (!isDetailed) {
-    (rows || []).forEach((row) => {
-      const newRow = {
-        SNo: serialNo++
-      };
-
-      cols.forEach((col) => {
-        newRow[col.display_name] = getCellValue(row, col);
-      });
-
-      exportRows.push(newRow); // ✅ FIXED
-    });
-  }
-
-  // ================= DETAILED =================
-  else {
-    groups.forEach(([groupName, groupRows]) => {
-      exportRows.push({
-        SNo: "",
-        Group: groupName,
-        __type: "group_header"
-      });
-
-      groupRows.forEach((row) => {
-        const newRow = {
-          SNo: serialNo++,
-          Group: groupName
-        };
-
-        cols.forEach((col) => {
-          newRow[col.display_name] = getCellValue(row, col);
-        });
-
-        exportRows.push(newRow);
-      });
-
-      exportRows.push({
-        SNo: "",
-        Group: "",
-        __type: "group_footer"
-      });
-    });
-  }
-
-  console.log("Final Excel rows:", exportRows);
-
-  reportToExcel(
-    exportRows,
-    cols.map((c) => c.display_name),
-    moduleName,
-    groupBy,
-    columns
-  );
-};
 
 
   
@@ -383,7 +330,10 @@ useEffect(() => {
 
     if (!id) return;
 
-    if (isYearlyReport) {
+    const reportId = String(id).toUpperCase();
+    const isYearly = reportId === "R011" || reportId === "R012";
+
+    if (isYearly) {
       const allYearRange = getYearRange("all");
 
       setSearch("");
@@ -407,11 +357,12 @@ useEffect(() => {
       return;
     }
 
-    await loadReport(id, dateFilters);
+    await loadReport(reportId, dateFilters);
   };
 
   initReport();
-}, [id, isYearlyReport]);
+}, [id]);
+
 
 const handleSearch = async (appliedFilters) => {
   try {
@@ -574,6 +525,881 @@ const handleClear = async () => {
       return () => window.removeEventListener("click", closeMenu);
     }, []);
 
+
+
+
+
+// const handleQuickDateChange = (value) => {
+//   setActiveDateFilter(value);
+
+//   const range = getDateRange(value);
+
+//   if (range) {
+//     setDateFilters(range);
+//   }
+// };
+
+const handleQuickDateChange = async (value) => {
+  setActiveDateFilter(value);
+
+  if (isYearlyReport) {
+    const range = getYearRange(value || "all");
+
+    setYearFilter(value || "");
+    setDateFilters(range);
+    setPage(1);
+
+    await loadYearlyExpiryReport({
+      selectedYearFilter: value || "all",
+      selectedReportType: reportType,
+      customDateFilters: range,
+      customFilters: filters,
+    });
+
+    return;
+  }
+
+  const range = getDateRange(value);
+
+  if (range) {
+    setDateFilters(range);
+  }
+};
+
+const normalizeKeys = (row) => {
+  const newRow = {};
+
+  Object.keys(row).forEach((k) => {
+    newRow[k.toLowerCase()] = row[k];
+  });
+
+  return newRow;
+};
+
+
+const buildDynamicColumns = (data = []) => {
+  if (!data.length) return [];
+
+  const firstRow = data[0];
+
+  const baseKeys = Object.keys(firstRow).filter(
+    key =>
+      key !== "curr_code" &&
+      key !== "total_amount" &&          // ❌ REMOVE
+      key !== "total_amount_aed" &&
+      key !== "total_amount_aed".toLowerCase() &&
+      !key.toLowerCase().includes("total_amount") &&
+      !key.startsWith("amount_") &&
+      key !== "monthly_amount_aed" &&
+      key !== "yearly_amount_aed"
+  );
+const yearlyDisplayNames = {
+  expiry_year: "Year",
+  date: "Invoice Date",
+  expiry_date: "Expiry Date",
+  invoice_number: "Invoice No",
+  com_code: "Company",
+  vend_code: "Vendor",
+  prd_code: "Product",
+  prdtype_code: "Product Type",
+  plan_code: "Plan",
+  dep_code: "Department",
+  dv_code: "Cost Center",
+  billcycle_code: "Billing Cycle",
+  curr_code: "Currency",
+  amount: "Amount",
+  vat_amount: "VAT Amount",
+  total_amount: "Total Amount",
+  total_amount_aed: "Total Amount AED",
+  prf_num: "PRF No",
+  remarks: "Remarks",
+};
+  const normalCols = baseKeys.map((key) => ({
+    column_name: key,
+   display_name: yearlyDisplayNames[key] || displayNames?.[key] || key
+  }));
+
+  const currencies = Array.from(
+    new Set(
+      data
+        .map(r => r.curr_code?.trim().toUpperCase())
+        .filter(Boolean)
+    )
+  );
+
+  const currencyCols = currencies.map(curr => ({
+    column_name: `amount_${curr}`,
+    display_name: `Amount (${curr})`
+  }));
+
+  // ✅ ONLY AED TOTAL
+  const totalCols = [];
+
+  if (
+    firstRow.hasOwnProperty("total_amount_aed") ||
+    firstRow.hasOwnProperty("Total_Amount_AED")
+  ) {
+    totalCols.push({
+      column_name: "total_amount_aed",
+      display_name: isYearlyReport
+  ? "Total Amount AED"
+  : displayNames?.total_amount_aed || "Total Amount (AED)"
+    });
+  }
+
+  if (
+    firstRow.hasOwnProperty("monthly_amount_aed") ||
+    firstRow.hasOwnProperty("Monthly_Amount_AED")
+  ) {
+    totalCols.push({
+      column_name: "monthly_amount_aed",
+      display_name: displayNames?.monthly_amount_aed || "Monthly Amount (AED)"
+    });
+  }
+
+  if (
+    firstRow.hasOwnProperty("yearly_amount_aed") ||
+    firstRow.hasOwnProperty("Yearly_Amount_AED")
+  ) {
+    totalCols.push({
+      column_name: "yearly_amount_aed",
+      display_name: displayNames?.yearly_amount_aed || "Yearly Amount (AED)"
+    });
+  }
+
+  return [...normalCols, ...currencyCols, ...totalCols];
+};
+
+const transformCurrencyRows = (data = []) => {
+  const currencies = Array.from(
+    new Set(
+      data
+        .map(r => r.curr_code?.trim().toUpperCase())
+        .filter(Boolean)
+    )
+  );
+
+  return data.map(row => {
+    const newRow = { ...row };
+
+    // ❌ remove unwanted column completely
+    delete newRow.total_amount;
+
+    const rowCurr = row.curr_code?.trim().toUpperCase();
+
+    currencies.forEach(curr => {
+      newRow[`amount_${curr}`] =
+        rowCurr === curr ? (row.total_amount ?? 0) : "-";
+    });
+
+    return newRow;
+  });
+};
+
+const getCellValue = (row, col, isTotalRow = false) => {
+  const value = row[col.column_name];
+  const name = (col.column_name || "").toLowerCase();
+
+  // ================= TOTAL ROW =================
+  if (isTotalRow) {
+    if (
+      name.startsWith("cr") ||
+      name.startsWith("bc") ||
+      name.includes("amount") ||
+      name.includes("price") ||
+      name.includes("total") ||
+      name.includes("aed")
+    ) {
+      return formatAmount(value);
+    }
+
+    // Don't mask payment method in total row
+    if (name.includes("paymentmethod")) {
+      return value ?? "-";
+    }
+
+    return value ?? "-";
+  }
+
+  // ================= DATE =================
+  if (
+    name.includes("date") ||
+    name.includes("podate") ||
+    name.includes("start") ||
+    name.includes("end")
+  ) {
+    return formatDate(value) ?? "-";
+  }
+
+  // ================= NUMERIC COLUMNS =================
+  if (
+    name.startsWith("cr") ||
+    name.startsWith("bc") ||
+    name.includes("amount") ||
+    name.includes("price") ||
+    name.includes("total") ||
+    name.includes("aed")
+  ) {
+    return formatAmount(value);
+  }
+
+  // ================= PAYMENT METHOD =================
+  if (name.includes("paymentmethod")) {
+    return value ? `**** ${value.slice(-4)}` : "-";
+  }
+
+  // ================= CUSTOM LABELS =================
+  if (name.includes("monthly_amount_aed")) {
+    return "Monthly Amount (AED)";
+  }
+
+  if (name.includes("yearly_amount_aed")) {
+    return "Yearly Amount (AED)";
+  }
+
+  // ================= DEFAULT =================
+  return value ?? "-";
+};
+
+
+const handleReportTypeChange = async (type) => {
+  if (type === reportType) return;
+
+  setReportType(type);
+  setPage(1);
+
+  if (isYearlyReport) {
+    await loadYearlyExpiryReport({
+      selectedYearFilter: activeDateFilter || yearFilter || "currentYear",
+      selectedReportType: type, // important
+      customDateFilters: dateFilters,
+      customFilters: filters,
+    });
+
+    return;
+  }
+
+  await loadReport(id, dateFilters, type);
+};
+
+const loadYearlyExpiryReport = async ({
+  selectedYearFilter = yearFilter,
+  selectedReportType = reportType,
+  customDateFilters = null,
+  customFilters = filters,
+} = {}) => {
+  try {
+    setLoading(true);
+const reportId = report.report_id === "R012" ? "R012" : "R011";
+
+const isAll = report.report_id === "R012";
+//console.log("report",report)
+const params = {
+  activeUserEmail,
+  reportType: selectedReportType,
+  yearFilter: selectedYearFilter,
+  search,
+  filters: JSON.stringify(customFilters || []),
+  isAll: isAll ? "all" : "",
+};
+ 
+
+    if (customDateFilters) {
+      params.dateFilters = JSON.stringify({
+        date: {
+          startDate: customDateFilters.startDate,
+          endDate: customDateFilters.endDate,
+        },
+      });
+    }
+
+    const res = await getYearlyExpiryReport(reportId, params);
+
+    let data = res.data?.rows || [];
+    data = data.map(normalizeKeys);
+
+    setRows(data);
+
+    // =========================
+    // YEARLY DETAILED
+    // Use backend module_columns from module_id = 12
+    // =========================
+    if (selectedReportType === "detailed") {
+      const apiColumns = res.data?.columns || [];
+
+      const activeColumns = apiColumns.filter(
+        (c) => c.is_active !== false
+      );
+
+      setColumns(activeColumns);
+
+      const defaultVisible = activeColumns.map((c) => c.column_name);
+      setSelectedColumns(defaultVisible);
+    }
+
+    // =========================
+    // YEARLY SUMMARY
+    // Build Year + Total Amount AED columns
+    // =========================
+    else {
+      const dynamicCols = buildDynamicColumns(data);
+
+      setColumns(dynamicCols);
+
+      const defaultVisible = dynamicCols.map((c) => c.column_name);
+      setSelectedColumns(defaultVisible);
+    }
+
+    if (res.data?.startDate && res.data?.endDate) {
+      setDateFilters({
+        startDate: res.data.startDate,
+        endDate: res.data.endDate,
+      });
+    }
+
+    setPage(1);
+  } catch (err) {
+    console.error("Yearly expiry report failed:", err);
+    setRows([]);
+    setColumns([]);
+  } finally {
+    setLoading(false);
+  }
+};
+const loadReport = async (reportId, overrideDateFilters = dateFilters, type = reportType) => {
+  try {
+    setLoading(true);
+
+    const payload = {
+      filters: JSON.stringify(filters || []),
+      dateFilters: JSON.stringify({
+        date: {
+          startDate: overrideDateFilters.startDate,
+          endDate: overrideDateFilters.endDate,
+        },
+      }),
+      reportType: type,
+    };
+
+    const res = await getReportData(reportId, activeUserEmail, payload);
+
+    const data = (res.data || []).map(normalizeKeys);
+
+    // ❗ NO MASTER MAPPING ANYMORE
+
+    const transformed = transformCurrencyRows(data);
+
+    setRows(transformed);
+
+    const dynamicCols = buildDynamicColumns(transformed);
+    setColumns(dynamicCols);
+    setColumns(dynamicCols);
+
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// const applyDateFilter = async () => {
+//   try {
+//     setLoading(true);
+//     setPage(1);
+
+//     const reportId = report?.report_id || id;
+
+//     await loadReport(
+//       reportId,
+//       dateFilters,
+//       reportType
+//     );
+
+//   } catch (err) {
+//     console.error(err);
+//   } finally {
+//     setLoading(false);
+//   }
+// };
+
+
+const applyDateFilter = async () => {
+  try {
+    setLoading(true);
+    setPage(1);
+
+    if (isYearlyReport) {
+      setYearFilter("");
+      setActiveDateFilter("");
+
+      await loadYearlyExpiryReport({
+        selectedYearFilter: "",
+        selectedReportType: reportType,
+        customDateFilters: dateFilters,
+      });
+
+      return;
+    }
+
+    const reportId = report?.report_id || id;
+
+    await loadReport(
+      reportId,
+      dateFilters,
+      reportType
+    );
+
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+const filteredRows = useMemo(() => {
+  if (!search) return rows;
+
+  const keyword = search.toLowerCase();
+
+  return rows.filter((row) =>
+    Object.values(row).some((val) =>
+      String(val || "").toLowerCase().includes(keyword)
+    )
+  );
+}, [rows, search]);
+
+
+const summaryRows = filteredRows;
+
+const indexedRows = useMemo(() => {
+  return filteredRows.map((row, index) => ({
+    ...row,
+    _globalSn: index + 1,
+    _group: row[groupBy] || "Unknown"
+  }));
+}, [filteredRows, groupBy]);
+
+const groupedRows = useMemo(() => {
+  if (!report?.is_detailed || !groupBy) return [];
+
+  return Object.entries(
+    indexedRows.reduce((acc, row) => {
+      const key = row[groupBy] || "Unknown";
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(row);
+      return acc;
+    }, {})
+  );
+}, [indexedRows, groupBy, report]);
+
+
+
+
+
+const detailedFlatRows = useMemo(() => {
+  if (reportType !== "detailed") return [];
+
+  return filteredRows.map((row) => ({
+    ...row,
+    _group: row[groupBy] || "Unknown",
+  }));
+}, [filteredRows, groupBy, reportType]);
+
+const paginatedRows = filteredRows.slice(
+  (page - 1) * pageSize,
+  page * pageSize
+);
+
+const paginatedDetailedRows = useMemo(() => {
+  return indexedRows.slice(
+    (page - 1) * pageSize,
+    page * pageSize
+  );
+}, [indexedRows, page]);
+
+const fullGroupedRows = useMemo(() => {
+  if (reportType !== "detailed") return [];
+
+  return Object.entries(
+    filteredRows.reduce((acc, row) => {
+      const key = row[groupBy] || "Unknown";
+
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(row);
+
+      return acc;
+    }, {})
+  );
+}, [filteredRows, groupBy, reportType]);
+
+// const paginatedGroupedRows = useMemo(() => {
+//   if (reportType !== "detailed") return [];
+
+//   const group = fullGroupedRows[page - 1];
+
+//   if (!group) return [];
+
+//   const [groupName, rows] = group;
+
+//   return [[
+//     groupName,
+//     rows.map((row, idx) => ({
+//       ...row,
+//       _sn: idx + 1
+//     }))
+//   ]];
+// }, [fullGroupedRows, page, reportType]);
+
+// const totalPages =
+//   reportType === "detailed"
+//     ? fullGroupedRows.length
+//     : Math.ceil(filteredRows.length / pageSize);
+const isRightAligned = (col) => {
+      const name = (col.column_name || "").toLowerCase();
+      return name.includes("bc") || name.includes("cr") || name.includes("cost") || name.includes("total") || name.includes("amount");
+    };
+
+    const groupSerialMap = useMemo(() => {
+  const map = {};
+
+  if (reportType !== "detailed") return map;
+
+  const grouped = filteredRows.reduce((acc, row) => {
+    const key = row[groupBy] || "Unknown";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(row);
+    return acc;
+  }, {});
+
+  Object.keys(grouped).forEach(group => {
+    map[group] = grouped[group].map((_, idx) => idx + 1);
+  });
+
+  return map;
+}, [filteredRows, groupBy, reportType]);
+
+const enrichedRows = useMemo(() => {
+  if (reportType !== "detailed") return [];
+
+  const grouped = filteredRows.reduce((acc, row) => {
+    const key = row[groupBy] || "Unknown";
+
+    if (!acc[key]) acc[key] = [];
+
+    acc[key].push(row);
+
+    return acc;
+  }, {});
+
+  Object.keys(grouped).forEach(group => {
+    grouped[group] = grouped[group].map((row, idx) => ({
+      ...row,
+      _sn: idx + 1
+    }));
+  });
+
+  return grouped;
+}, [filteredRows, groupBy, reportType]);
+
+
+
+const totalColIndex = columns.findIndex(col =>
+  col.column_name?.toLowerCase().includes("total_amount_aed")
+);
+
+const groupedPages = useMemo(() => {
+  if (reportType !== "detailed") return [];
+
+  const pages = [];
+  const maxRows = 10;
+
+  let currentPage = [];
+  let currentCount = 0;
+
+  fullGroupedRows.forEach(([groupName, groupRows]) => {
+    const groupCount = groupRows.length;
+
+    // Large group (>10) gets its own page
+    if (groupCount > maxRows) {
+      // Save current page first
+      if (currentPage.length) {
+        pages.push(currentPage);
+        currentPage = [];
+        currentCount = 0;
+      }
+
+      pages.push([
+        [
+          groupName,
+          groupRows.map((row, idx) => ({
+            ...row,
+            _sn: idx + 1,
+          })),
+        ],
+      ]);
+
+      return;
+    }
+
+    // Doesn't fit in current page -> start a new page
+    if (currentCount + groupCount > maxRows) {
+      pages.push(currentPage);
+      currentPage = [];
+      currentCount = 0;
+    }
+
+    currentPage.push([
+      groupName,
+      groupRows.map((row, idx) => ({
+        ...row,
+        _sn: idx + 1,
+      })),
+    ]);
+
+    currentCount += groupCount;
+  });
+
+  if (currentPage.length) {
+    pages.push(currentPage);
+  }
+
+  return pages;
+}, [fullGroupedRows, reportType]);
+
+  const isNumericColumn = (col) =>
+  col.column_name?.toLowerCase().includes("cr") ||
+  col.column_name?.toLowerCase().includes("bc") ||
+  col.column_name?.toLowerCase().includes("cost") ||
+  col.column_name?.toLowerCase().includes("total") ||
+  col.column_name?.toLowerCase().includes("amount");
+
+    const parseNum = (val) =>
+  isNaN(parseFloat((val ?? "0").toString().replace(/,/g, "")))
+    ? 0
+    : parseFloat((val ?? "0").toString().replace(/,/g, ""));
+
+const buildTotalRow = (rows, cols) => {
+  const total = {};
+
+  cols.forEach((col) => {
+    if (isNumericColumn(col)) {
+      total[col.column_name] = rows.reduce(
+        (sum, row) => sum + parseNum(row[col.column_name]),
+        0
+      );
+    } else {
+      total[col.column_name] = "";
+    }
+  });
+
+  return total;
+};
+
+const paginatedGroupedRows =
+  groupedPages[page - 1] || [];
+
+const totalPages =
+  reportType === "detailed"
+    ? groupedPages.length
+    : Math.ceil(filteredRows.length / pageSize);
+
+const grandTotalRow = useMemo(() => {
+  return buildTotalRow(filteredRows, visibleDetailedColumns);
+}, [filteredRows, visibleDetailedColumns]);
+
+const firstAmountIndex = visibleDetailedColumns.findIndex(col =>
+  col.column_name?.toLowerCase().startsWith("amount_")
+);
+
+const totalLabelIndex =
+  firstAmountIndex > 0 ? firstAmountIndex - 1 : 0;
+
+const resetFiltersState = () => {
+  setFilters([]);
+  setSearch("");
+  setSearchColumnKey(null);
+  setPage(1);
+  setActiveDateFilter(null);
+
+  const defaults = getCurrentMonth();
+  setDateFilters(defaults);
+};
+
+const yearlyVisibleColumns = useMemo(() => {
+  if (!columns?.length) return [];
+
+  // If nothing is saved, show all columns
+  if (!visibleColumnsState?.length) return columns;
+
+  return visibleColumnsState
+    .map((name) => columns.find((c) => c.column_name === name))
+    .filter(Boolean);
+}, [columns, visibleColumnsState]);
+
+useEffect(() => {
+  setTempHideColumns(
+    yearlyVisibleColumns.map((c) => c.column_name)
+  );
+}, [yearlyVisibleColumns]);
+
+const yearlyDetailedColumns = useMemo(() => {
+  if (!yearlyVisibleColumns?.length) return [];
+
+  return yearlyVisibleColumns.filter(
+    (col) => col.column_name !== report?.group_by
+  );
+}, [yearlyVisibleColumns, report]);
+
+
+const openColumnPopup = () => {
+  const rect = snoRef.current?.getBoundingClientRect();
+
+  if (!rect) return;
+
+  setMenuPosition({
+    top: rect.bottom + 5,
+    left: rect.left,
+  });
+
+  setHidePopupColumn("__sno__");
+
+  setTempHideColumns(
+    yearlyVisibleColumns?.length
+      ? yearlyVisibleColumns.map((c) => c.column_name)
+      : columns.map((c) => c.column_name)
+  );
+
+  setShowHidePopup(true);
+};
+
+// useEffect(() => {
+//   const currentCols = isDetailed
+//     ? visibleDetailedColumns
+//     : columns;
+
+//   if (currentCols?.length) {
+//     setColumnOrder(
+//       currentCols.map((col) => col.column_name)
+//     );
+//   }
+
+// }, [isDetailed, visibleDetailedColumns, columns]);
+
+
+const handleDragStart = (colName) => {
+  dragIndexRef.current = colName;
+};
+
+const handleDrop = async (dropColName) => {
+  const dragColName = dragIndexRef.current;
+
+  if (!dragColName || dragColName === dropColName) return;
+
+  const updated = yearlyVisibleColumns.map((c) => c.column_name);
+
+  const dragIndex = updated.indexOf(dragColName);
+  const dropIndex = updated.indexOf(dropColName);
+
+  if (dragIndex === -1 || dropIndex === -1) {
+    dragIndexRef.current = null;
+    return;
+  }
+
+  const [removed] = updated.splice(dragIndex, 1);
+  updated.splice(dropIndex, 0, removed);
+
+  // Update UI immediately
+  setVisibleColumnsState(updated);
+  setColumnOrder(updated);
+  setSelectedColumns(updated);
+  setSavedTableColumns(updated);
+
+  // Save to API
+  await saveColumnSelection(updated);
+
+  dragIndexRef.current = null;
+};
+
+
+
+
+const saveColumnSelection = async (selectedCols = []) => {
+  try {
+    const columnSettings = {
+      visibleColumns: selectedCols,
+      pinnedColumns: pinnedColumns || [],
+    };
+
+    await upsertCustomizedColumns(
+      currentModule,
+      activeUserEmail,
+      columnSettings,
+      currentReport
+    );
+
+    // ✅ UPDATE UI IMMEDIATELY (NO REFRESH NEEDED)
+    setVisibleColumnsState(selectedCols);
+
+    setSelectedColumns(selectedCols);
+    setSavedTableColumns(selectedCols);
+    
+
+  } catch (err) {
+    console.error("Failed to save customized columns:", err);
+  }
+};
+
+// useEffect(() => {
+//   if (!columnOrder?.length) return;
+  
+//   const timeout = setTimeout(() => {
+//     saveColumnSelection(columnOrder);
+//   }, 300); // debounce to avoid spam
+
+//   return () => clearTimeout(timeout);
+// }, [columnOrder]);
+
+const fetchCustomizedColumns = async () => {
+  try {
+    const res = await getReportCustomizedColumns(
+      currentReport,
+      activeUserEmail,
+      currentModule,
+    );
+
+    const savedColumns = res?.data?.data?.columns;
+    
+    if (Array.isArray(savedColumns)) {
+      return { visibleColumns: savedColumns, pinnedColumns: [] };
+    }
+    if (savedColumns && typeof savedColumns === "object") {
+      return {
+        visibleColumns: Array.isArray(savedColumns.visibleColumns) ? savedColumns.visibleColumns : [],
+        pinnedColumns: Array.isArray(savedColumns.pinnedColumns) ? savedColumns.pinnedColumns : [],
+      };
+    }
+    return { visibleColumns: [], pinnedColumns: [] };
+
+  } catch (err) {
+    console.error("Failed to load customized columns:", err);
+    return { visibleColumns: [], pinnedColumns: [] };
+  }
+};
+
+useEffect(() => {
+  const init = async () => {
+    const res = await fetchCustomizedColumns();
+
+    setVisibleColumnsState(res?.visibleColumns || []);
+    setPinnedColumns(res?.pinnedColumns || []);
+    setColumnOrder(res?.visibleColumns || []);
+  };
+
+  init();
+}, [currentReport, activeUserEmail, currentModule]);
+
+
+
 function getFormattedDateTime(date = new Date()) {
 
   const pad = (n) => n.toString().padStart(2, "0");
@@ -593,22 +1419,7 @@ function getFormattedDateTime(date = new Date()) {
   return `${day}/${month}/${year} ${hours} ${minutes} ${ampm}`;
 }
 
-const buildTotalRow = (rows, cols) => {
-  const total = {};
 
-  cols.forEach((col) => {
-    if (isNumericColumn(col)) {
-      total[col.column_name] = rows.reduce(
-        (sum, row) => sum + parseNum(row[col.column_name]),
-        0
-      );
-    } else {
-      total[col.column_name] = "";
-    }
-  });
-
-  return total;
-};
    const buildGroupTotal = (rows, cols) => {
       const total = {};
       cols.forEach((col) => {
@@ -661,17 +1472,9 @@ const formatPrintDate = (dateStr) => {
       key?.toLowerCase().includes("amount");
 
     const dataRows = rows || [];
-    const isNumericColumn = (col) =>
-  col.column_name?.toLowerCase().includes("cr") ||
-  col.column_name?.toLowerCase().includes("bc") ||
-  col.column_name?.toLowerCase().includes("cost") ||
-  col.column_name?.toLowerCase().includes("total") ||
-  col.column_name?.toLowerCase().includes("amount");
+  
 
-  const parseNum = (val) =>
-  isNaN(parseFloat((val ?? "0").toString().replace(/,/g, "")))
-    ? 0
-    : parseFloat((val ?? "0").toString().replace(/,/g, ""));
+
 
 const moduleName = report?.description || "Report";
     const formattedTime = getFormattedDateTime();
@@ -917,7 +1720,7 @@ const totalLabelIndex =
     <table>
       <thead>
         <tr>
-          <th style="width:20px; min-width:20px; max-width:20px;">S/N</th>
+          <th style="width:25px; min-width:25px; max-width:25px;">S/N</th>
           ${yearlyVisibleColumns
             .map(
               (col) => `
@@ -1374,909 +2177,322 @@ const handlePdf = async () => {
     const isDetailed =
       reportType === "detailed" && report?.is_detailed === true;
 
-    const moduleName = report?.description || "Report";
+    const reportTitle = getReportTitle();
 
-    // ================= BASE DATA =================
-    const rowsData = filteredRows.map(normalizeKeys);
-    const transformedRows = transformCurrencyRows(rowsData);
+    const tableHtml = isDetailed
+      ? generateDetailedTable()
+      : generateSummaryTable();
 
-    const cols = isDetailed
-      ? visibleDetailedColumns
-      : columns;
+    const approvalHtml = generateApprovalHtml();
+    const filterHtml = generateFilterHtml();
+    const blankSpaceHtml = generateBlankSpaceHtml();
 
-    // ================= FILTERS =================
-    const pdfFilters = (filters || []).filter(
-      (f) => f?.master !== "dateFilters"
-    );
+    // Create hidden container
+    const container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.left = "-100000px";
+    container.style.top = "0";
+    container.style.width = isDetailed ? "297mm" : "210mm";
+    container.style.background = "#ffffff";
+    container.style.zIndex = "-1";
 
-    const pdfDateFilters = {
-      startDate: dateFilters.startDate,
-      endDate: dateFilters.endDate,
+    container.innerHTML = `
+      <div class="report-page">
+        ${generateHeader(reportTitle)}
+        ${tableHtml}
+        ${approvalHtml}
+        ${filterHtml}
+        ${blankSpaceHtml}
+      </div>
+    `;
+
+    // Reuse your existing print CSS
+    const style = document.createElement("style");
+
+style.innerHTML = `
+  ${getPrintStyles()}
+
+  table {
+  border-collapse: collapse !important;
+}
+
+tr {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+td,
+th {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+thead {
+  display: table-header-group;
+}
+
+tfoot {
+  display: table-footer-group;
+}
+
+  td:not(.approval-table td) {
+    padding: 2px 4px 10px 4px !important;
+    line-height: 1 !important;
+    vertical-align: middle !important;
+    font-size: 7px !important;
+  }
+
+  th {
+    padding: 2px 4px 10px 4px !important;
+    line-height: 1 !important;
+    vertical-align: middle !important;
+    font-size: 7px !important;
+  }
+
+  .approval-table td {
+    height: 100px !important;
+    border: 1px solid #111827;
+    padding: 0 !important;
+    text-align: center;
+    vertical-align: bottom !important;
+  }
+
+  .approval-content {
+    padding-bottom: 8px;
+    font-size: 8px;
+    font-weight: bold;
+  }
+
+  .approval-dept {
+    margin-top: 3px !important;
+    font-size: 8px;
+    color: #4b5563;
+    font-weight: bold;
+  }
+
+  .approval-title {
+    background: #e5e7eb;
+    color: #111827;
+    text-align: left !important;
+    font-size: 8px;
+    font-weight: bold;
+    padding: 2px 4px 10px 4px !important;
+    border: 1px solid #111827;
+  }
+
+  .approval-prepared td {
+    padding: 0 !important;
+    border: 1px solid #111827;
+  }
+     .sno-col {
+      width: 30px !important;
+      font-weight: bold;
+    }
+`;
+
+container.appendChild(style);
+
+    document.body.appendChild(container);
+
+    const reportElement =
+      container.querySelector(".report-page") || container;
+
+    const options = {
+      margin: [7, 7, 12, 7], // top, left, bottom, right
+      filename: `${report?.description || "Report"}.pdf`,
+
+      image: {
+        type: "jpeg",
+        quality: 1,
+      },
+
+      html2canvas: {
+        scale: 3,
+        useCORS: true,
+        letterRendering: true,
+        scrollX: 0,
+        scrollY: 0,
+        backgroundColor: "#ffffff",
+      },
+
+      jsPDF: {
+        unit: "mm",
+        format: "a4",
+        orientation: isDetailed ? "landscape" : "portrait",
+      },
+
+      pagebreak: {
+  mode: ["avoid-all", "css", "legacy"],
+  avoid: ["tr", "td", ".approval-table", ".approval-section"],
+},
     };
 
-    let payload;
-
-    // ================= SUMMARY / EQUIVALENT =================
-    if (!isDetailed) {
-      payload = {
-        rows: transformedRows,
-        columns: cols,
-        moduleName,
-        reportType,
-        filters: pdfFilters,
-        dateFilters: pdfDateFilters,
-        userName : activeUserName || "",
-      };
-    }
-
-    // ================= DETAILED =================
-    else {
-      const grouped = Object.entries(
-        transformedRows.reduce((acc, row) => {
-          const key = row[groupBy] || "Unknown";
-
-          if (!acc[key]) acc[key] = [];
-
-          acc[key].push(row);
-
-          return acc;
-        }, {})
-      ).map(([groupName, rows]) => ({
-        groupName,
-        rows: rows.map((r, idx) => ({
-          ...r,
-          _sn: idx + 1,
-        })),
-      }));
-
-      payload = {
-        rows: grouped,
-        columns: cols,
-        moduleName,
-        reportType,
-        groupBy,
-        filters: pdfFilters,
-        dateFilters: pdfDateFilters,
-      };
-    }
-
-    // ================= REPORT ID =================
-    const reportId =
-      reportType === "equivalent" && report?.eqnt_report
-        ? report.eqnt_report
-        : report?.report_id || id;
-
-    // ================= API CALL =================
-    const res = await reportPdf(
-      reportId,
-      activeUserEmail,
-      payload
-    );
-
-    // ================= DOWNLOAD =================
-    const url = window.URL.createObjectURL(
-      new Blob([res.data], { type: "application/pdf" })
-    );
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${moduleName}.pdf`;
-
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    window.URL.revokeObjectURL(url);
-  } catch (err) {
-    console.error("PDF export failed:", err);
-  }
-};
-
-
-
-
-
-// const handleQuickDateChange = (value) => {
-//   setActiveDateFilter(value);
-
-//   const range = getDateRange(value);
-
-//   if (range) {
-//     setDateFilters(range);
-//   }
-// };
-
-const handleQuickDateChange = async (value) => {
-  setActiveDateFilter(value);
-
-  if (isYearlyReport) {
-    const range = getYearRange(value || "all");
-
-    setYearFilter(value || "");
-    setDateFilters(range);
-    setPage(1);
-
-    await loadYearlyExpiryReport({
-      selectedYearFilter: value || "all",
-      selectedReportType: reportType,
-      customDateFilters: range,
-      customFilters: filters,
-    });
-
-    return;
-  }
-
-  const range = getDateRange(value);
-
-  if (range) {
-    setDateFilters(range);
-  }
-};
-
-const normalizeKeys = (row) => {
-  const newRow = {};
-
-  Object.keys(row).forEach((k) => {
-    newRow[k.toLowerCase()] = row[k];
-  });
-
-  return newRow;
-};
-
-
-const buildDynamicColumns = (data = []) => {
-  if (!data.length) return [];
-
-  const firstRow = data[0];
-
-  const baseKeys = Object.keys(firstRow).filter(
-    key =>
-      key !== "curr_code" &&
-      key !== "total_amount" &&          // ❌ REMOVE
-      key !== "total_amount_aed" &&
-      key !== "total_amount_aed".toLowerCase() &&
-      !key.toLowerCase().includes("total_amount") &&
-      !key.startsWith("amount_") &&
-      key !== "monthly_amount_aed" &&
-      key !== "yearly_amount_aed"
-  );
-const yearlyDisplayNames = {
-  expiry_year: "Year",
-  date: "Invoice Date",
-  expiry_date: "Expiry Date",
-  invoice_number: "Invoice No",
-  com_code: "Company",
-  vend_code: "Vendor",
-  prd_code: "Product",
-  prdtype_code: "Product Type",
-  plan_code: "Plan",
-  dep_code: "Department",
-  dv_code: "Cost Center",
-  billcycle_code: "Billing Cycle",
-  curr_code: "Currency",
-  amount: "Amount",
-  vat_amount: "VAT Amount",
-  total_amount: "Total Amount",
-  total_amount_aed: "Total Amount AED",
-  prf_num: "PRF No",
-  remarks: "Remarks",
-};
-  const normalCols = baseKeys.map((key) => ({
-    column_name: key,
-   display_name: yearlyDisplayNames[key] || displayNames?.[key] || key
-  }));
-
-  const currencies = Array.from(
-    new Set(
-      data
-        .map(r => r.curr_code?.trim().toUpperCase())
-        .filter(Boolean)
-    )
-  );
-
-  const currencyCols = currencies.map(curr => ({
-    column_name: `amount_${curr}`,
-    display_name: `Amount (${curr})`
-  }));
-
-  // ✅ ONLY AED TOTAL
-  const totalCols = [];
-
-  if (
-    firstRow.hasOwnProperty("total_amount_aed") ||
-    firstRow.hasOwnProperty("Total_Amount_AED")
-  ) {
-    totalCols.push({
-      column_name: "total_amount_aed",
-      display_name: isYearlyReport
-  ? "Total Amount AED"
-  : displayNames?.total_amount_aed || "Total Amount (AED)"
-    });
-  }
-
-  if (
-    firstRow.hasOwnProperty("monthly_amount_aed") ||
-    firstRow.hasOwnProperty("Monthly_Amount_AED")
-  ) {
-    totalCols.push({
-      column_name: "monthly_amount_aed",
-      display_name: displayNames?.monthly_amount_aed || "Monthly Amount (AED)"
-    });
-  }
-
-  if (
-    firstRow.hasOwnProperty("yearly_amount_aed") ||
-    firstRow.hasOwnProperty("Yearly_Amount_AED")
-  ) {
-    totalCols.push({
-      column_name: "yearly_amount_aed",
-      display_name: displayNames?.yearly_amount_aed || "Yearly Amount (AED)"
-    });
-  }
-
-  return [...normalCols, ...currencyCols, ...totalCols];
-};
-
-const transformCurrencyRows = (data = []) => {
-  const currencies = Array.from(
-    new Set(
-      data
-        .map(r => r.curr_code?.trim().toUpperCase())
-        .filter(Boolean)
-    )
-  );
-
-  return data.map(row => {
-    const newRow = { ...row };
-
-    // ❌ remove unwanted column completely
-    delete newRow.total_amount;
-
-    const rowCurr = row.curr_code?.trim().toUpperCase();
-
-    currencies.forEach(curr => {
-      newRow[`amount_${curr}`] =
-        rowCurr === curr ? (row.total_amount ?? 0) : "-";
-    });
-
-    return newRow;
-  });
-};
-
-const getCellValue = (row, col, isTotalRow = false) => {
-  const value = row[col.column_name];
-  const name = (col.column_name || "").toLowerCase();
-
-  // ================= TOTAL ROW =================
-  if (isTotalRow) {
-    if (
-      name.startsWith("cr") ||
-      name.startsWith("bc") ||
-      name.includes("amount") ||
-      name.includes("price") ||
-      name.includes("total") ||
-      name.includes("aed")
-    ) {
-      return formatAmount(value);
-    }
-
-    // Don't mask payment method in total row
-    if (name.includes("paymentmethod")) {
-      return value ?? "-";
-    }
-
-    return value ?? "-";
-  }
-
-  // ================= DATE =================
-  if (
-    name.includes("date") ||
-    name.includes("podate") ||
-    name.includes("start") ||
-    name.includes("end")
-  ) {
-    return formatDate(value) ?? "-";
-  }
-
-  // ================= NUMERIC COLUMNS =================
-  if (
-    name.startsWith("cr") ||
-    name.startsWith("bc") ||
-    name.includes("amount") ||
-    name.includes("price") ||
-    name.includes("total") ||
-    name.includes("aed")
-  ) {
-    return formatAmount(value);
-  }
-
-  // ================= PAYMENT METHOD =================
-  if (name.includes("paymentmethod")) {
-    return value ? `**** ${value.slice(-4)}` : "-";
-  }
-
-  // ================= CUSTOM LABELS =================
-  if (name.includes("monthly_amount_aed")) {
-    return "Monthly Amount (AED)";
-  }
-
-  if (name.includes("yearly_amount_aed")) {
-    return "Yearly Amount (AED)";
-  }
-
-  // ================= DEFAULT =================
-  return value ?? "-";
-};
-
-
-const handleReportTypeChange = async (type) => {
-  if (type === reportType) return;
-
-  setReportType(type);
-  setPage(1);
-
-  if (isYearlyReport) {
-    await loadYearlyExpiryReport({
-      selectedYearFilter: activeDateFilter || yearFilter || "currentYear",
-      selectedReportType: type, // important
-      customDateFilters: dateFilters,
-      customFilters: filters,
-    });
-
-    return;
-  }
-
-  await loadReport(id, dateFilters, type);
-};
-
-const loadYearlyExpiryReport = async ({
-  selectedYearFilter = yearFilter,
-  selectedReportType = reportType,
-  customDateFilters = null,
-  customFilters = filters,
-} = {}) => {
-  try {
-    setLoading(true);
-
-const params = {
-  activeUserEmail,
-  reportType: selectedReportType,
-  yearFilter: selectedYearFilter,
-  search,
-  filters: JSON.stringify(customFilters || []),
-};  
-
-    if (customDateFilters) {
-      params.dateFilters = JSON.stringify({
-        date: {
-          startDate: customDateFilters.startDate,
-          endDate: customDateFilters.endDate,
-        },
-      });
-    }
-
-    const res = await getYearlyExpiryReport(params);
-
-    let data = res.data?.rows || [];
-    data = data.map(normalizeKeys);
-
-    setRows(data);
-
-    // =========================
-    // YEARLY DETAILED
-    // Use backend module_columns from module_id = 12
-    // =========================
-    if (selectedReportType === "detailed") {
-      const apiColumns = res.data?.columns || [];
-
-      const activeColumns = apiColumns.filter(
-        (c) => c.is_active !== false
+    const worker = html2pdf()
+      .set(options)
+      .from(reportElement)
+      .toPdf();
+
+    const pdf = await worker.get("pdf");
+
+    // Add footer + page numbers
+    const totalPages = pdf.internal.getNumberOfPages();
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    const printedDate = getFormattedDateTime();
+
+    const user =
+      activeUserName
+        ? activeUserName.charAt(0).toUpperCase() +
+          activeUserName.slice(1).toLowerCase()
+        : "User";
+
+    for (let i = 1; i <= totalPages; i++) {
+      pdf.setPage(i);
+
+      pdf.setFont("times", "normal");
+      pdf.setFontSize(8);
+
+      // Bottom left
+      pdf.text(
+        `User: ${user} | Printed: ${printedDate}`,
+        7,
+        pageHeight - 5
       );
 
-      setColumns(activeColumns);
+      // Bottom right
+      const pageText = `Page ${i} of ${totalPages}`;
+      const textWidth = pdf.getTextWidth(pageText);
 
-      const defaultVisible = activeColumns.map((c) => c.column_name);
-      setSelectedColumns(defaultVisible);
+      pdf.text(
+        pageText,
+        pageWidth - textWidth - 7,
+        pageHeight - 5
+      );
     }
 
-    // =========================
-    // YEARLY SUMMARY
-    // Build Year + Total Amount AED columns
-    // =========================
-    else {
-      const dynamicCols = buildDynamicColumns(data);
+    await worker.save();
 
-      setColumns(dynamicCols);
-
-      const defaultVisible = dynamicCols.map((c) => c.column_name);
-      setSelectedColumns(defaultVisible);
-    }
-
-    if (res.data?.startDate && res.data?.endDate) {
-      setDateFilters({
-        startDate: res.data.startDate,
-        endDate: res.data.endDate,
-      });
-    }
-
-    setPage(1);
+    document.body.removeChild(container);
   } catch (err) {
-    console.error("Yearly expiry report failed:", err);
-    setRows([]);
-    setColumns([]);
-  } finally {
-    setLoading(false);
-  }
-};
-const loadReport = async (reportId, overrideDateFilters = dateFilters, type = reportType) => {
-  try {
-    setLoading(true);
-
-    const payload = {
-      filters: JSON.stringify(filters || []),
-      dateFilters: JSON.stringify({
-        date: {
-          startDate: overrideDateFilters.startDate,
-          endDate: overrideDateFilters.endDate,
-        },
-      }),
-      reportType: type,
-    };
-
-    const res = await getReportData(reportId, activeUserEmail, payload);
-
-    const data = (res.data || []).map(normalizeKeys);
-
-    // ❗ NO MASTER MAPPING ANYMORE
-
-    const transformed = transformCurrencyRows(data);
-
-    setRows(transformed);
-
-    const dynamicCols = buildDynamicColumns(transformed);
-    setColumns(dynamicCols);
-    setColumns(dynamicCols);
-
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setLoading(false);
+    console.error("PDF generation failed:", err);
   }
 };
 
-// const applyDateFilter = async () => {
-//   try {
-//     setLoading(true);
-//     setPage(1);
+const handleExcel = async () => {
+  console.log("Exporting to Excel...");
 
-//     const reportId = report?.report_id || id;
+  const isDetailed =
+    reportType === "detailed" && report?.is_detailed === true;
 
-//     await loadReport(
-//       reportId,
-//       dateFilters,
-//       reportType
-//     );
+  const cols = isDetailed
+    ? visibleDetailedColumns
+    : columns;
+  
+  
+  const isR011 = String(report?.report_id || "").toUpperCase() === "R011";
+  const moduleName = report?.description || "Report";
 
-//   } catch (err) {
-//     console.error(err);
-//   } finally {
-//     setLoading(false);
-//   }
-// };
+  const groups = isDetailed ? fullGroupedRows || [] : null;
 
+  const printCompany = 'ABDULWAHED BIN SHABIB GROUP';
+  const printLable = `${moduleName} ${reportType} (${formatPrintDate(dateFilters.startDate)} to ${formatPrintDate(dateFilters.endDate)})`;
 
-const applyDateFilter = async () => {
-  try {
-    setLoading(true);
-    setPage(1);
+  const exportRows = []; // ✅ NEW SAFE ARRAY
+  let serialNo = 1;
 
-    if (isYearlyReport) {
-      setYearFilter("");
-      setActiveDateFilter("");
+  // ================= SUMMARY =================
+  if (!isDetailed) {
+    (rows || []).forEach((row) => {
+      const newRow = {
+        SNo: serialNo++
+      };
 
-      await loadYearlyExpiryReport({
-        selectedYearFilter: "",
-        selectedReportType: reportType,
-        customDateFilters: dateFilters,
+      cols.forEach((col) => {
+        newRow[col.display_name] = getCellValue(row, col);
       });
 
-      return;
-    }
-
-    const reportId = report?.report_id || id;
-
-    await loadReport(
-      reportId,
-      dateFilters,
-      reportType
-    );
-
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setLoading(false);
-  }
-};
-
-const filteredRows = useMemo(() => {
-  if (!search) return rows;
-
-  const keyword = search.toLowerCase();
-
-  return rows.filter((row) =>
-    Object.values(row).some((val) =>
-      String(val || "").toLowerCase().includes(keyword)
-    )
-  );
-}, [rows, search]);
-
-
-const summaryRows = filteredRows;
-
-const indexedRows = useMemo(() => {
-  return filteredRows.map((row, index) => ({
-    ...row,
-    _globalSn: index + 1,
-    _group: row[groupBy] || "Unknown"
-  }));
-}, [filteredRows, groupBy]);
-
-const groupedRows = useMemo(() => {
-  if (!report?.is_detailed || !groupBy) return [];
-
-  return Object.entries(
-    indexedRows.reduce((acc, row) => {
-      const key = row[groupBy] || "Unknown";
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(row);
-      return acc;
-    }, {})
-  );
-}, [indexedRows, groupBy, report]);
-
-
-
-
-
-const detailedFlatRows = useMemo(() => {
-  if (reportType !== "detailed") return [];
-
-  return filteredRows.map((row) => ({
-    ...row,
-    _group: row[groupBy] || "Unknown",
-  }));
-}, [filteredRows, groupBy, reportType]);
-
-const paginatedRows = filteredRows.slice(
-  (page - 1) * pageSize,
-  page * pageSize
-);
-
-const paginatedDetailedRows = useMemo(() => {
-  return indexedRows.slice(
-    (page - 1) * pageSize,
-    page * pageSize
-  );
-}, [indexedRows, page]);
-
-const fullGroupedRows = useMemo(() => {
-  if (reportType !== "detailed") return [];
-
-  return Object.entries(
-    filteredRows.reduce((acc, row) => {
-      const key = row[groupBy] || "Unknown";
-
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(row);
-
-      return acc;
-    }, {})
-  );
-}, [filteredRows, groupBy, reportType]);
-
-// const paginatedGroupedRows = useMemo(() => {
-//   if (reportType !== "detailed") return [];
-
-//   const group = fullGroupedRows[page - 1];
-
-//   if (!group) return [];
-
-//   const [groupName, rows] = group;
-
-//   return [[
-//     groupName,
-//     rows.map((row, idx) => ({
-//       ...row,
-//       _sn: idx + 1
-//     }))
-//   ]];
-// }, [fullGroupedRows, page, reportType]);
-
-// const totalPages =
-//   reportType === "detailed"
-//     ? fullGroupedRows.length
-//     : Math.ceil(filteredRows.length / pageSize);
-const isRightAligned = (col) => {
-      const name = (col.column_name || "").toLowerCase();
-      return name.includes("bc") || name.includes("cr") || name.includes("cost") || name.includes("total") || name.includes("amount");
-    };
-
-    const groupSerialMap = useMemo(() => {
-  const map = {};
-
-  if (reportType !== "detailed") return map;
-
-  const grouped = filteredRows.reduce((acc, row) => {
-    const key = row[groupBy] || "Unknown";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(row);
-    return acc;
-  }, {});
-
-  Object.keys(grouped).forEach(group => {
-    map[group] = grouped[group].map((_, idx) => idx + 1);
-  });
-
-  return map;
-}, [filteredRows, groupBy, reportType]);
-
-const enrichedRows = useMemo(() => {
-  if (reportType !== "detailed") return [];
-
-  const grouped = filteredRows.reduce((acc, row) => {
-    const key = row[groupBy] || "Unknown";
-
-    if (!acc[key]) acc[key] = [];
-
-    acc[key].push(row);
-
-    return acc;
-  }, {});
-
-  Object.keys(grouped).forEach(group => {
-    grouped[group] = grouped[group].map((row, idx) => ({
-      ...row,
-      _sn: idx + 1
-    }));
-  });
-
-  return grouped;
-}, [filteredRows, groupBy, reportType]);
-
-
-
-const totalColIndex = columns.findIndex(col =>
-  col.column_name?.toLowerCase().includes("total_amount_aed")
-);
-
-const groupedPages = useMemo(() => {
-  if (reportType !== "detailed") return [];
-
-  const pages = [];
-  const maxRows = 10;
-
-  let currentPage = [];
-  let currentCount = 0;
-
-  fullGroupedRows.forEach(([groupName, groupRows]) => {
-    const groupCount = groupRows.length;
-
-    // Large group (>10) gets its own page
-    if (groupCount > maxRows) {
-      // Save current page first
-      if (currentPage.length) {
-        pages.push(currentPage);
-        currentPage = [];
-        currentCount = 0;
-      }
-
-      pages.push([
-        [
-          groupName,
-          groupRows.map((row, idx) => ({
-            ...row,
-            _sn: idx + 1,
-          })),
-        ],
-      ]);
-
-      return;
-    }
-
-    // Doesn't fit in current page -> start a new page
-    if (currentCount + groupCount > maxRows) {
-      pages.push(currentPage);
-      currentPage = [];
-      currentCount = 0;
-    }
-
-    currentPage.push([
-      groupName,
-      groupRows.map((row, idx) => ({
-        ...row,
-        _sn: idx + 1,
-      })),
-    ]);
-
-    currentCount += groupCount;
-  });
-
-  if (currentPage.length) {
-    pages.push(currentPage);
+      exportRows.push(newRow); // ✅ FIXED
+    });
   }
 
-  return pages;
-}, [fullGroupedRows, reportType]);
+  // ================= DETAILED =================
+  else {
+    groups.forEach(([groupName, groupRows]) => {
+      exportRows.push({
+        SNo: "",
+        Group: groupName,
+        __type: "group_header"
+      });
 
-const paginatedGroupedRows =
-  groupedPages[page - 1] || [];
+      groupRows.forEach((row) => {
+        const newRow = {
+          SNo: serialNo++,
+          Group: groupName
+        };
 
-const totalPages =
-  reportType === "detailed"
-    ? groupedPages.length
-    : Math.ceil(filteredRows.length / pageSize);
+        cols.forEach((col) => {
+          newRow[col.display_name] = getCellValue(row, col);
+        });
 
-const grandTotalRow = useMemo(() => {
-  return buildTotalRow(filteredRows, visibleDetailedColumns);
-}, [filteredRows, visibleDetailedColumns]);
+        exportRows.push(newRow);
+      });
 
-const firstAmountIndex = visibleDetailedColumns.findIndex(col =>
-  col.column_name?.toLowerCase().startsWith("amount_")
+      exportRows.push({
+        SNo: "",
+        Group: "",
+        __type: "group_footer"
+      });
+    });
+  }
+
+const exportCols = visibleColumnsState
+  .map((colName) =>
+    cols.find((col) => col.column_name === colName)
+  )
+  .filter(Boolean);
+
+const useExportCols = isR011 && reportType === "detailed";
+
+const finalCols = useExportCols ? exportCols : cols;
+
+reportToExcel(
+  exportRows,
+  printCompany,
+  printLable,
+  finalCols.map((c) => c.display_name),
+  moduleName,
+  isR011 ? "R011" : "",
+  finalCols
 );
 
-const totalLabelIndex =
-  firstAmountIndex > 0 ? firstAmountIndex - 1 : 0;
 
-const resetFiltersState = () => {
-  setFilters([]);
-  setSearch("");
-  setSearchColumnKey(null);
-  setPage(1);
-  setActiveDateFilter(null);
-
-  const defaults = getCurrentMonth();
-  setDateFilters(defaults);
 };
 
-const yearlyVisibleColumns = useMemo(() => {
-  if (!columns?.length) return [];
+const handleHeaderMenuToggle = (columnName, e) => {
+  e.stopPropagation();
 
-  // If nothing is saved, show all columns
-  if (!visibleColumnsState?.length) return columns;
+  if (openMenu === columnName) {
+    setOpenMenu(null);
+    return;
+  }
 
-  return visibleColumnsState
-    .map((name) => columns.find((c) => c.column_name === name))
-    .filter(Boolean);
-}, [columns, visibleColumnsState]);
-
-useEffect(() => {
-  setTempHideColumns(
-    yearlyVisibleColumns.map((c) => c.column_name)
-  );
-}, [yearlyVisibleColumns]);
-
-const yearlyDetailedColumns = useMemo(() => {
-  if (!yearlyVisibleColumns?.length) return [];
-
-  return yearlyVisibleColumns.filter(
-    (col) => col.column_name !== report?.group_by
-  );
-}, [yearlyVisibleColumns, report]);
-
-
-const openColumnPopup = () => {
-  const rect = snoRef.current?.getBoundingClientRect();
-
-  if (!rect) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const menuWidth = 224; // Tailwind w-56
+  const gutter = 8;
+  const maxLeft = window.innerWidth - menuWidth - gutter;
+  const nextLeft = Math.min(Math.max(rect.left, gutter), maxLeft);
 
   setMenuPosition({
-    top: rect.bottom + 5,
-    left: rect.left,
+    top: rect.bottom + 4,
+    left: nextLeft,
   });
-
-  setHidePopupColumn("__sno__");
-
-  setTempHideColumns(
-    yearlyVisibleColumns?.length
-      ? yearlyVisibleColumns.map((c) => c.column_name)
-      : columns.map((c) => c.column_name)
-  );
-
-  setShowHidePopup(true);
+  setOpenMenu(columnName);
 };
 
-const handleDragStart = (colName) => {
-  dragIndexRef.current = colName;
-};
 
-const handleDrop = (dropColName) => {
-  const dragColName = dragIndexRef.current;
 
-  if (!dragColName || dragColName === dropColName) return;
-
-  setSelectedColumns((prev) => {
-    const current =
-      prev?.length > 0 ? [...prev] : columns.map((c) => c.column_name);
-
-    const dragIndex = current.indexOf(dragColName);
-    const dropIndex = current.indexOf(dropColName);
-
-    if (dragIndex === -1 || dropIndex === -1) return current;
-
-    const [removed] = current.splice(dragIndex, 1);
-    current.splice(dropIndex, 0, removed);
-
-    return current;
-  });
-
-  dragIndexRef.current = null;
-};
-
-const saveColumnSelection = async (selectedCols = []) => {
-  try {
-    const columnSettings = {
-      visibleColumns: selectedCols,
-      pinnedColumns: pinnedColumns || [],
-    };
-
-    await upsertCustomizedColumns(
-      currentModule,
-      activeUserEmail,
-      columnSettings,
-      currentReport
-    );
-
-    // ✅ UPDATE UI IMMEDIATELY (NO REFRESH NEEDED)
-    setVisibleColumnsState(selectedCols);
-
-    setSelectedColumns(selectedCols);
-    setSavedTableColumns(selectedCols);
-    
-
-  } catch (err) {
-    console.error("Failed to save customized columns:", err);
-  }
-};
-
-const fetchCustomizedColumns = async () => {
-  try {
-    const res = await getReportCustomizedColumns(
-      currentReport,
-      activeUserEmail,
-      currentModule,
-    );
-
-    const savedColumns = res?.data?.data?.columns;
-    
-    if (Array.isArray(savedColumns)) {
-      return { visibleColumns: savedColumns, pinnedColumns: [] };
-    }
-    if (savedColumns && typeof savedColumns === "object") {
-      return {
-        visibleColumns: Array.isArray(savedColumns.visibleColumns) ? savedColumns.visibleColumns : [],
-        pinnedColumns: Array.isArray(savedColumns.pinnedColumns) ? savedColumns.pinnedColumns : [],
-      };
-    }
-    return { visibleColumns: [], pinnedColumns: [] };
-
-  } catch (err) {
-    console.error("Failed to load customized columns:", err);
-    return { visibleColumns: [], pinnedColumns: [] };
-  }
-};
-
-useEffect(() => {
-  const init = async () => {
-    const res = await fetchCustomizedColumns();
-
-    setVisibleColumnsState(res?.visibleColumns || []);
-    setPinnedColumns(res?.pinnedColumns || []);
-  };
-
-  init();
-}, [id, activeUserEmail]);
-
-            const NoRecordsRow = ({ colSpan }) => (
+const NoRecordsRow = ({ colSpan }) => (
   <tr>
     <td colSpan={colSpan} className="p-0" style={{ padding: "20px 0px 0px 89px" }}>
       <div className="h-[120px] flex flex-col items-left justify-left text-left bg-white">
@@ -2688,8 +2904,85 @@ useEffect(() => {
             >
               <div className="flex items-center justify-between gap-2">
                 <span>{col.display_name}</span>
-                <span className="text-gray-400">▾</span>
+                 <button
+    className=" absolute right-0
+                h-5 w-5
+                flex items-center justify-center
+                rounded-md
+               
+                text-gray-400
+                hover:bg-blue-100
+                transition"
+    onClick={(e) => {
+      e.stopPropagation();
+
+      handleHeaderMenuToggle(col.column_name, e);
+    }}
+  >
+    ▾
+  </button>
               </div>
+               {openMenu === col.column_name && createPortal(
+                    <div
+                      className="fixed mt-1 absolute top-9 right-0
+                      w-[275px]
+                      bg-white
+                      rounded-xl
+                      shadow-[0_15px_45px_rgba(0,0,0,0.16)]
+                      border border-gray-100
+                      z-[99999]
+                      overflow-hidden"
+                      style={{ top: menuPosition.top, left: menuPosition.left }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => handleSearch(col.column_name, col.display_name)}
+                        className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
+                      >
+                         Search
+                      </button>
+                      <div className="border-t border-gray-100" />
+                    
+                      <div className="border-t border-gray-100" />
+                      <button
+                        onClick={() =>
+                          handleSort(col.column_name, "asc", col.display_name)
+                        }
+                        className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
+                      >
+                        Sort by Ascending
+                      </button>
+                      <div className="border-t border-gray-100" />
+                      <button
+                        onClick={() => {
+                          console.log("Sorting by column:", col, "with direction: desc");
+                          handleSort(col.column_name, "desc", col.display_name);
+                        }}
+                        className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
+                      >
+                        Sort by Descending
+                      </button>
+                      <div className="border-t border-gray-100" />
+                      <button
+                        onClick={() => {
+                          handleGroup(col.column_name, "asc", col.display_name);
+                        }}
+                        className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
+                      >
+                        Group by Ascending
+                      </button>
+                      <div className="border-t border-gray-100" />
+                      <button
+                        onClick={() =>
+                          handleGroup(col.column_name, "desc", col.display_name)
+                        }
+                        className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
+                      >
+                        Group by Descending
+                      </button>
+                    </div>,
+                    document.body
+                  )}
             </th>
           ))}
         </tr>
@@ -2832,7 +3125,7 @@ useEffect(() => {
 
   ) : (
     /* ================= SUMMARY ================= */
-    <div className="overflow-x-auto">
+     <div className="overflow-auto max-h-[calc(100vh-260px)]">
       <table className="min-w-max w-full text-sm border-separate border-spacing-0">
 
   <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">

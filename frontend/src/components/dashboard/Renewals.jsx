@@ -3,7 +3,7 @@ import { getAlertData, getMasterData } from "../../api/api";
 
 export default function RenewalTimeline() {
   const [data, setData] = useState([]);
-  const [selectedFilter, setSelectedFilter] = useState("today_tomorrow");
+  const [selectedFilter, setSelectedFilter] = useState("today");
   const activeUserEmail = JSON.parse(localStorage.getItem("user"))?.email || "";
   const [serviceProviderMap, setServiceProviderMap] = useState({});
   const [currencyMap, setCurrencyMap] = useState({});
@@ -83,7 +83,7 @@ export default function RenewalTimeline() {
 
     loadMasters();
   }, [activeUserEmail]);
-  const fetchAlerts = async (filter = "today_tomorrow") => {
+  const fetchAlerts = async (filter = "today") => {
     try {
       const res = await getAlertData(filter);
       setData(res?.data?.data || []);
@@ -203,7 +203,8 @@ export default function RenewalTimeline() {
           onChange={(e) => setSelectedFilter(e.target.value)}
           className="bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm text-sm"
         >
-          <option value="today_tomorrow">Today & Tomorrow</option>
+          <option value="today">Today</option>
+          <option value="tomorrow">Tomorrow</option>
           <option value="this_week">This Week</option>
           <option value="next_week">Next Week</option>
           <option value="next_month">Next Month</option>
