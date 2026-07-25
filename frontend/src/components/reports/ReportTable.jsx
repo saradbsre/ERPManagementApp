@@ -2904,7 +2904,7 @@ const NoRecordsRow = ({ colSpan }) => (
             >
               <div className="flex items-center justify-between gap-2">
                 <span>{col.display_name}</span>
-                 <button
+                 {/* <button
     className=" absolute right-0
                 h-5 w-5
                 flex items-center justify-center
@@ -2920,7 +2920,7 @@ const NoRecordsRow = ({ colSpan }) => (
     }}
   >
     ▾
-  </button>
+  </button> */}
               </div>
                {openMenu === col.column_name && createPortal(
                     <div
