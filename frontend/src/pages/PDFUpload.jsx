@@ -902,6 +902,32 @@ const handleInvoiceCellChange = (rowIndex, field, value) => {
   });
 };
 
+const isCancellationTransaction = (transactionTypeValue) => {
+  if (!transactionTypeValue) return false;
+
+  const selectedType = transactionTypes.find((type) => {
+    return (
+      String(type.trntype_code || "").trim().toLowerCase() ===
+      String(transactionTypeValue || "").trim().toLowerCase()
+    );
+  });
+
+  const typeCode = String(transactionTypeValue || "").trim().toLowerCase();
+
+  const typeName = String(
+    selectedType?.trntype_name || transactionTypeValue || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  return (
+    typeName.includes("cancel") ||
+    typeName.includes("cancellation") ||
+    typeName.includes("cancelation") ||
+    typeCode.includes("TT004")
+  );
+};
+
 const validateRows = () => {
   const errors = {};
 
@@ -929,8 +955,28 @@ const validateRows = () => {
       rowErrors.currency = true;
 
     // Amount
-    if (!row.amount || Number(row.amount) <= 0)
-      rowErrors.amount = true;
+    // if (!row.amount || Number(row.amount) <= 0)
+    //   rowErrors.amount = true;
+    const isCancellation = isCancellationTransaction(row.transactionType);
+    const amountValue = Number(row.amount || 0);
+
+    if (isCancellation) {
+      if (
+        row.amount === "" ||
+        row.amount === null ||
+        row.amount === undefined
+      ) {
+        rowErrors.amount = true;
+      }
+    } else {
+      if (
+        row.amount === "" ||
+        row.amount === null ||
+        amountValue <= 0
+      ) {
+        rowErrors.amount = true;
+      }
+    }
 
     // Transaction Type
     if ( !row.transactionType )
