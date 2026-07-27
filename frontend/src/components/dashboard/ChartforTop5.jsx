@@ -84,17 +84,17 @@ const chartData = useMemo(() => {
       <div className="flex justify-between items-start mb-4">
 
         <div>
-          <h2 className="font-semibold text-gray-800 text-[12px]">
+          <h2 className="font-semibold text-gray-800 text-[15px]">
             Top Expenses
           </h2>
-          <p className="text-[10px] text-gray-400">
+          <p className="text-[12px] text-gray-400">
             Product wise spending analysis
           </p>
         </div>
 
         {/* DROPDOWN */}
        <select
-  className="bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm text-[10px] "
+  className="bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm text-[12px] "
   value={selectedProductType}
   onChange={(e) => {
     const value = e.target.value;
@@ -144,7 +144,7 @@ const chartData = useMemo(() => {
             {/* X AXIS */}
             <XAxis
               type="number"
-              tick={{ fill: "#6B7280", fontSize: 10 }}
+              tick={{ fill: "#6B7280", fontSize: 12 }}
               axisLine={false}
               tickLine={false}
             />
@@ -154,7 +154,7 @@ const chartData = useMemo(() => {
               type="category"
               dataKey="name"
               width={80}
-              tick={{ fill: "#374151", fontSize: 10 }}
+              tick={{ fill: "#374151", fontSize: 12 }}
               axisLine={false}
               tickLine={false}
             />
