@@ -194,14 +194,14 @@ export default function RenewalTimeline() {
       {/* HEADER */}
       <div className="flex justify-between items-center mb-4">
 
-        <h2 className="text-lg font-semibold text-gray-800">
+        <h2 className="text-[12px] font-semibold text-gray-800">
           Renewal Alerts
         </h2>
 
         <select
           value={selectedFilter}
           onChange={(e) => setSelectedFilter(e.target.value)}
-          className="bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm text-sm"
+          className="bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm text-[10px]"
         >
           <option value="today">Today</option>
           <option value="tomorrow">Tomorrow</option>
@@ -216,7 +216,7 @@ export default function RenewalTimeline() {
       <div className="space-y-3 max-h-75 overflow-y-auto">
 
         {sortedData.length === 0 && (
-          <p className="text-gray-400 text-sm">
+          <p className="text-gray-400 text-[10px] text-center mt-10">
             No upcoming renewals
           </p>
         )}
@@ -240,23 +240,23 @@ export default function RenewalTimeline() {
 
                 <div className="flex justify-between items-center">
 
-                  <p className="font-medium text-sm text-gray-800">
+                  <p className="font-medium text-[10px] text-gray-800">
                     {serviceProviderMap[item.prd_code] || item.prd_code}
                   </p>
 
                   <span
-                    className={`text-xs font-semibold ${priority.text}`}
+                    className={`text-[10px] font-semibold ${priority.text}`}
                   >
                     {priority.label}
                   </span>
 
                 </div>
                 <div className="flex justify-between items-center">
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-[10px] text-gray-500 mt-1">
                   {getDisplayDate(item.expiry_date)}
                 </p>
                    <span
-                    className={`text-xs font-semibold`}
+                    className={`text-[10px] font-semibold`}
                   >
                     {currencyMap[item.curr_code] || item.curr_code} {Number(item.total_amount_aed || 0).toFixed(2)}
                   </span>

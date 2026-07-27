@@ -40,11 +40,11 @@ export default function SignupRequestsCard() {
       <div className="flex justify-between items-center mb-4">
 
         <div>
-          <h2 className="text-lg font-semibold text-gray-800">
+          <h2 className="text-[12px] font-semibold text-gray-800">
             Signup Requests
           </h2>
 
-          <p className="text-xs text-gray-400">
+          <p className="text-[10px] text-gray-400">
             Pending approvals waiting review
           </p>
         </div>
@@ -53,7 +53,7 @@ export default function SignupRequestsCard() {
         <button
           onClick={handleAcceptAll}
           disabled={requests.length === 0}
-          className={`px-4 py-2 rounded-xl text-sm font-medium transition shadow-sm
+          className={`px-4 py-2 rounded-xl text-[10px] font-medium transition shadow-sm
             ${
               requests.length > 0
                 ? "bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:scale-105"
@@ -70,7 +70,7 @@ export default function SignupRequestsCard() {
       <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
 
         {requests.length === 0 && (
-          <div className="text-center py-10 text-gray-400 text-sm">
+          <div className="text-center py-10 text-gray-400 text-[10px]">
             No pending requests 
           </div>
         )}
@@ -94,7 +94,7 @@ export default function SignupRequestsCard() {
                 <p className="font-medium text-gray-800">
                   {req.name || "Unknown User"}
                 </p>
-                <p className="text-xs text-gray-500">
+                <p className="text-[10px] text-gray-500">
                   {req.email || "No email"}
                 </p>
               </div>
@@ -102,7 +102,7 @@ export default function SignupRequestsCard() {
             </div>
 
             {/* BADGE */}
-            <span className="text-xs px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 font-medium">
+            <span className="text-[10px] px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 font-medium">
               Pending
             </span>
 

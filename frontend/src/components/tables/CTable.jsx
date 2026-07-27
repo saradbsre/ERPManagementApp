@@ -2628,6 +2628,7 @@ const handlePdf = async (
   padding: 2px 4px 10px 4px !important;
   line-height: 1.3 !important;
   vertical-align: middle !important;
+ 
 }
 
 th {
@@ -3131,8 +3132,13 @@ printableCols.splice(
   const getColumnWidth = (col) => {
   const name = (col.column_name || "").toLowerCase();
 
-  if ( name.includes("com_code") ) return "160px";
+  if ( name.includes("com_code") ) return "130px";
   
+   if (
+    name.includes("vend_code")
+  ) {
+    return "70px";
+  }
 
   if (col.isProductDescription) return "80px";
 
@@ -3146,7 +3152,7 @@ printableCols.splice(
     name.includes("number") ||
     name.includes("dep_code")
   ) {
-    return "45px";
+    return "40px";
   }
   if ( name.includes("billcycle_code") || name.includes("curr_code") ) {
     return "33px";
@@ -3160,15 +3166,19 @@ printableCols.splice(
     name.includes("price") ||
     name.includes("total")
   ) {
-    return "30px";
+    return "35px";
   }
 
-  if (
-    name.includes("vend_code") ||
-    // name.includes("description") ||
-    name.includes("narr")
-  ) {
-    return "100px";
+ 
+  if ( name.includes("request") || name.includes("requested") ) {
+    return "30px";
+  }
+  if(name.includes("qty")){
+    return "20px";
+  }
+
+   if(name.includes("lpo")){
+    return "30px";
   }
 
   
@@ -3297,7 +3307,7 @@ printableCols.splice(
     th {
       background: #e5e7eb !important;
       color: #111827 !important;
-      border: 1px solid #111827;
+      border: 1px solid #9ca3af;
       padding: 4px 3px;
       font-size: 8px;
       font-weight: bold;
@@ -3322,7 +3332,7 @@ printableCols.splice(
     } 
 
     .sno-col {
-      width: 20px !important;
+      width: 18px !important;
       font-weight: bold;
     }
 
@@ -3565,7 +3575,7 @@ ${groupedRows
       <table>
         <thead>
           <tr>
-            <th class="sno-col" style="width:30px;">S/N</th>
+            <th class="sno-col" style="width:25px;">S/N</th>
             ${printableCols
               .map(
                 (col) => `
@@ -5858,8 +5868,17 @@ onDrop={() => handleDrop(col.column_name)}
 
         </td>
         
-                     <td className="px-4 py-3 whitespace-nowrap">
-  <div className="flex items-center justify-end gap-2">
+<td className="px-4 py-3 whitespace-nowrap">
+  <div className="flex items-center justify-between w-full px-2">
+    {/* Left */}
+    <input
+      type="checkbox"
+      checked={row.requires_prf_form || false}
+      onChange={(e) => handleRequiresPrfChange(row, e.target.checked)}
+      className="h-4 w-4 mr-3 cursor-pointer shrink-0"
+      title="PRF Required"
+    />
+    <div className="flex items-center gap-2">
     {row.pdf_path && (
   <button
     type="button"
@@ -5870,16 +5889,7 @@ onDrop={() => handleDrop(col.column_name)}
     <EyeIcon className="w-5 h-5 text-gray-600" />
   </button>
 )}
-    {/* Always show PRF checkbox */}
-    <input
-      type="checkbox"
-      checked={row.requires_prf_form || false}
-      onChange={(e) =>
-        handleRequiresPrfChange(row, e.target.checked)
-      }
-      className="h-4 w-4 cursor-pointer shrink-0"
-      title="PRF Required"
-    />
+    
 
 
 
@@ -6010,6 +6020,7 @@ onDrop={() => handleDrop(col.column_name)}
         </PermissionButton>
       </>
     )}
+    </div>
   </div>
 </td>
 

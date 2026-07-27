@@ -30,8 +30,8 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="px-3 pb-3 md:px-1 md:pb-1 lg:px-2 lg:pb-2 pt-0 bg-gray-100 min-h-screen">
-     <h1 className="text-2xl lg:text-3xl font-bold mt-2 mb-2 text-center lg:text-left">Dashboard</h1>
+    <div className="px-3 pb-3 md:px-1 md:pb-1  pt-0 bg-gray-100 min-h-screen">
+     <h1 className="text-xl lg:text-2xl font-bold mt-0 mb-2 text-center lg:text-left">Dashboard</h1>
 
 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 

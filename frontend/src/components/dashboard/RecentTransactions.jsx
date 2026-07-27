@@ -214,15 +214,15 @@ export default function RecentTransactions() {
       {/* HEADER */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h2 className="text-lg font-semibold text-gray-800">
+          <h2 className="text-[12px] font-semibold text-gray-800">
             Recent Transactions Last 30 Days
           </h2>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-[10px] text-gray-400 mt-1">
             Latest payment activities
           </p>
         </div>
 
-        <div className="bg-blue-50 text-blue-600 text-xs font-semibold px-3 py-1 rounded-full">
+        <div className="bg-blue-50 text-blue-600 text-[10px] font-semibold px-3 py-1 rounded-full">
           {filteredTransactions.length} Records
         </div>
       </div>
@@ -234,7 +234,7 @@ export default function RecentTransactions() {
         <select
           value={selectedMaster}
           onChange={(e) => setSelectedMaster(e.target.value)}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[10px]"
         >
           <option value="">Group By</option>
 
@@ -253,7 +253,7 @@ export default function RecentTransactions() {
           value={selectedValue}
           disabled={!selectedMaster}
           onChange={(e) => setSelectedValue(e.target.value)}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[10px] cursor-pointer disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
         >
           <option value=""> Value</option>
 
@@ -274,7 +274,7 @@ export default function RecentTransactions() {
 }`}>
 
         {filteredTransactions.length === 0 && (
-          <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
+          <div className="flex items-center justify-center h-40 text-gray-400 text-[10px]">
             No recent transactions found
           </div>
         )}
@@ -289,7 +289,7 @@ export default function RecentTransactions() {
             >
               {/* LEFT */}
               <div className="ml-3 flex-1 min-w-0">
-                <h3 className="font-semibold text-gray-800 text-sm truncate">
+                <h3 className="font-semibold text-gray-800 text-[10px] truncate">
                   {/* ✅ FINAL FIX: ALWAYS SHOW NAME */}
                   {serviceProviderMap[item.prd_code] || item.prd_code}
                 </h3>
@@ -301,7 +301,7 @@ export default function RecentTransactions() {
 
               {/* RIGHT */}
               <div className="text-right ml-2 flex-shrink-0">
-                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-700">
+                <div className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
                   AED {formatAmount(amount)}
                 </div>
               </div>

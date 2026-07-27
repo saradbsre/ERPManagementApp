@@ -177,6 +177,20 @@ useEffect(() => {
   };
 }, []);
 
+useEffect(() => {
+  setValidationErrors((prev) => {
+    const next = {};
+
+    invoiceRows.forEach((_, index) => {
+      if (prev[index]) {
+        next[index] = prev[index];
+      }
+    });
+
+    return next;
+  });
+}, [invoiceRows.length]);
+
  const handleFileSelect = (e) => {
   const selectedFiles = Array.from(e.target.files || []);
 
@@ -204,11 +218,12 @@ useEffect(() => {
   setFiles(pdfFiles);
   const previewMap = {};
 
-pdfFiles.forEach((pdfFile) => {
-  previewMap[pdfFile.name] = URL.createObjectURL(pdfFile);
-});
+  pdfFiles.forEach((pdfFile) => {
+    previewMap[pdfFile.name] = URL.createObjectURL(pdfFile);
+  });
 
-setPdfPreviewUrls(previewMap);
+  setPdfPreviewUrls(previewMap);
+  setValidationErrors({});
   setExtractedData(null);
   setExtractedInvoices([]);
   setInvoiceRows([]);
@@ -457,7 +472,7 @@ const processSinglePdfFile = async (pdfFile, index, totalFiles) => {
     setMessage({ type: "error", text: "Please select one or more PDF files first" });
     return;
   }
-
+  setValidationErrors({});
   setLoading(true);
   setExtractedData(null);
   setExtractedInvoices([]);
@@ -473,11 +488,12 @@ const processSinglePdfFile = async (pdfFile, index, totalFiles) => {
     const sortedResults = sortInvoicesByNumber(results);
     //console.log("Sorted invoice results:", sortedResults);
     setExtractedInvoices(sortedResults);
-const editableRows = buildEditableInvoiceRows(sortedResults);
-console.log("Extracted invoice raw data:", sortedResults);
-console.log("Editable invoice rows after date format:", editableRows);
-//console.log("Editable invoice rows:", editableRows);
-setInvoiceRows(editableRows);
+    const editableRows = buildEditableInvoiceRows(sortedResults);
+    // console.log("Extracted invoice raw data:", sortedResults);
+    // console.log("Editable invoice rows after date format:", editableRows);
+    //console.log("Editable invoice rows:", editableRows);
+    setValidationErrors({});
+    setInvoiceRows(editableRows);
     if (sortedResults.length === 1) {
       setExtractedData(sortedResults[0]);
     } else {
@@ -1966,8 +1982,9 @@ const handleSaveTransactions = async () => {
 >
   Save Transactions
 </button>
-
+          {console.log("available validation errors when discarding:", validationErrors)}
               <button
+             
   onClick={() => {
     setInvoiceRows([]);
     setExtractedInvoices([]);

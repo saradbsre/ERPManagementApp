@@ -84,12 +84,12 @@ export default function CurrencyWidget() {
     <div className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl  w-full h-96 overflow-hidden">
 
       {/* HEADER */}
-      <h2 className="text-lg font-semibold mb-4">
+      <h2 className="text-[12px] font-semibold mb-4">
         Currency Exchange
       </h2>
 
       {/* RATE */}
-      <div className="text-sm text-gray-500 mb-4 transition-all duration-300">
+      <div className="text-[10px] text-gray-500 mb-4 transition-all duration-300">
         {exchangeLabel}
       </div>
 
@@ -99,7 +99,7 @@ export default function CurrencyWidget() {
         <select
           value={from}
           onChange={(e) => setFrom(e.target.value)}
-          className="flex-1 border rounded-lg p-2 text-sm bg-white focus:ring-2 focus:ring-indigo-300 transition"
+          className="flex-1 border rounded-lg p-2 text-[10px] bg-white focus:ring-2 focus:ring-indigo-300 transition"
         >
           {currencies.map(c => (
             <option key={c.curr_code} value={c.curr_code}>
@@ -119,7 +119,7 @@ export default function CurrencyWidget() {
         <select
           value={to}
           onChange={(e) => setTo(e.target.value)}
-          className="flex-1 border rounded-lg p-2 text-sm bg-white focus:ring-2 focus:ring-indigo-300 transition"
+          className="flex-1 border rounded-lg p-2 text-[10px] bg-white focus:ring-2 focus:ring-indigo-300 transition"
         >
           {currencies.map(c => (
             <option key={c.curr_code} value={c.curr_code}>
@@ -138,7 +138,7 @@ export default function CurrencyWidget() {
           type="number"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-300 transition"
+          className="w-full border rounded-lg p-2 text-[10px] focus:ring-2 focus:ring-indigo-300 transition"
         />
       </div>
 
@@ -152,7 +152,7 @@ export default function CurrencyWidget() {
           type="text"
           value={converted}
           readOnly
-          className="w-full border rounded-lg p-2 text-sm bg-gray-100 font-semibold transition-all duration-300 focus:ring-2 focus:ring-green-300"
+          className="w-full border rounded-lg p-2 text-[10px] bg-gray-100 font-semibold transition-all duration-300 focus:ring-2 focus:ring-green-300"
         />
 
        

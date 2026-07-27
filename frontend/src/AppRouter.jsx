@@ -26,46 +26,29 @@ function AppRouter() {
   const isActive = useRef(false);
   const inactiveCount = useRef(0);
   const [inactiveMsg, setInactiveMsg] = useState("");
-  const [dbStatus, setDbStatus] = useState("loading"); 
+  const [dbStatus, setDbStatus] = useState("connected"); 
 
 useEffect(() => {
-
   const checkDb = async () => {
-    // console.log("Checking database status...");
-    // delay before showing loading
-    const loadingTimer = setTimeout(() => {
-      setDbStatus("loading");
-    }, 1500); // 1.5 sec delay
-
     try {
-      // console.log("Fetching database status...");
       const res = await getDbStatus();
-      // console.log("DB Status Response:", res.data);
-      // stop loading timer
-      clearTimeout(loadingTimer);
 
       if (res.data?.status === "connected") {
         setDbStatus("connected");
       } else {
         setDbStatus("error");
       }
-
     } catch (err) {
-      console.log(err.message);
-      clearTimeout(loadingTimer);
-
-      setDbStatus("error");
+      console.error(err);
+      setDbStatus("error"); // Network/API failure
     }
   };
 
   checkDb();
 
-  const interval = setInterval(() => {
-    checkDb();
-  }, 60000);
+  const interval = setInterval(checkDb, 60000);  // check every 1 minute
 
   return () => clearInterval(interval);
-
 }, []);
 
 useEffect(() => {

@@ -84,17 +84,17 @@ const chartData = useMemo(() => {
       <div className="flex justify-between items-start mb-4">
 
         <div>
-          <h2 className="font-semibold text-gray-800 text-lg">
+          <h2 className="font-semibold text-gray-800 text-[12px]">
             Top Expenses
           </h2>
-          <p className="text-xs text-gray-400">
+          <p className="text-[10px] text-gray-400">
             Product wise spending analysis
           </p>
         </div>
 
         {/* DROPDOWN */}
        <select
-  className="bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm text-sm"
+  className="bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm text-[10px] "
   value={selectedProductType}
   onChange={(e) => {
     const value = e.target.value;
@@ -124,7 +124,7 @@ const chartData = useMemo(() => {
       {/* CHART OR NO DATA MESSAGE */}
       {chartData.length === 0 ? (
         <div className="flex items-center justify-center h-4/5">
-          <span className="text-gray-400 text-sm">No transactions for this month</span>
+          <span className="text-gray-400 text-[10px]">No transactions for this month</span>
         </div>
       ) : (
         <ResponsiveContainer width="100%" height="85%">
@@ -144,7 +144,7 @@ const chartData = useMemo(() => {
             {/* X AXIS */}
             <XAxis
               type="number"
-              tick={{ fill: "#6B7280", fontSize: 12 }}
+              tick={{ fill: "#6B7280", fontSize: 10 }}
               axisLine={false}
               tickLine={false}
             />
@@ -154,7 +154,7 @@ const chartData = useMemo(() => {
               type="category"
               dataKey="name"
               width={80}
-              tick={{ fill: "#374151", fontSize: 12 }}
+              tick={{ fill: "#374151", fontSize: 10 }}
               axisLine={false}
               tickLine={false}
             />
