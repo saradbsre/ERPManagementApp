@@ -5606,7 +5606,7 @@ const normalizedFilters = nextFilters.map((filter) => ({
                                   <EyeIcon className="w-6 h-6" />
                                 </span>
                                 </th>
-                                <th className="px-4 py-3 border-b text-right">Actions</th>
+                                <th className="px-4 py-3 border-b text-center">Actions</th>
 
                                {orderedVisibleColumns.map((col, index) => (
   <th
@@ -6675,50 +6675,50 @@ onDrop={() => handleDrop(col.column_name)}
                       </tbody>
                      <tfoot className="sticky bottom-0 bg-gray-100 border-t-2 border-gray-300 z-30">
   <tr>
-
     {/* Serial No */}
-  <td className="px-4 py-3"></td>
+    <td className="px-4 py-3"></td>
 
-   {orderedVisibleColumns.map((col, index) => {
-  const isNumeric = col.column_name.toLowerCase().includes("amount");
+    {orderedVisibleColumns.map((col, index) => {
+      const columnName = col.column_name.toLowerCase();
 
-  // Find the index of the Amount column
-  const amountIndex = orderedVisibleColumns.findIndex(
-    c => c.column_name === "amount"
-  );
+      // Only show total for Total Amount AED
+      const isNumeric = columnName === "total_amount_aed";
 
-  return (
-    <React.Fragment key={col.column_id}>
-      {index === amountIndex && (
-        <td className="px-4 py-3 text-center">
-          <button
-            onClick={() => setShowTotals(!showTotals)}
-            className="px-3 py-1 rounded bg-blue-600 text-white text-xs"
+      const totalAmountAedIndex = orderedVisibleColumns.findIndex(
+        (c) => c.column_name.toLowerCase() === "total_amount_aed"
+      );
+
+      return (
+        <React.Fragment key={col.column_id}>
+          {index === totalAmountAedIndex && (
+            <td className="px-4 py-3 text-center">
+              <button
+                onClick={() => setShowTotals(!showTotals)}
+                className="px-3 py-1 rounded bg-blue-600 text-white text-xs"
+              >
+                {showTotals ? "Hide Total" : "Show Total"}
+              </button>
+            </td>
+          )}
+
+          <td
+            className={`px-4 py-3 font-semibold ${getAlignClass(
+              col.display_name
+            )}`}
           >
-            {showTotals ? "Hide Total" : "Show Total"}
-          </button>
-        </td>
-      )}
-
-      <td
-        className={`px-4 py-3 font-semibold ${getAlignClass(
-          col.display_name
-        )}`}
-      >
-        {showTotals && isNumeric
-          ? Number(grandTotal[col.column_name] || 0).toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })
-          : ""}
-      </td>
-    </React.Fragment>
-  );
-})}
-
-    {/* Action */}
-    
-
+            {showTotals && isNumeric
+              ? Number(grandTotal[col.column_name] || 0).toLocaleString(
+                  "en-GB",
+                  {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  }
+                )
+              : ""}
+          </td>
+        </React.Fragment>
+      );
+    })}
   </tr>
 </tfoot>
 

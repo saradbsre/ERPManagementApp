@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, act } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { getMasterData, createMasterData, updateMasterData, deleteMasterData, saveProviderPlans,getProviderPlans } from "../../api/api"; // 👈 create this API
-import masterTableConfig from "../../utils/masterTableConfig"; // 👈 create this config
+import masterTableConfig from "../../utils/masterTableConfig"; 
 import { getAlignClass } from "../../utils/leftAlign";
 import { handleNumericInput, isNumericColumn } from "../../utils/numberValidation";
 import PermissionButton from "../PermissionButton";
@@ -11,7 +11,8 @@ import ValidatePopups from "../Validatepopups";
 import Loader from "../Loader";
 import ConfirmModal from "../ConfirmationPopups";
 import PlanDropdown from "./PlanDropdown";
-
+import {
+  SquarePen, Trash2, Save, CircleX } from "lucide-react";
 
 const Modal = ({ title, children, onClose }) => (
   <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
@@ -259,21 +260,24 @@ const handleSavePlans = async () => {
         loadMasterData();
     }, [masterName]);
 
-  const loadMasterData = async () => {
+const loadMasterData = async () => {
   try {
     setLoading(true);
+
     const res = await getMasterData(masterName, activeUserEmail);
     const data = res.data || [];
 
     const withIds = data.map((row, index) => ({
       ...row,
-      id: row.id || index + 1   // fallback id
+      id: row.id || index + 1,
     }));
-    
+
     setRows(withIds);
-    setLoading(false);
   } catch (err) {
     console.error(err);
+    setRows([]);
+  } finally {
+    setLoading(false);
   }
 };
 
@@ -383,8 +387,42 @@ const handleCancel = () => {
   setNewRow({});
 };
 
+// const handleDelete = (row) => {
+//   setLoading(true);
+//   setConfirmData({
+//     title: "Delete Record",
+//     message: "Are you sure you want to delete this record?",
+//     confirmText: "Delete",
+//     cancelText: "Cancel",
+//     type: "danger",
+//     onConfirm: async () => {
+//       setConfirmOpen(false);
+//       try {
+//         await deleteMasterData(masterName, row.id, activeUserEmail);
+//         setValidationMessage("Record deleted successfully!");
+//         setValidationType("success");
+//         setPopupMessage("Record deleted successfully!");
+//         setPopupType("success");
+//         setShowValidatePopup(true);
+//         loadMasterData();
+//         setLoading(false);
+//       } catch (err) {
+//         setLoading(false);
+//         console.error("DELETE ERROR:", err);
+//         setValidationMessage("Error deleting record!");
+//         setValidationType("error");
+//         setPopupMessage("Error deleting record!");
+//         setPopupType("error");
+//         setShowValidatePopup(true);
+//       }
+//     }
+//   });
+//   setConfirmOpen(true);
+// };
+
+
+
 const handleDelete = (row) => {
-  setLoading(true);
   setConfirmData({
     title: "Delete Record",
     message: "Are you sure you want to delete this record?",
@@ -392,30 +430,39 @@ const handleDelete = (row) => {
     cancelText: "Cancel",
     type: "danger",
     onConfirm: async () => {
-      setConfirmOpen(false);
       try {
+        setConfirmOpen(false);
+        setLoading(true);
+
         await deleteMasterData(masterName, row.id, activeUserEmail);
+
         setValidationMessage("Record deleted successfully!");
         setValidationType("success");
+
         setPopupMessage("Record deleted successfully!");
         setPopupType("success");
+
         setShowValidatePopup(true);
-        loadMasterData();
-        setLoading(false);
+
+        await loadMasterData();
       } catch (err) {
-        setLoading(false);
         console.error("DELETE ERROR:", err);
+
         setValidationMessage("Error deleting record!");
         setValidationType("error");
+
         setPopupMessage("Error deleting record!");
         setPopupType("error");
+
         setShowValidatePopup(true);
+      } finally {
+        setLoading(false);
       }
-    }
+    },
   });
+
   setConfirmOpen(true);
 };
-
 const handleSaveEdit = async () => {
   setLoading(true);
   try {
@@ -634,6 +681,7 @@ const renderDesktop = () => (
     <table className="min-w-max w-full text-sm">
       <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
   <tr>
+    <th className="px-4 py-3 text-left">Actions</th>
     <th className="px-4 py-3 text-left">S.No</th>
                                     {columns.map(col => (
                                         <th
@@ -658,7 +706,7 @@ const renderDesktop = () => (
                                     {masterName === "products" && (
   <th className="px-4 py-3 text-center">Plans</th>
 )}
-                                    <th className="px-4 py-3 text-right">Actions</th>
+                                    
                                 </tr>
                             </thead>
 
@@ -667,7 +715,30 @@ const renderDesktop = () => (
 {/* ================= CREATE ROW ================= */}
 {isCreating && (
   <tr className="bg-blue-50">
+    {/* ================= ACTIONS ================= */}
+    <td className="px-2 py-3 flex">
 
+    
+
+       <button
+              onClick={handleSave}
+              className="
+                px-2 py-1.5 text-sm  hover:bg-gray-200 rounded-md transition
+              "
+            >
+              <Save className="text-gray-500" size={18} />
+            </button>
+
+            <button
+              onClick={handleCancel}
+              className="
+                px-2 py-1.5 text-sm  hover:bg-red-100 rounded-md transition
+              "
+            >
+              <CircleX className="text-red-400" size={18} />
+            </button>
+
+    </td>
     <td className="px-4 py-3">#</td>
 
     {columns.map(col => {
@@ -892,34 +963,7 @@ const renderDesktop = () => (
 
     )}
 
-    {/* ================= ACTIONS ================= */}
-    <td className="px-4 py-3 flex gap-2 justify-end">
 
-      <button
-        onClick={handleSave}
-        className="
-          px-3 py-1.5 text-sm rounded-md
-          border border-blue-300 bg-white
-          hover:bg-blue-100 hover:border-blue-500
-          transition
-        "
-      >
-        Save
-      </button>
-
-      <button
-        onClick={handleCancel}
-        className="
-          px-3 py-1.5 text-sm rounded-md
-          border border-red-300 bg-white
-          hover:bg-red-100 hover:border-red-500
-          transition
-        "
-      >
-        Cancel
-      </button>
-
-    </td>
 
   </tr>
 )}
@@ -935,6 +979,68 @@ const renderDesktop = () => (
       key={rowKey}
       className="border-b hover:bg-gray-50"
     >
+      {/* ================= ACTIONS ================= */}
+      <td className="px-2 py-3 flex">
+
+        {editRowId === rowKey ? (
+
+          <>
+            <button
+              onClick={handleSaveEdit}
+              className="
+                px-2 py-1.5 text-sm  hover:bg-gray-200 rounded-md transition
+              "
+            >
+              <Save className="text-gray-500" size={18} />
+            </button>
+
+            <button
+              onClick={handleCancelEdit}
+              className="
+               px-2 py-1.5 text-sm  hover:bg-red-100 rounded-md transition
+              "
+            >
+              <CircleX className="text-red-400" size={18} />
+            </button>
+          </>
+
+        ) : (
+
+          <>
+            <PermissionButton
+              user={activeUser}
+              permission="modify"
+              onClick={() => {
+
+                setEditRowId(rowKey);
+
+                setEditRow(row);
+
+                setOriginalRow(row);
+
+              }}
+              className="
+                px-2 py-1.5 text-sm  hover:bg-gray-200 rounded-md transition
+              "
+            >
+             <SquarePen className="text-gray-500" size={18} />
+            </PermissionButton>
+
+            <PermissionButton
+              user={activeUser}
+              permission="delete"
+              onClick={() => handleDelete(row)}
+              className="
+               px-2 py-1.5 text-sm  hover:bg-red-100 rounded-md transition
+              "
+            >
+              <Trash2 className="text-red-400" size={18} />
+            </PermissionButton>
+          </>
+
+        )}
+
+      </td>
 
       {/* ================= S.NO ================= */}
       <td className="px-4 py-3">
@@ -1241,76 +1347,7 @@ const renderDesktop = () => (
 
       )}
 
-      {/* ================= ACTIONS ================= */}
-      <td className="px-4 py-3 flex justify-end gap-2">
-
-        {editRowId === rowKey ? (
-
-          <>
-            <button
-              onClick={handleSaveEdit}
-              className="
-                px-3 py-1.5 text-sm rounded-md
-                border border-blue-300
-                bg-white hover:bg-blue-100
-              "
-            >
-              Save
-            </button>
-
-            <button
-              onClick={handleCancelEdit}
-              className="
-                px-3 py-1.5 text-sm rounded-md
-                border border-red-300
-                bg-white hover:bg-red-100
-              "
-            >
-              Cancel
-            </button>
-          </>
-
-        ) : (
-
-          <>
-            <PermissionButton
-              user={activeUser}
-              permission="modify"
-              onClick={() => {
-
-                setEditRowId(rowKey);
-
-                setEditRow(row);
-
-                setOriginalRow(row);
-
-              }}
-              className="
-                px-3 py-1.5 text-sm rounded-md
-                border border-blue-300
-                bg-white hover:bg-blue-100
-              "
-            >
-              Edit
-            </PermissionButton>
-
-            <PermissionButton
-              user={activeUser}
-              permission="delete"
-              onClick={() => handleDelete(row)}
-              className="
-                px-3 py-1.5 text-sm rounded-md
-                border border-red-300
-                bg-white hover:bg-red-100
-              "
-            >
-              Delete
-            </PermissionButton>
-          </>
-
-        )}
-
-      </td>
+      
 
     </tr>
 
@@ -1445,6 +1482,9 @@ const renderDesktop = () => (
 )}
                     </div>
                 </div>
+
+
+       
                 <ConfirmModal
   open={confirmOpen}
   title={confirmData.title}
@@ -1452,7 +1492,10 @@ const renderDesktop = () => (
   confirmText={confirmData.confirmText}
   cancelText={confirmData.cancelText}
   type={confirmData.type}
-  onClose={() => setConfirmOpen(false)}
+  onClose={() => {
+  setConfirmOpen(false);
+  setLoading(false);
+}}
   onConfirm={confirmData.onConfirm}
 />
         </div>
@@ -1578,7 +1621,10 @@ const renderMobile = () => (
       confirmText={confirmData.confirmText}
       cancelText={confirmData.cancelText}
       type={confirmData.type}
-      onClose={() => setConfirmOpen(false)}
+     onClose={() => {
+  setConfirmOpen(false);
+  setLoading(false);
+}}
       onConfirm={confirmData.onConfirm}
     />
   </>

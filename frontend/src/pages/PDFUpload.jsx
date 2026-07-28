@@ -43,7 +43,8 @@ const invoiceColumns = [
 export default function PDFUpload() {
   const navigate = useNavigate();
   const { moduleId } = useParams();
-
+const activeUser = JSON.parse(localStorage.getItem("user"));
+const activeUserEmail = activeUser?.email || "";
 const [pdfPreviewUrls, setPdfPreviewUrls] = useState({});
 const [previewPdfUrl, setPreviewPdfUrl] = useState("");
 const [files, setFiles] = useState([]);
@@ -426,7 +427,7 @@ const processSinglePdfFile = async (pdfFile, index, totalFiles) => {
     if (text && text.trim().length >= 20) {
       setMessage({
         type: "info",
-        text: `Processing invoice ${index + 1} of ${totalFiles} with Gemini AI...`
+        text: `Processing invoice ${index + 1} of ${totalFiles}`
       });
 
       data = await extractDataWithGeminiText(text);
@@ -502,7 +503,7 @@ const processSinglePdfFile = async (pdfFile, index, totalFiles) => {
 
     setMessage({
       type: "success",
-      text: `✓ ${sortedResults.length} invoice${sortedResults.length > 1 ? "s" : ""} processed successfully and sorted by invoice number!`
+      text: `✓ ${sortedResults.length} invoice${sortedResults.length > 1 ? "s" : ""} processed successfully!`
     });
 
   } catch (error) {
@@ -820,7 +821,7 @@ const deliveryDateValue =
           costCenter: "",
           transactionType: "",
           projects: invoice.projects || "",
-          createdBy: invoice.createdBy || "",
+          createdBy: activeUserEmail,
           fileName: invoice.fileName || "",
         });
       });
@@ -852,7 +853,7 @@ const deliveryDateValue =
   costCenter: "",
   transactionType: "",
   projects: invoice.projects || "",
-  createdBy: invoice.createdBy || "",
+  createdBy: activeUserEmail,
   fileName: invoice.fileName || "",
   vatApplicable: false,
 });
@@ -1375,7 +1376,7 @@ const createBlankInvoiceRow = () => ({
   costCenter: "",
   transactionType: "",
   projects: "",
-  createdBy: "",
+  createdBy: activeUserEmail,
   fileName: "",
   vatApplicable: false,
 });
@@ -1572,7 +1573,7 @@ const renderEditableCell = (row, rowIndex, column) => {
   const isRightAligned = rightAlignedColumns.includes(column.key);
   return (
     <input
-      readOnly={["vatAmount", "totalAmount", "totalAmountAED"].includes(column.key)}
+      readOnly={["vatAmount", "totalAmount", "totalAmountAED", "createdBy"].includes(column.key)}
       type={column.type || "text"}
       value={value}
       onChange={(e) =>
@@ -1586,11 +1587,13 @@ const renderEditableCell = (row, rowIndex, column) => {
         text-xs text-gray-900
         flex items-center justify-between
         ${isRightAligned ? "text-right" : "text-left"}
-        ${
-          hasError
-            ? " text-red-500 bg-red-50"
-            : "border-0 focus:bg-blue-50 focus:ring-1 focus:ring-blue-400"
-        }
+   ${
+  hasError
+    ? " text-red-500 bg-red-50"
+    : column.key === "createdBy"
+    ? "border-0 bg-gray-900 text-gray-800 cursor-not-allowed"
+    : "border-0 focus:bg-blue-50 focus:ring-1 focus:ring-blue-400"
+}
       `}
     />
   );
@@ -1738,7 +1741,7 @@ const handleSaveTransactions = async () => {
         </button>
 
        <h1 className="text-xl font-semibold text-gray-800">
-  Purchase Invoice PDF Upload & Extraction
+  Invoice PDF Upload & Extraction
 </h1>
       </div>
 
