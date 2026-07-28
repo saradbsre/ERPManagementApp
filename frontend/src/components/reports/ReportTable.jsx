@@ -790,19 +790,21 @@ const loadYearlyExpiryReport = async ({
 } = {}) => {
   try {
     setLoading(true);
-const reportId = report.report_id === "R012" ? "R012" : "R011";
 
-const isAll = report.report_id === "R012";
-//console.log("report",report)
-const params = {
-  activeUserEmail,
-  reportType: selectedReportType,
-  yearFilter: selectedYearFilter,
-  search,
-  filters: JSON.stringify(customFilters || []),
-  isAll: isAll ? "all" : "",
-};
- 
+    const resolvedReportId = String(
+      id || report?.report_id || ""
+    ).trim().toUpperCase();
+
+    const isAllReport = resolvedReportId === "R012";
+
+    const params = {
+      activeUserEmail,
+      reportType: selectedReportType,
+      yearFilter: selectedYearFilter || "all",
+      search,
+      filters: JSON.stringify(customFilters || []),
+      isAll: isAllReport ? "all" : "",
+    };
 
     if (customDateFilters) {
       params.dateFilters = JSON.stringify({
@@ -813,7 +815,7 @@ const params = {
       });
     }
 
-    const res = await getYearlyExpiryReport(reportId, params);
+    const res = await getYearlyExpiryReport(resolvedReportId, params);
 
     let data = res.data?.rows || [];
     data = data.map(normalizeKeys);
@@ -827,7 +829,7 @@ const params = {
     if (selectedReportType === "detailed") {
       const apiColumns = res.data?.columns || [];
 
-      const activeColumns = apiColumns.filter(
+      const activeColumns = apiColumns.filter(  
         (c) => c.is_active !== false
       );
 
