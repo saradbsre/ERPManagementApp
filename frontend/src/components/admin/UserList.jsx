@@ -340,148 +340,135 @@ const handlePermissionSave = async () => {
 
 const renderDesktop = () => (
   <>
-     <div
+    <div
   style={{
-    ...containerStyle,
-    flexDirection: isMobile || isTablet ? "column" : "row",
+    display: "flex",
+    gap: 24,
+    alignItems: "stretch",
+    height: "85vh",
+    minHeight: 0,
   }}
 >
 
       {/* ================= LEFT PANEL ================= */}
       <div
-  style={{
-    ...leftPanel,
-    width: isMobile || isTablet ? "100%" : undefined,
-    borderRight: isMobile || isTablet ? "none" : leftPanel.borderRight,
-    borderBottom: "none",
-    paddingRight: isMobile || isTablet ? 0 : 20,
-    paddingBottom: isMobile || isTablet ? 20 : 0,
-    height: isMobile || isTablet ? "auto" : "80vh",
-    background: isMobile ? "#ffffff" : undefined,
-    border: isMobile ? "1px solid #e6ebf2" : undefined,
-    borderRadius: isMobile ? 16 : undefined,
-    overflow: isMobile ? "hidden" : leftPanel.overflowY,
-  }}
+style={{
+  flex: "0 0 42%",
+  display: "flex",
+  flexDirection: "column",
+ // overflow: "hidden",
+}}
 >
+  {/* FILTER BAR */}
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "1fr 150px 150px",
+      gap: 8,
+      marginBottom: 12,
+    }}
+  >
+    <input
+      placeholder="Search user..."
+      value={search}
+      onChange={(e) => setSearch(e.target.value)}
+      style={inputStyle}
+    />
 
-        {/* FILTER BAR */}
-        <div
+    <select
+      value={roleFilter}
+      onChange={(e) => setRoleFilter(e.target.value)}
+      style={selectStyle}
+    >
+      <option value="">Role</option>
+      {roles.map((r) => (
+        <option key={r.id} value={r.role}>
+          {r.role}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={statusFilter}
+      onChange={(e) => setStatusFilter(e.target.value)}
+      style={selectStyle}
+    >
+      <option value="">Status</option>
+      <option value="active">Active</option>
+      <option value="inactive">Inactive</option>
+    </select>
+  </div>
+
+ <div
   style={{
-    display: "grid",
-    gridTemplateColumns: isMobile ? "1fr" : isTablet ? "1fr 1fr" : "1fr 150px 150px",
-    gap: 8,
-    marginBottom: 12,
+    flex: 1,
+    overflowY: "auto",
+    minHeight: 0,
+    paddingRight: 4, // optional
   }}
 >
-          <div style={isMobile ? mobileSearchWrap : {}}>
-            {isMobile && <span style={mobileSearchIcon}>⌕</span>}
-            <input
-              placeholder="Search user..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={isMobile ? mobileSearchInput : inputStyle}
-            />
+  <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+    {filteredUsers.map((user) => {
+      const isSelected = selectedUser?.id === user.id;
+
+      return (
+        <li
+          key={user.id}
+          onClick={() => handleEdit(user)}
+          style={{
+            ...userCard,
+            width: "100%",
+            background: isSelected ? "#eef2ff" : "#fff",
+            border: isSelected
+              ? "1px solid #6366f1"
+              : "1px solid #e5e7eb",
+          }}
+        >
+          {/* LEFT */}
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              alignItems: "center",
+              minWidth: 0,
+            }}
+          >
+            <div style={avatar}>
+              {user.name?.charAt(0)?.toUpperCase()}
+            </div>
+
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 540, fontSize: 15, whiteSpace: "nowrap" }}>
+                {user.name}
+              </div>
+
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#6b7280",
+                }}
+              >
+                {user.email}
+              </div>
+            </div>
           </div>
 
-          {!isMobile && (
-            <>
-              <select
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-                style={selectStyle}
-              >
-                <option value="">Role</option>
-                {roles.map((r) => (
-                  <option key={r.id} value={r.role}>
-                    {r.role}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                style={selectStyle}
-              >
-                <option value="">Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </>
-          )}
-        </div>
-
-        {/* USER LIST */}
-        <ul
-          style={
-            isMobile
-              ? { ...mobileListShell, listStyle: "none", padding: 0, margin: 0 }
-              : { listStyle: "none", padding: 0, margin: 0 }
-          }
-        >
-          {filteredUsers.map((user) => {
-            const isSelected = selectedUser?.id === user.id;
-
-            return (
-              <li
-                key={user.id}
-                onClick={() => handleEdit(user)}
-                style={
-                  isMobile
-                    ? {
-                        ...mobileRow,
-                        background: isSelected ? "#f0f6ff" : "#fff",
-                      }
-                    : {
-                        ...userCard,
-                        width: "100%",
-                        background: isSelected ? "#eef2ff" : "#fff",
-                        border: isSelected ? "1px solid #6366f1" : "1px solid #e5e7eb",
-                      }
-                }
-              >
-                {isMobile && isSelected && <span style={mobileSelectedBar} />}
-
-                {/* LEFT */}
-                <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0 }}>
-                  <div style={isMobile ? mobileAvatar : avatar}>
-                    {user.name?.charAt(0)?.toUpperCase()}
-                  </div>
-
-                  <div style={{ minWidth: 0 }}>
-                    <div style={isMobile ? mobileName : { fontWeight: 600 }}>
-                      {user.name}
-                    </div>
-                    <div style={isMobile ? mobileMeta : { fontSize: 12, color: "#6b7280" }}>
-                      {isMobile ? user.role : user.email}
-                    </div>
-                    {isMobile && (
-                      <div
-                        style={{
-                          ...mobileMeta,
-                          marginTop: 2,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          maxWidth: 180,
-                        }}
-                      >
-                        {user.email}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* RIGHT STATUS */}
-                <span style={user.is_active ? statusPillActive : statusPillInactive}>
-                  {user.is_active ? "Active" : "Inactive"}
-                </span>
-
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+          {/* RIGHT STATUS */}
+          <span
+            style={
+              user.is_active
+                ? statusPillActive
+                : statusPillInactive
+            }
+          >
+            {user.is_active ? "Active" : "Inactive"}
+          </span>
+        </li>
+      );
+    })}
+  </ul>
+</div>
+</div>
 
       {/* ================= RIGHT PANEL ================= */}
 {!isMobile && (
@@ -510,13 +497,17 @@ const renderDesktop = () => (
   </div>
 
   {!isEditing ? (
-    <button
-      onClick={() => setIsEditing(true)}
-      style={btnPrimaryModern}
-      disabled={!selectedUser}
-    >
-      Edit
-    </button>
+   <button
+  onClick={() => setIsEditing(true)}
+  disabled={!selectedUser}
+  style={{
+    ...btnPrimaryModern,
+    cursor: !selectedUser ? "not-allowed" : "pointer",
+    opacity: !selectedUser ? 0.6 : 1,
+  }}
+>
+  Edit
+</button>
   ) : (
     <div style={{ display: "flex", gap: 10 }}>
       
@@ -746,7 +737,7 @@ const renderDesktop = () => (
       </div>
     </>
   ) : (
-    <div style={{ color: "#9ca3af" }}>Select User</div>
+    <div style={{ color: "#9ca3af" }}>Select User to edit</div>
   )}
 </div>
 )}
@@ -1292,6 +1283,7 @@ const inputStyle = {
   padding: "8px 12px",
   borderRadius: 8,
   border: "1px solid #ddd",
+  fontSize: "14px",
 };
 
 const selectStyle = {
@@ -1299,6 +1291,7 @@ const selectStyle = {
   padding: "8px 12px",
   borderRadius: 8,
   border: "1px solid #ddd",
+  fontSize: "14px",
 };
 
 const selectFull = {
@@ -1335,7 +1328,7 @@ const containerStyle = {
   display: "flex",
   gap: 24,
   background: "#fff",
-  padding: 0,
+  padding: 24,
   borderRadius: 0,
 };
 
@@ -1365,6 +1358,7 @@ const row = {
   display: "flex",
   justifyContent: "space-between",
   padding: "8px 0",
+  fontSize: "14px",
 };
 
 const btnPrimary = {
@@ -1465,6 +1459,7 @@ const modernSelect = {
   borderRadius: 10,
   border: "1px solid #e5e7eb",
   background: "#f9fafb",
+  fontSize: "14px",
 };
 
 const controlRow = {
@@ -1477,6 +1472,7 @@ const controlItem = {
   display: "flex",
   alignItems: "center",
   gap: 12,
+  fontSize: "14px",
 };
 
 const permissionGridModern = {
@@ -1498,7 +1494,7 @@ const permissionBox = {
 const btnPrimaryModern = {
   background: "#2563eb",
   color: "#fff",
-  padding: "10px 18px",
+  padding: "4px 17px",
   borderRadius: 10,
   border: "none",
   fontWeight: 500,
@@ -1517,7 +1513,7 @@ const btnSecondary = {
 const btnSaveModern = {
   background: "#22c55e",
   color: "#fff",
-  padding: "10px 18px",
+  padding: "4px 17px",
   borderRadius: 10,
   border: "none",
   fontWeight: 500,
@@ -1525,9 +1521,9 @@ const btnSaveModern = {
 };
 
 const btnCancelModern = {
-  background: "#f3f4f6",
+  background: "#b5b3b3",
   color: "#374151",
-  padding: "10px 18px",
+  padding: "4px 10px",
   borderRadius: 10,
   border: "none",
   cursor: "pointer",

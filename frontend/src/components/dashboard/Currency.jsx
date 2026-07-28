@@ -1,33 +1,45 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { currencises } from "../../api/api";
-
+import Loader from "../Loader";
 export default function CurrencyWidget() {
   const [currencies, setCurrencies] = useState([]);
   const [amount, setAmount] = useState(1);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [animate, setAnimate] = useState(false);
+  const [loading, setLoading] = React.useState(true);
 
   // -----------------------------
   // FETCH
   // -----------------------------
-  useEffect(() => {
-    const fetchData = async () => {
+useEffect(() => {
+  const fetchData = async () => {
+    setLoading(true);
+
+    try {
       const res = await currencises();
       const data = res?.data || [];
 
       setCurrencies(data);
 
-      const base = data.find(c => c.curr_is_basecurr);
-     // console.log("Base currency:", base);
+      const base = data.find((c) => c.curr_is_basecurr);
+
       if (base) {
         setTo(base.curr_code);
-        setFrom(data.find(c => c.curr_code !== base.curr_code)?.curr_code);
+        setFrom(
+          data.find((c) => c.curr_code !== base.curr_code)?.curr_code
+        );
       }
-    };
+    } catch (err) {
+      console.error(err);
+      setCurrencies([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchData();
-  }, []);
+  fetchData();
+}, []);
 
   // -----------------------------
   // CONVERT
@@ -79,6 +91,14 @@ export default function CurrencyWidget() {
       setAnimate(false);
     }, 200);
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader type="orbit" />
+      </div>
+    );
+  }
 
   return (
     <div className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl  w-full h-96 overflow-hidden">
