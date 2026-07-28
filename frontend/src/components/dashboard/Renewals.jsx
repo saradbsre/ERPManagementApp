@@ -1,101 +1,32 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getAlertData, getMasterData } from "../../api/api";
+import Loader from "../Loader";
 
 export default function RenewalTimeline() {
   const [data, setData] = useState([]);
   const [selectedFilter, setSelectedFilter] = useState("today");
   const activeUserEmail = JSON.parse(localStorage.getItem("user"))?.email || "";
   const [serviceProviderMap, setServiceProviderMap] = useState({});
-  const [currencyMap, setCurrencyMap] = useState({});
+  const [loading, setLoading] = React.useState(true);
 
-  useEffect(() => {
-    const loadMasters = async () => {
-      try {
-        const [productsRes, currencyRes] = await Promise.all([
-          getMasterData("products", activeUserEmail),
-          getMasterData("currency", activeUserEmail),
-        ]);
+  
+const fetchAlerts = async (filter = "today") => {
+  setLoading(true);
 
-        // -----------------------------
-        // PRODUCTS
-        // -----------------------------
-        const productRows = Array.isArray(productsRes?.data)
-          ? productsRes.data
-          : [];
+  try {
+    const res = await getAlertData(filter);
+    setData(res?.data?.data || []);
+  } catch (err) {
+    console.error(err);
+    setData([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
-        const productMap = {};
-
-        productRows.forEach((row) => {
-          const codeKey =
-            Object.keys(row).find((k) =>
-              k.toLowerCase().includes("prd_code")
-            ) || "prd_code";
-
-          const nameKey =
-            Object.keys(row).find((k) =>
-              k.toLowerCase().includes("prd_name")
-            ) || "prd_name";
-
-          if (row[codeKey]) {
-            productMap[row[codeKey]] = row[nameKey];
-          }
-        });
-
-        setServiceProviderMap(productMap);
-
-        // -----------------------------
-        // CURRENCY
-        // -----------------------------
-        const currencyRows = Array.isArray(currencyRes?.data)
-          ? currencyRes.data
-          : [];
-
-        const currMap = {};
-
-        currencyRows.forEach((row) => {
-          const codeKey =
-            Object.keys(row).find((k) =>
-              k.toLowerCase().includes("curr_code")
-            ) || "curr_code";
-
-          const nameKey =
-            Object.keys(row).find((k) =>
-              k.toLowerCase().includes("currency_name")
-            ) ||
-            Object.keys(row).find((k) =>
-              k.toLowerCase().includes("curr_name")
-            ) ||
-            Object.keys(row).find((k) =>
-              k.toLowerCase().includes("currency")
-            );
-
-          if (row[codeKey]) {
-            currMap[row[codeKey]] = row[nameKey];
-          }
-        });
-
-        setCurrencyMap(currMap);
-
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    loadMasters();
-  }, [activeUserEmail]);
-  const fetchAlerts = async (filter = "today") => {
-    try {
-      const res = await getAlertData(filter);
-      setData(res?.data?.data || []);
-    } catch (err) {
-      console.error(err);
-      setData([]);
-    }
-  };
-
-  useEffect(() => {
-    fetchAlerts(selectedFilter);
-  }, [selectedFilter]);
+useEffect(() => {
+  fetchAlerts(selectedFilter);
+}, [selectedFilter]);
 
   // -----------------------------
   // DISPLAY DATE
@@ -185,9 +116,13 @@ export default function RenewalTimeline() {
     );
   }, [data]);
 
-  // -----------------------------
-  // UI
-  // -----------------------------
+ if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader type="orbit" />
+      </div>
+    );
+  }
   return (
     <div className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl  w-full h-96 overflow-hidden">
 
@@ -241,7 +176,7 @@ export default function RenewalTimeline() {
                 <div className="flex justify-between items-center">
 
                   <p className="font-medium text-[12px] text-gray-800">
-                    {serviceProviderMap[item.prd_code] || item.prd_code}
+                    { item.product_name}
                   </p>
 
                   <span
@@ -258,7 +193,7 @@ export default function RenewalTimeline() {
                    <span
                     className={`text-[12px] font-semibold`}
                   >
-                    {currencyMap[item.curr_code] || item.curr_code} {Number(item.total_amount_aed || 0).toFixed(2)}
+                    { item.currency_name} {Number(item.total_amount_aed || 0).toFixed(2)}
                   </span>
                 </div>
               </div>

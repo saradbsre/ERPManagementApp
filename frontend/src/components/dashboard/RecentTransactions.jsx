@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { getRecentTransactions, getMasterData } from "../../api/api";
 import { formatAmount } from "../../utils/formatAmount";
 import { formatDate } from "../../utils/formatDate";
+import Loader from "../Loader";
 
 export default function RecentTransactions() {
   const [data, setData] = useState([]);
-  
+  const [loading, setLoading] = React.useState(true);
   const activeUserEmail =
     JSON.parse(localStorage.getItem("user"))?.email || "";
 
@@ -19,116 +20,45 @@ export default function RecentTransactions() {
   const [masterValues, setMasterValues] = useState([]);
 
   // -----------------------------
-  // PERMANENT DISPLAY MAP (IMPORTANT FIX)
-  // -----------------------------
-  const [serviceProviderMap, setServiceProviderMap] = useState({});
-  const [currencyMap, setCurrencyMap] = useState({});
-
-  // -----------------------------
   // FETCH TRANSACTIONS + MASTER LIST
   // -----------------------------
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await getRecentTransactions();
-        const result = res?.data?.data || [];
+ useEffect(() => {
+  const fetchData = async () => {
+    setLoading(true);
 
-        setData(result);
+    try {
+      const res = await getRecentTransactions();
+      const result = res?.data?.data || [];
 
-        const masters = [];
+      setData(result);
 
-        result.forEach((module) => {
-          (module.master_list || []).forEach((m) => {
-            const exists = masters.find(
-              (x) =>
-                x.master === m.master &&
-                x.column_name === m.column_name
-            );
+      const masters = [];
 
-            if (!exists) masters.push(m);
-          });
+      result.forEach((module) => {
+        (module.master_list || []).forEach((m) => {
+          const exists = masters.find(
+            (x) =>
+              x.master === m.master &&
+              x.column_name === m.column_name
+          );
+
+          if (!exists) masters.push(m);
         });
+      });
 
-        setMasterOptions(masters);
-      } catch (err) {
-        console.error(err);
-        setData([]);
-      }
-    };
+      setMasterOptions(masters);
+    } catch (err) {
+      console.error(err);
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchData();
-  }, []);
+  fetchData();
+}, []);
 
-  // -----------------------------
-  // LOAD SERVICE PROVIDERS ONCE (FOR DISPLAY ONLY)
-  // -----------------------------
-  useEffect(() => {
-    const loadServiceProviders = async () => {
-      try {
-        const res = await getMasterData("products", activeUserEmail);
-        const rows = Array.isArray(res?.data) ? res.data : [];
-        //console.log("Loaded service providers:", rows);
-        const map = {};
 
-        rows.forEach((row) => {
-          const codeKey =
-            Object.keys(row).find((k) =>
-              k.toLowerCase().includes("prd_code")
-            ) || "key";
-
-          const nameKey =
-            Object.keys(row).find((k) =>
-              k.toLowerCase().includes("prd_name")
-            );
-
-          if (row[codeKey] && row[nameKey]) {
-            map[row[codeKey]] = row[nameKey];
-          }
-        });
-
-        setServiceProviderMap(map);
-        //console.log("Service Provider Map:", map);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    loadServiceProviders();
-  }, [activeUserEmail]);
-
-  useEffect(() => {
-    const loadCurrencies = async () => {
-      try {
-        const res = await getMasterData("currency", activeUserEmail);
-        const rows = Array.isArray(res?.data) ? res.data : [];
-
-        const map = {};
-
-        rows.forEach((row) => {
-          const codeKey =
-            Object.keys(row).find((k) =>
-              k.toLowerCase().includes("_code")
-            ) || "id";
-
-          const nameKey =
-            Object.keys(row).find((k) =>
-              k.toLowerCase().includes("currency")
-            );
-
-          if (row[codeKey] && row[nameKey]) {
-            map[row[codeKey]] = row[nameKey];
-          }
-        });
-
-        setCurrencyMap(map);
-        //console.log("Currency Map:", map);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    loadCurrencies();
-  }, [activeUserEmail]);
 
   // -----------------------------
   // FETCH MASTER VALUES (FOR FILTER ONLY)
@@ -205,6 +135,15 @@ export default function RecentTransactions() {
         String(selectedValue)
     );
   }, [transactions, selectedMaster, selectedValue, masterOptions]);
+
+
+    if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader type="orbit" />
+      </div>
+    );
+  }
 
 
 
@@ -290,8 +229,7 @@ export default function RecentTransactions() {
               {/* LEFT */}
               <div className="ml-3 flex-1 min-w-0">
                 <h3 className="font-semibold text-gray-800 text-[12px] truncate">
-                  {/* ✅ FINAL FIX: ALWAYS SHOW NAME */}
-                  {serviceProviderMap[item.prd_code] || item.prd_code}
+                  { item.prd_name}
                 </h3>
 
                 <p className="text-[12px] text-gray-400 mt-1">

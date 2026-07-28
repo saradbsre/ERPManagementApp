@@ -1169,11 +1169,7 @@ const groupedPages = useMemo(() => {
 }, [fullGroupedRows, reportType]);
 
   const isNumericColumn = (col) =>
-  col.column_name?.toLowerCase().includes("cr") ||
-  col.column_name?.toLowerCase().includes("bc") ||
-  col.column_name?.toLowerCase().includes("cost") ||
-  col.column_name?.toLowerCase().includes("total") ||
-  col.column_name?.toLowerCase().includes("amount");
+  col.column_name?.toLowerCase().includes("total_amount_aed");
 
     const parseNum = (val) =>
   isNaN(parseFloat((val ?? "0").toString().replace(/,/g, "")))
@@ -1702,7 +1698,7 @@ const generateSummaryTable = () => {
 };
 
 const generateDetailedTable = () => {
-  const isR011 = report?.report_id === "R011";
+  const isR011 = report?.report_id === "R011" || report?.report_id === "R012";
   //console.log("visible colmns",yearlyVisibleColumns)
   const grandTotal = buildTotalRow(rows || [], yearlyVisibleColumns);
 
@@ -2028,7 +2024,7 @@ const getPrintStyles = () => `
 th {
       background: #e5e7eb !important;
       color: #111827 !important;
-      border: 1px solid #111827;
+      border: 1px solid #9ca3af;
       padding: 4px 3px;
       font-size: 8px;
       font-weight: bold;
@@ -2151,6 +2147,19 @@ th {
   text-align: center;
   vertical-align: bottom !important;
 }
+
+ .approval-table th{
+background: #e5e7eb !important;
+      color: #111827 !important;
+      border: 1px solid #111827;
+      padding: 4px 3px;
+      font-size: 8px;
+      font-weight: bold;
+      text-align: center;
+      vertical-align: middle;
+      line-height: 1.15;
+      word-break: break-word;
+ }
 
 .approval-content {
   padding-bottom: 8px;
@@ -2392,7 +2401,9 @@ const handleExcel = async () => {
     : columns;
   
   
-  const isR011 = String(report?.report_id || "").toUpperCase() === "R011";
+  const isR011 = ["R011", "R012"].includes(
+    String(report?.report_id || "").toUpperCase()
+  );
   const moduleName = report?.description || "Report";
 
   const groups = isDetailed ? fullGroupedRows || [] : null;
@@ -2815,47 +2826,49 @@ const NoRecordsRow = ({ colSpan }) => (
 
               {/* Right side: Pagination + Total */}
             <div className="ml-auto flex items-center gap-4">
-              <div className="flex items-end gap-2 text-sm">
-                <button
-                  disabled={page === 1}
-                  onClick={() => setPage(1)}
-                  className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="First Page"
-                >
-                  ⏮
-                </button>
+              {!isYearlyReport && (
+  <div className="flex items-end gap-2 text-sm">
+    <button
+      disabled={page === 1}
+      onClick={() => setPage(1)}
+      className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+      title="First Page"
+    >
+      ⏮
+    </button>
 
-                <button
-                  disabled={page === 1}
-                  onClick={() => setPage((p) => Math.max(p - 1, 1))}
-                  className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="Previous"
-                >
-                  ◀
-                </button>
+    <button
+      disabled={page === 1}
+      onClick={() => setPage((p) => Math.max(p - 1, 1))}
+      className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+      title="Previous"
+    >
+      ◀
+    </button>
 
-                <div className="px-3 py-1 rounded-md bg-gray-50 border text-gray-700 font-medium">
-                  {page} / {totalPages || 1}
-                </div>
+    <div className="px-3 py-1 rounded-md bg-gray-50 border text-gray-700 font-medium">
+      {page} / {totalPages || 1}
+    </div>
 
-                <button
-                  disabled={page === totalPages}
-                  onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-                  className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="Next"
-                >
-                  ▶
-                </button>
+    <button
+      disabled={page === totalPages}
+      onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+      className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+      title="Next"
+    >
+      ▶
+    </button>
 
-                <button
-                  disabled={page === totalPages}
-                  onClick={() => setPage(totalPages)}
-                  className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="Last Page"
-                >
-                  ⏭
-                </button>
-              </div>
+    <button
+      disabled={page === totalPages}
+      onClick={() => setPage(totalPages)}
+      className="px-3 py-1 rounded-md border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+      title="Last Page"
+    >
+      ⏭
+    </button>
+  </div>
+)}
 
               <span className="text-sm text-gray-500">
                 {/* Total: {finalRows.length} */}

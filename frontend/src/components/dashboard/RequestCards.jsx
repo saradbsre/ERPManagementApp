@@ -1,15 +1,18 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signupRequest, fetchForgotPasswordReqs } from "../../api/api";
+import Loader from "../Loader";
 
 export default function SignupRequestsCard() {
   const [requests, setRequests] = useState([]);
   const navigate = useNavigate();
+  const [loading, setLoading] = React.useState(true);
 
   // FETCH DATA
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
         const result = await signupRequest();
         const forgotPasswordReqs = await fetchForgotPasswordReqs();
 
@@ -20,6 +23,8 @@ export default function SignupRequestsCard() {
       } catch (err) {
         console.error(err);
         setRequests([]);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -32,6 +37,14 @@ export default function SignupRequestsCard() {
   state: { activeTab: 1, requests }
 });
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader type="orbit" />
+      </div>
+    );
+  }
 
   return (
     <div className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl  w-full h-96 overflow-hidden">

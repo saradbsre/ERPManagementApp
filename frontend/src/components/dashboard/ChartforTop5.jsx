@@ -1,54 +1,35 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer
-} from "recharts";
-
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { getTopExpensiveAssets, getMasterData } from "../../api/api";
+import Loader from "../Loader";
 
 export default function ChartforTop5() {
   const [data, setData] = useState([]); // This will be the flattened data for charting
-  const [serviceProviders, setServiceProviders] = useState([]);
   const activeUser = JSON.parse(localStorage.getItem("user"));
   const activeUserEmail = activeUser?.email;
   const [productTypes, setProductTypes] = useState([]);
   const [selectedProductType, setSelectedProductType] = useState("");
+  const [loading, setLoading] = React.useState(true);
 
-  useEffect(() => {
-    getMasterData("products", activeUserEmail).then((res) => {
-      const result = Array.isArray(res?.data) ? res.data : [];
-      setServiceProviders(result);
-    }).catch(() => setServiceProviders([]));
-  }, []);
 
-  const productNameByCode = useMemo(() => {
-    const map = new Map();
-    serviceProviders.forEach((sp) => {
-      const code = String(sp.prd_code || "").trim();
-      const name = String(sp.prd_name || sp.prd_name || "").trim();
-      if (code) map.set(code, name || code);
-    });
-    return map;
-  }, [serviceProviders]);
-  useEffect(() => {
+useEffect(() => {
   fetchTopExpenses("");
 }, []);
 
 const fetchTopExpenses = async (prdtype_code = "") => {
+  setLoading(true);
+
   try {
     const result = await getTopExpensiveAssets(prdtype_code);
 
     setData(result.data.transactions || []);
     setProductTypes(result.data.productTypes || []);
-
   } catch (err) {
     console.error(err);
     setData([]);
     setProductTypes([]);
+  } finally {
+    setLoading(false);
   }
 };
 
@@ -61,8 +42,8 @@ const chartData = useMemo(() => {
   if (!Array.isArray(data)) return [];
 
   return data.map((item) => {
-    const code = String(item.prd_code || "").trim();
-    const fullName = productNameByCode.get(code) || code;
+    const code = String(item.prd_name || "").trim();
+    const fullName =  code;
 
     return {
       name:
@@ -72,11 +53,15 @@ const chartData = useMemo(() => {
       "total AED": Number(item.total_amount_aed) || 0,
     };
   });
-}, [data, productNameByCode]);
+}, [data]);
 
-  // -----------------------------
-  // UI
-  // -----------------------------
+   if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader type="orbit" />
+      </div>
+    );
+  }
   return (
     <div className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl  w-full h-96 overflow-hidden">
 
@@ -94,30 +79,30 @@ const chartData = useMemo(() => {
 
         {/* DROPDOWN */}
        <select
-  className="bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm text-[12px] "
-  value={selectedProductType}
-  onChange={(e) => {
-    const value = e.target.value;
-    setSelectedProductType(value);
-    fetchTopExpenses(value);
-  }}
->
-  <option value="">All Product Types</option>
-
-  {productTypes.map((type) => {
-    const name = type.prdtype_name.trim();
-
-    return (
-      <option
-        key={type.prdtype_code}
-        value={type.prdtype_code}
-        title={name} // Shows full name on hover (browser support varies)
+        className="bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm text-[12px] "
+        value={selectedProductType}
+        onChange={(e) => {
+          const value = e.target.value;
+          setSelectedProductType(value);
+          fetchTopExpenses(value);
+        }}
       >
-        {name.length > 25 ? `${name.slice(0, 25)}...` : name}
-      </option>
-    );
-  })}
-</select>
+        <option value="">All Product Types</option>
+
+        {productTypes.map((type) => {
+          const name = type.prdtype_name.trim();
+
+          return (
+            <option
+              key={type.prdtype_code}
+              value={type.prdtype_code}
+              title={name} // Shows full name on hover (browser support varies)
+            >
+              {name.length > 25 ? `${name.slice(0, 25)}...` : name}
+            </option>
+          );
+        })}
+      </select>
 
       </div>
 
