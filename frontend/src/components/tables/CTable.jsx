@@ -5589,7 +5589,7 @@ const normalizedFilters = nextFilters.map((filter) => ({
                     <>
                     <div className="hidden md:block ">
                     <table className="min-w-max w-full text-sm border-separate border-spacing-0">
-                        <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
+                        <thead className="sticky top-0 z-40 bg-gray-100 text-gray-700 text-xs uppercase">
                             <tr>
                                <th
                                   ref={snoRef}
