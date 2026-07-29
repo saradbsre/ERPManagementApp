@@ -78,13 +78,15 @@ export default function ReportTable() {
     const [pinnedColumns, setPinnedColumns] = useState([]);
     const [visibleColumnsState, setVisibleColumnsState] = useState([]);
     const [savedTableColumns, setSavedTableColumns] = useState([]);
-const [showHidePopup, setShowHidePopup] = useState(false);
-const [hidePopupColumn, setHidePopupColumn] = useState(null);
-const [tempHideColumns, setTempHideColumns] = useState([]);
-const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
-const [columnOrder, setColumnOrder] = useState([]);
-const snoRef = useRef(null);
-const dragIndexRef = useRef(null);
+    const [showHidePopup, setShowHidePopup] = useState(false);
+    const [hidePopupColumn, setHidePopupColumn] = useState(null);
+    const [tempHideColumns, setTempHideColumns] = useState([]);
+    const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+    const [columnOrder, setColumnOrder] = useState([]);
+    const snoRef = useRef(null);
+    const dragIndexRef = useRef(null);
+    const [sortConfig, setSortConfig] = useState([]);
+    const [columnChips, setColumnChips] = useState([]);
 //console.log("savedTableColumns:", visibleColumnsState);
 const isYearlyReport =
   ["R011", "R012"].includes(String(report?.report_id || "").toUpperCase());
@@ -973,13 +975,42 @@ const filteredRows = useMemo(() => {
 
 const summaryRows = filteredRows;
 
+const sortedRows = useMemo(() => {
+  let rows = [...filteredRows];
+
+  sortConfig.forEach(({ key, direction }) => {
+    rows.sort((a, b) => {
+      const aVal = a[key];
+      const bVal = b[key];
+
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
+
+      // Numeric comparison
+      if (!isNaN(aVal) && !isNaN(bVal)) {
+        return direction === "asc"
+          ? Number(aVal) - Number(bVal)
+          : Number(bVal) - Number(aVal);
+      }
+
+      // String comparison
+      return direction === "asc"
+        ? String(aVal).localeCompare(String(bVal))
+        : String(bVal).localeCompare(String(aVal));
+    });
+  });
+
+  return rows;
+}, [filteredRows, sortConfig]);
+
 const indexedRows = useMemo(() => {
-  return filteredRows.map((row, index) => ({
+  return sortedRows.map((row, index) => ({
     ...row,
     _globalSn: index + 1,
     _group: row[groupBy] || "Unknown"
   }));
-}, [filteredRows, groupBy]);
+}, [sortedRows, groupBy, reportType]);
 
 const groupedRows = useMemo(() => {
   if (!report?.is_detailed || !groupBy) return [];
@@ -1001,29 +1032,35 @@ const groupedRows = useMemo(() => {
 const detailedFlatRows = useMemo(() => {
   if (reportType !== "detailed") return [];
 
-  return filteredRows.map((row) => ({
+  // return filteredRows.map((row) => ({
+  //   ...row,
+  //   _group: row[groupBy] || "Unknown",
+  // }));
+  return indexedRows.map((row) => ({
     ...row,
     _group: row[groupBy] || "Unknown",
   }));
-}, [filteredRows, groupBy, reportType]);
+}, [indexedRows, groupBy, reportType]);
 
-const paginatedRows = filteredRows.slice(
-  (page - 1) * pageSize,
-  page * pageSize
-);
+const paginatedRows = useMemo(() => {
+  return indexedRows.slice(
+    (page - 1) * pageSize,
+    page * pageSize
+  );
+}, [indexedRows, page, pageSize]);
 
 const paginatedDetailedRows = useMemo(() => {
   return indexedRows.slice(
     (page - 1) * pageSize,
     page * pageSize
   );
-}, [indexedRows, page]);
+}, [indexedRows, page, pageSize]);
 
 const fullGroupedRows = useMemo(() => {
   if (reportType !== "detailed") return [];
 
   return Object.entries(
-    filteredRows.reduce((acc, row) => {
+    indexedRows.reduce((acc, row) => {
       const key = row[groupBy] || "Unknown";
 
       if (!acc[key]) acc[key] = [];
@@ -1032,7 +1069,7 @@ const fullGroupedRows = useMemo(() => {
       return acc;
     }, {})
   );
-}, [filteredRows, groupBy, reportType]);
+}, [indexedRows, groupBy, reportType]);
 
 // const paginatedGroupedRows = useMemo(() => {
 //   if (reportType !== "detailed") return [];
@@ -1474,28 +1511,19 @@ const formatPrintDate = (dateStr) => {
 
 
 
-const moduleName = report?.description || "Report";
-    const formattedTime = getFormattedDateTime();
-
-
-    const fromDate = formatPrintDate(dateFilters.startDate);
-    const toDate = formatPrintDate(dateFilters.endDate);
-    
-
-    
-  const isDetailed =
-    reportType === "detailed" && allowDetailed;
-  const isEquivalent =
-    reportType === "equivalent" && report?.is_equivalent === true;
-
+  const moduleName = report?.description || "Report";
+  const formattedTime = getFormattedDateTime();
+  const fromDate = formatPrintDate(dateFilters.startDate);
+  const toDate = formatPrintDate(dateFilters.endDate);   
+  const isDetailed = reportType === "detailed" && allowDetailed;
+  const isEquivalent = reportType === "equivalent" && report?.is_equivalent === true;
   const reportTypeLabel = isEquivalent
     ? "Equivalent"
     : isDetailed
     ? "Detailed"
     : "Summary";
-
   const reportTitle = `${moduleName} ${reportTypeLabel} (${fromDate} to ${toDate})`;
-  const getColumnWidth = (col) => {
+const getColumnWidth = (col) => {
   const name = (col.column_name || "").toLowerCase();
 
   if ( name.includes("com_code") ) return "160px";
@@ -2503,7 +2531,51 @@ const handleHeaderMenuToggle = (columnName, e) => {
   setOpenMenu(columnName);
 };
 
+const handleSort = (key, direction, displayName) => {
+  setSortConfig(prev => {
+    const safe = Array.isArray(prev) ? prev : [];
+    console.log("before sort", safe, key, direction, displayName)
+    return [
+      ...safe.filter(s => s.key !== key),
+      { key, direction }
+    ];
+  });
 
+  setColumnChips(prev => {
+    const filtered = prev.filter(
+      c => !(c.type === "sort" && c.column === key)
+    );
+   console.log("after sort", filtered, key, direction, displayName)
+    return [
+      ...filtered,
+      {
+        type: "sort",
+        column: key,
+        value: direction,
+        displayName: displayName
+      }
+    ];
+  });
+
+  setOpenMenu(null);
+};
+
+
+const handleHeaderSortToggle = (key, displayName) => {
+  const existing = sortConfig.find(s => s.key === key);
+  console.log("Sorting:", key, existing);
+  if (!existing) {
+    handleSort(key, "asc", displayName);
+  } else if (existing.direction === "asc") {
+    handleSort(key, "desc", displayName);
+  } else {
+    setSortConfig(prev => prev.filter(s => s.key !== key));
+  }
+};
+
+useEffect(() => {
+  console.log("sortConfig updated:", sortConfig);
+}, [sortConfig]);
 
 const NoRecordsRow = ({ colSpan }) => (
   <tr>
@@ -2889,22 +2961,33 @@ const NoRecordsRow = ({ colSpan }) => (
     </div>
 ) : reportType === "detailed" && allowDetailed ? (
   <div className="overflow-auto max-h-[calc(100vh-260px)]">
-    <table className="min-w-max w-full text-sm border-separate border-spacing-0">
-      <thead className="bg-gray-100 text-gray-700 text-xs uppercase sticky top-0 z-10">
+    <table className="min-w-max w-full text-sm border-collapse">
+      <thead className="sticky top-0 z-40 bg-gray-100 text-gray-700 text-xs uppercase">
         <tr>
-          <th
-            ref={snoRef}
-            onClick={openColumnPopup}
-            className="group relative px-4 py-3 border-b text-left sticky left-0 z-40 bg-gray-100 w-16 min-w-16 border-r border-gray-200 cursor-pointer"
-          >
-            <span className="group-hover:opacity-0 transition">
-              S.No
-            </span>
+<th
+  ref={snoRef}
+  onClick={openColumnPopup}
+  className="
+    group relative
+    px-4 py-3
+    border-b
+    text-left
+    sticky top-0 left-0
+    z-50
+    bg-gray-100
+    w-16 min-w-16
+    border-b border-gray-600
+    cursor-pointer
+  "
+>
+  <span className="group-hover:opacity-0 transition">
+    S.No
+  </span>
 
-            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition text-gray-500">
-              <EyeIcon className="w-6 h-6" />
-            </span>
-          </th>
+  <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition text-gray-500">
+    <EyeIcon className="w-6 h-6" />
+  </span>
+</th>
 
           {yearlyDetailedColumns.map((col) => (
             <th
@@ -2918,86 +3001,11 @@ const NoRecordsRow = ({ colSpan }) => (
               }`}
             >
               <div className="flex items-center justify-between gap-2">
-                <span>{col.display_name}</span>
-                 {/* <button
-    className=" absolute right-0
-                h-5 w-5
-                flex items-center justify-center
-                rounded-md
-               
-                text-gray-400
-                hover:bg-blue-100
-                transition"
-    onClick={(e) => {
-      e.stopPropagation();
-
-      handleHeaderMenuToggle(col.column_name, e);
-    }}   //test
-  >
-    ▾
-  </button> */}
+                <span className="cursor-pointer flex-1 hover:bg-gray-200 px-1 py-1 rounded"
+    onClick={() => handleHeaderSortToggle(col.column_name, col.display_name)}>{col.display_name}</span>
+                
               </div>
-               {openMenu === col.column_name && createPortal(
-                    <div
-                      className="fixed mt-1 absolute top-9 right-0
-                      w-[275px]
-                      bg-white
-                      rounded-xl
-                      shadow-[0_15px_45px_rgba(0,0,0,0.16)]
-                      border border-gray-100
-                      z-[99999]
-                      overflow-hidden"
-                      style={{ top: menuPosition.top, left: menuPosition.left }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        onClick={() => handleSearch(col.column_name, col.display_name)}
-                        className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
-                      >
-                         Search
-                      </button>
-                      <div className="border-t border-gray-100" />
-                    
-                      <div className="border-t border-gray-100" />
-                      <button
-                        onClick={() =>
-                          handleSort(col.column_name, "asc", col.display_name)
-                        }
-                        className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
-                      >
-                        Sort by Ascending
-                      </button>
-                      <div className="border-t border-gray-100" />
-                      <button
-                        onClick={() => {
-                          console.log("Sorting by column:", col, "with direction: desc");
-                          handleSort(col.column_name, "desc", col.display_name);
-                        }}
-                        className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
-                      >
-                        Sort by Descending
-                      </button>
-                      <div className="border-t border-gray-100" />
-                      <button
-                        onClick={() => {
-                          handleGroup(col.column_name, "asc", col.display_name);
-                        }}
-                        className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
-                      >
-                        Group by Ascending
-                      </button>
-                      <div className="border-t border-gray-100" />
-                      <button
-                        onClick={() =>
-                          handleGroup(col.column_name, "desc", col.display_name)
-                        }
-                        className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
-                      >
-                        Group by Descending
-                      </button>
-                    </div>,
-                    document.body
-                  )}
+            
             </th>
           ))}
         </tr>
@@ -3034,7 +3042,16 @@ const NoRecordsRow = ({ colSpan }) => (
                     key={row.id ?? i}
                     className="group hover:bg-gray-50 transition-colors"
                   >
-                    <td className="px-4 py-3 whitespace-nowrap sticky left-0 z-20 bg-white group-hover:bg-gray-50 w-16 min-w-16 border-r border-gray-200">
+                    <td
+  className="
+    sticky left-0
+    z-0
+    bg-white
+    px-4 py-3
+    whitespace-nowrap
+    border-r border-gray-200
+  "
+>
                       {row._sn || i + 1}
                     </td>
 
