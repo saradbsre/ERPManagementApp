@@ -1703,7 +1703,7 @@ const handleSaveTransactions = async () => {
 
     setMessage({
       type: "success",
-      text: "Payment transactions saved successfully.",
+      text: "Payment transactions saved successfully. Kindly check the workspace for the saved transactions.",
     });
 
     setInvoiceRows([]);
