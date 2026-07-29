@@ -2696,9 +2696,7 @@ const handleHeaderSortToggle = (key, displayName) => {
   }
 };
 
-useEffect(() => {
-  console.log("sortConfig updated:", sortConfig);
-}, [sortConfig]);
+
 
 const NoRecordsRow = ({ colSpan }) => (
   <tr>
@@ -3114,20 +3112,56 @@ const NoRecordsRow = ({ colSpan }) => (
 
           {yearlyDetailedColumns.map((col) => (
             <th
-              key={col.column_name}
-              draggable
-              onDragStart={() => handleDragStart(col.column_name)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => handleDrop(col.column_name)}
-              className={`px-4 py-3 border-b relative select-none cursor-move ${
-                isRightAligned(col) ? "text-right" : "text-left"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="cursor-pointer flex-1 hover:bg-gray-200 px-1 py-1 rounded"
-    onClick={() => handleHeaderSortToggle(col.column_name, col.display_name)}>{col.display_name}</span>
-                
-              </div>
+  key={col.column_name}
+  draggable
+  onDragStart={() => handleDragStart(col.column_name)}
+  onDragOver={(e) => e.preventDefault()}
+  onDrop={() => handleDrop(col.column_name)}
+  className={`group px-4 py-3 border-b relative select-none cursor-move ${
+    isRightAligned(col) ? "text-right" : "text-left"
+  }`}
+>
+            <div className="flex items-center justify-between">
+  <span>{col.display_name}</span>
+
+  {(() => {
+    const sort = sortConfig.find(
+      (s) => s.key === col.column_name
+    );
+
+    return (
+      <button
+        onClick={() =>
+          handleHeaderSortToggle(
+            col.column_name,
+            col.display_name
+          )
+        }
+       className={`
+  ml-2
+  h-6
+  w-6
+  flex
+  items-center
+  justify-center
+  rounded-md
+  transition-all
+  ${
+    sort
+      ? "bg-blue-100 text-blue-600 opacity-100"
+      : "opacity-30 group-hover:opacity-100 hover:bg-gray-200 hover:text-gray-700"
+  }
+`}
+      >
+        {sort?.direction === "asc"
+          ? "▲"
+          : sort?.direction === "desc"
+          ? "▼"
+          : "⇅"}
+      </button>
+    );
+  })()}
+</div>
             
             </th>
           ))}
