@@ -5879,16 +5879,37 @@ onDrop={() => handleDrop(col.column_name)}
       title="PRF Required"
     />
     <div className="flex items-center gap-2">
-    {row.pdf_path && (
+    {/* {row.pdf_path && (
   <button
     type="button"
     onClick={() => setPreviewPdfUrl(getPdfUrl(row.pdf_path))}
-    title="View Uploaded PDF"
+    title="View Invoice"
     className="p-1 rounded hover:bg-blue-50 transition"
   >
     <EyeIcon className="w-5 h-5 text-gray-600" />
   </button>
-)}
+)} */}
+<button
+  type="button"
+  onClick={() => {
+    if (!row.pdf_path) return;
+    setPreviewPdfUrl(getPdfUrl(row.pdf_path));
+  }}
+  title={row.pdf_path ? "View Invoice" : ""}
+  disabled={!row.pdf_path}
+  className={`
+    p-1 rounded transition
+    w-7 h-7
+    flex items-center justify-center
+    ${
+      row.pdf_path
+        ? "hover:bg-blue-50 cursor-pointer"
+        : "invisible pointer-events-none"
+    }
+  `}
+>
+  <EyeIcon className="w-5 h-5 text-gray-600" />
+</button>
     
 
 
@@ -6062,7 +6083,7 @@ onDrop={() => handleDrop(col.column_name)}
 
                                 const generatedLabel = isRowUnposted(row)
                                   ? `PRF Unposted (${val})`
-                                  : `Already Generated (${val})`;
+                                  : `PRF Generated (${val})`;
                                 const generatedClass = isRowUnposted(row)
                                   ? "bg-amber-100 text-amber-700"
                                   : "bg-green-100 text-green-700";
@@ -7049,7 +7070,7 @@ onDrop={() => handleDrop(col.column_name)}
             Invoice / PO Details
           </h3>
         </div>
-  <div className="flex items-center gap-2">
+  <div className="flex items-center gap-2 min-w-[150px]">
     <label className="text-sm font-medium text-slate-700">
       Receipt No
     </label>

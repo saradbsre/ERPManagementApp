@@ -1451,7 +1451,7 @@ function getFormattedDateTime(date = new Date()) {
   hours = hours % 12;
   hours = hours ? hours : 12; // 0 becomes 12
 
-  return `${day}/${month}/${year} ${hours} ${minutes} ${ampm}`;
+return `${day}/${month}/${year} ${hours}:${minutes} ${ampm}`;
 }
 
 
@@ -1526,7 +1526,7 @@ const formatPrintDate = (dateStr) => {
 const getColumnWidth = (col) => {
   const name = (col.column_name || "").toLowerCase();
 
-  if ( name.includes("com_code") ) return "160px";
+ if (name.includes("com_code")) return "110px";
 
   if (
     name.includes("date") ||
@@ -1540,20 +1540,32 @@ const getColumnWidth = (col) => {
   ) {
     return "45px";
   }
-  if ( name.includes("billcycle_code") || name.includes("curr_code") ) {
-    return "33px";
-  }
+ if (name.includes("billcycle_code")) {
+  return "35px";
+}
+
+if (name.includes("curr_code")) {
+  return "38px";
+}
   if (name.includes("prf")) {
     return "35px";
   }
 
-  if (
-    name.includes("amount") ||
-    name.includes("price") ||
-    name.includes("total")
-  ) {
-    return "30px";
-  }
+ if (name.includes("total_amount_aed")) {
+  return "45px";
+}
+
+if (
+  name.includes("amount") ||
+  name.includes("price") ||
+  name.includes("total")
+) {
+  return "38px";
+}
+
+if (name.includes("curr_code")) {
+  return "38px";
+}
 
   if (
     name.includes("vend_code") ||
@@ -1565,7 +1577,7 @@ const getColumnWidth = (col) => {
 
   
 
-  return "70px";
+  return "50px";
 };
 
 const handlePrint = () => {
@@ -1573,66 +1585,60 @@ const handlePrint = () => {
   if (!printWindow) return;
 
   const reportTitle = getReportTitle();
-  const tableHtml = reportType === "detailed" && allowDetailed
-    ? generateDetailedTable()
-    : generateSummaryTable();
+
+  const tableHtml =
+    reportType === "detailed" && allowDetailed
+      ? generateDetailedTable()
+      : generateSummaryTable();
+
   const approvalHtml = generateApprovalHtml();
   const filterHtml = generateFilterHtml();
-  const blankSpaceHtml = generateBlankSpaceHtml();
-  const UserNameFormatted = activeUserName.charAt(0).toUpperCase() + activeUserName.slice(1).toLowerCase();
-  const printedDate = getFormattedDateTime();
+
+  printWindow.document.open();
 
   printWindow.document.write(`
+    <!DOCTYPE html>
     <html>
       <head>
+        <title>${reportTitle}</title>
         ${getPrintStyles()}
       </head>
-      <body>
-        ${generateHeader(reportTitle)}
-        ${tableHtml}
-        ${approvalHtml}
-        ${filterHtml}
-        ${blankSpaceHtml}
-         <script>
-        (function () {
-          const style = document.createElement('style');
-          style.textContent = \`
-            @media print {
-              @page {
-                
-                @bottom-left {
-                  content: "User: ${UserNameFormatted} | Printed: ${printedDate}";
-                  font-size: 10px;
-                  margin-bottom: 20mm;
-                }
-                @bottom-right {
-                  content: "Page " counter(page) " of " counter(pages);
-                  font-size: 10px;
-                  margin-bottom: 20mm;
-                }
-              }
-            }\`;
-          document.head.appendChild(style);
-        })();
 
-        window.onload = function() {
-          window.focus();
-          window.print();
-        }
-      </script>
+      <body>
+        <div class="report-page">
+          <table class="print-shell">
+            <thead>
+              <tr>
+                <td class="print-shell-header">
+                  ${generateHeader(reportTitle)}
+                </td>
+              </tr>
+            </thead>
+
+            <tbody>
+              <tr>
+                <td class="print-shell-content">
+                  ${tableHtml}
+                  ${approvalHtml}
+                  ${filterHtml}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <script>
+          window.onload = function () {
+            window.focus();
+            window.print();
+          };
+        </script>
       </body>
     </html>
   `);
 
   printWindow.document.close();
-
-  printWindow.onload = () => {
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
-  };
 };
-
 const getReportTitle = () => {
   const moduleName = report?.description || "Report";
 
@@ -1659,9 +1665,9 @@ const generateSummaryTable = () => {
 
   return `
     <table>
-      <tbody>
+      <thead>
         <tr>
-          <th class = "sno-col">S/N</th>
+          <th class="sno-col">S/N</th>
           ${columns
             .map(
               (c) => `
@@ -1672,19 +1678,30 @@ const generateSummaryTable = () => {
             )
             .join("")}
         </tr>
+      </thead>
 
+      <tbody>
         ${rows
           .map(
             (row, i) => `
               <tr>
-                <td style="text-align:center">${i + 1}</td>
+                <td class="sno-col">${i + 1}</td>
 
                 ${columns
                   .map(
                     (c) => `
-                      <td class="${isRightAligned(c) ? "text-right" : "text-left"}">
-                        ${getCellValue(row, c)}
-                      </td>
+                   <td class="${isRightAligned(c) ? "text-right" : "text-left"} ${
+  c.column_name?.toLowerCase().includes("total_amount_aed") ||
+  c.column_name?.toLowerCase().includes("amount")
+    ? "amount-cell num"
+    : ""
+} ${
+  c.column_name?.toLowerCase().includes("curr_code")
+    ? "currency-cell"
+    : ""
+}">
+  ${getCellValue(row, c)}
+</td>
                     `
                   )
                   .join("")}
@@ -1693,7 +1710,7 @@ const generateSummaryTable = () => {
           )
           .join("")}
 
-        <tr style="font-weight:bold;background:#e5e7eb;">
+        <tr class="total-row">
           <td></td>
 
           ${columns
@@ -1746,13 +1763,27 @@ const totalLabelIndex =
     <table>
       <thead>
         <tr>
-          <th style="width:25px; min-width:25px; max-width:25px;">S/N</th>
+          <th class="sno-col">S/N</th>
           ${yearlyVisibleColumns
             .map(
               (col) => `
-                <th class="${isRightAligned(col) ? "text-right" : "text-left"}" style="width:${getColumnWidth(col)}">
-                  ${col.display_name}
-                </th>
+                <th
+  class="${
+    isRightAligned(col) ? "text-right" : "text-left"
+  } ${
+    col.column_name?.toLowerCase().includes("total_amount_aed") ||
+    col.column_name?.toLowerCase().includes("amount")
+      ? "amount-header"
+      : ""
+  } ${
+    col.column_name?.toLowerCase().includes("curr_code")
+      ? "currency-header"
+      : ""
+  }"
+  style="width:${getColumnWidth(col)}"
+>
+  ${col.display_name}
+</th>
               `
             )
             .join("")}
@@ -1768,18 +1799,27 @@ const totalLabelIndex =
                 .map(
                   (row, i) => `
                     <tr>
-                      <td style="text-align:center">${i + 1}</td>
+                      <td class="sno-col" style="text-align:center">${i + 1}</td>
 
                       ${yearlyVisibleColumns
                         .map(
                           (col) => `
-                            <td class="${
-                              isRightAligned(col)
-                                ? "text-right"
-                                : "text-left"
-                            }">
-                              ${getCellValue(row, col)}
-                            </td>
+                          <td class="${
+  isRightAligned(col)
+    ? "text-right"
+    : "text-left"
+} ${
+  col.column_name?.toLowerCase().includes("total_amount_aed") ||
+  col.column_name?.toLowerCase().includes("amount")
+    ? "amount-cell num"
+    : ""
+} ${
+  col.column_name?.toLowerCase().includes("curr_code")
+    ? "currency-cell"
+    : ""
+}">
+  ${getCellValue(row, col)}
+</td>
                           `
                         )
                         .join("")}
@@ -1832,7 +1872,7 @@ const totalLabelIndex =
                       )
                       .join("")}
 
-                    <tr style="font-weight:bold;background:#f1f5f9;">
+                    <tr class="total-row">
                       <td></td>
 
                       ${yearlyVisibleColumns
@@ -1858,7 +1898,7 @@ const totalLabelIndex =
                 .join("")
         }
 
-        <tr style="font-weight:bold;background:#e5e7eb;">
+        <tr class="total-row">
           <td></td>
 
           ${yearlyVisibleColumns
@@ -1888,9 +1928,6 @@ const totalLabelIndex =
 };
 
 const generateHeader = (reportTitle) => `
-<div class="report-page">
-<div class="print-shell">
-<div class="print-shell-header">
 <div class="report-header">
   <div class="report-header-text">
     <h1 class="company-name">
@@ -1901,9 +1938,6 @@ const generateHeader = (reportTitle) => `
       ${reportTitle}
     </h2>
   </div>
-</div>
-</div>
-</div>
 </div>
 `;
 
@@ -2011,99 +2045,146 @@ const generateApprovalHtml = () => `
 </div>
 `;
 
-const generateBlankSpaceHtml = () => `
-  <div class="blank-space">
-    *** SPACE INTENTIONALLY LEFT BLANK ***
-  </div>
-`;
+// const generateBlankSpaceHtml = () => `
+//   <div class="blank-space">
+//     *** SPACE INTENTIONALLY LEFT BLANK ***
+//   </div>
+// `;
 
 const getPrintStyles = () => `
 <style>
-
-@page{
+@page {
   ${
     reportType === "detailed" && allowDetailed
-      ? "size:A4 landscape;"
-      : "size:A4 portrait;"
+      ? "size: A4 landscape;"
+      : "size: A4 portrait;"
   }
-   margin: 8mm 7mm 10mm 7mm;
+
+  margin: 8mm 7mm 12mm 7mm;
+
+  @bottom-left {
+    content: "User: ${activeUserName || "User"} | Printed: ${getFormattedDateTime()} | Designed by Abdulwahed Bin Shabib Group";
+    font-size: 7px;
+    font-family: "Times New Roman", serif;
+  }
+
+  @bottom-right {
+    content: "Page " counter(page) " of " counter(pages);
+    font-size: 7px;
+    font-family: "Times New Roman", serif;
+  }
 }
 
- body {
-      font-family: "Times New Roman", serif;
-      color: #1f2933;
-      margin: 0;
-      padding: 0;
-      background: #ffffff;
-      font-size: 9px;
-    }
+* {
+  box-sizing: border-box;
+}
 
-  table {
-   width: calc(100% - 2px);
-  margin: 0 auto;
-  border-collapse: collapse;
+html,
+body {
+  font-family: "Times New Roman", serif;
+  color: #1f2933;
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  font-size: 8px;
+  overflow: visible !important;
+}
+
+.report-page {
+  width: 100%;
+  position: relative;
+  padding: 4px 0 6px 0 !important;
+  page-break-after: auto;
+  break-after: auto;
+}
+
+
+.print-shell {
+  width: 100%;
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
   table-layout: fixed;
-    border-left: 1px solid #ccc;
-  border-right: 1px solid #ccc;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: #ffffff !important;
+}
+
+.print-shell > thead,
+.print-shell > tbody,
+.print-shell > thead > tr,
+.print-shell > tbody > tr,
+.print-shell > thead > tr > td,
+.print-shell > tbody > tr > td {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: #ffffff !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.print-shell-content table:not(.approval-table) {
+  width: 100%;
+  border-collapse: collapse !important;
+  table-layout: fixed;
   margin-bottom: 4px;
-  
 }
 
-th {
-      background: #e5e7eb !important;
-      color: #111827 !important;
-      border: 1px solid #9ca3af;
-      padding: 4px 3px;
-      font-size: 8px;
-      font-weight: bold;
-      text-align: center;
-      vertical-align: middle;
-      line-height: 1.15;
-      word-break: break-word;
-    }
-
-    td {
-      border: 1px solid #9ca3af;
-      padding: 4px 2px !important;
-      font-size: 8px;
-      text-align: center;
-      vertical-align: middle;
-      line-height: 1.2;
-      word-break: break-word;
-    }
-
-    tbody  {
-      background: #f8fafc;
-    } 
-
-.text-right{
-    text-align:right;
+.print-shell-content table:not(.approval-table) th,
+.print-shell-content table:not(.approval-table) td {
+  border: 1px solid #9ca3af !important;
 }
 
-.text-left{
-    text-align:left;
+.print-shell-header {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0 0 4px 0 !important;
+  margin: 0 !important;
 }
-    
- .sno-col {
-      width: 20px !important;
-      font-weight: bold;
-    }
+
+.print-shell-content {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+  .print-shell > thead > tr > td,
+.print-shell > tbody > tr > td {
+  border: 0 !important;
+  border-bottom: 0 !important;
+  border-top: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: #ffffff !important;
+}
+
+/* HEADER */
 .report-header {
   border: 1px solid #1f2937;
-  border-radius: 6px;
+  border-radius: 5px;
   padding: 6px 10px;
-  background: #fff;
+  margin-bottom: 7px;
+  background: #ffffff;
+  min-height: 54px;
 
   display: flex;
   justify-content: center;
   align-items: center;
+}
 
-  min-height: 60px;
+.report-header-text {
+  text-align: center;
+  width: 100%;
 }
 
 .company-name {
   text-align: center;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: bold;
   letter-spacing: 0.3px;
   color: #111827;
@@ -2113,100 +2194,179 @@ th {
 
 .report-title {
   text-align: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: bold;
   color: #374151;
-  margin: 3px 0 0;
+  margin: 3px 0 0 0;
   text-transform: uppercase;
+  white-space: normal;
+}
+
+/* MAIN TABLE */
+.print-shell-content table:not(.approval-table) {
+  width: 100%;
+  border-collapse: collapse !important;
+  table-layout: fixed;
+  margin-bottom: 4px;
+  page-break-inside: auto;
+}
+
+thead {
+  display: table-header-group;
+}
+
+tbody {
+  background: #f8fafc;
+}
+
+tr {
+  page-break-inside: auto !important;
+  break-inside: auto !important;
+  page-break-after: auto;
+}
+
+th {
+  background: #e5e7eb !important;
+  color: #111827 !important;
+  border: 1px solid #9ca3af;
+  padding: 3px 2px !important;
+  font-size: 7px;
+  font-weight: bold;
+  text-align: center;
+  vertical-align: middle;
+  line-height: 1.1;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+td {
+  border: 1px solid #9ca3af;
+  padding: 3px 2px !important;
+  font-size: 7px;
+  text-align: center;
+  vertical-align: middle;
+  line-height: 1.1;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+td.num,
+td.amount-cell,
+td.currency-cell,
+th.amount-header,
+th.currency-header {
+  white-space: nowrap !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  text-align: right !important;
+}
+
+th.currency-header,
+td.currency-cell {
+  text-align: center !important;
+}
+
+.text-right {
+  text-align: right !important;
+}
+
+.text-left {
+  text-align: left !important;
+}
+
+.sno-col {
+  width: 22px !important;
+  min-width: 22px !important;
+  max-width: 22px !important;
+  font-weight: bold;
+  text-align: center !important;
+}
+
+.num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-  .print-shell {
+
+.total-row td {
+  background: #e5e7eb !important;
+  font-weight: bold;
+  color: #111827;
+}
+
+/* APPROVAL SAME LIKE CTABLE */
+.print-footer-area {
+  padding-top: 8px !important;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.approval-section {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.approval-table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
-.print-shell > thead {
-  display: table-header-group;
-}
-
-.print-shell > tbody {
-  display: table-row-group;
-}
-
-.print-shell > thead > tr > td,
-.print-shell > tbody > tr > td {
-  
-  padding: 0 !important;
-  background: #ffffff !important;
-}
-
-.print-shell-header {
-  padding-bottom: 3px !important;
-}
-
-.report-page {
-  width: 100%;
-  min-height: auto;
-  position: relative;
-  padding: 4px 0 10px 0 !important;
-  page-break-after: avoid;
-  break-after: avoid;
-}
-.report-header-text {
-  text-align: center;
-  padding: 0 20px;
-}
-
 .approval-title {
-  background: #e5e7eb;
+  background: #e5e7eb !important;
   color: #111827;
   text-align: left !important;
   font-size: 8px;
   font-weight: bold;
+  padding: 3px !important;
   padding-left: 4px !important;
   border: 1px solid #111827;
 }
 
-.approval-table td {
-  height: 100px !important;
+.approval-table th {
+  background: #e5e7eb !important;
+  color: #111827 !important;
   border: 1px solid #111827;
-  padding: 0 !important;
+  padding: 3px 2px !important;
+  font-size: 8px;
+  font-weight: bold;
   text-align: center;
-  vertical-align: bottom !important;
 }
 
- .approval-table th{
-background: #e5e7eb !important;
-      color: #111827 !important;
-      border: 1px solid #111827;
-      padding: 4px 3px;
-      font-size: 8px;
-      font-weight: bold;
-      text-align: center;
-      vertical-align: middle;
-      line-height: 1.15;
-      word-break: break-word;
- }
+.approval-table td {
+  height: 75px !important;
+  border: 1px solid #111827;
+  padding: 3px 2px 8px 2px !important;
+  font-size: 8px !important;
+  font-weight: bold;
+  text-align: center;
+  vertical-align: bottom !important;
+  background: #f8fafc;
+}
 
 .approval-content {
-  padding-bottom: 8px;
+  padding-bottom: 6px;
   font-size: 8px;
   font-weight: bold;
 }
 
 .approval-dept {
-  margin-top: 3px !important;
+  margin-top: 4px !important;
   font-size: 8px;
   color: #4b5563;
   font-weight: bold;
 }
-  .blank-space {
-    display: block;
-    text-align: center;
-    font-size: 10px;
-    font-weight: bold;
-    margin: 10px 0;
+
+.blank-space,
+.print-footer {
+  display: none !important;
+}
+
+@media print {
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
 </style>
 `;
@@ -2214,7 +2374,7 @@ background: #e5e7eb !important;
 const handlePdf = async () => {
   try {
     const isDetailed =
-      reportType === "detailed" && report?.is_detailed === true;
+  reportType === "detailed" && allowDetailed;
 
     const reportTitle = getReportTitle();
 
@@ -2224,7 +2384,7 @@ const handlePdf = async () => {
 
     const approvalHtml = generateApprovalHtml();
     const filterHtml = generateFilterHtml();
-    const blankSpaceHtml = generateBlankSpaceHtml();
+    // const blankSpaceHtml = generateBlankSpaceHtml();
 
     // Create hidden container
     const container = document.createElement("div");
@@ -2234,99 +2394,63 @@ const handlePdf = async () => {
     container.style.width = isDetailed ? "297mm" : "210mm";
     container.style.background = "#ffffff";
     container.style.zIndex = "-1";
+container.innerHTML = `
+  <div class="report-page">
+    <table class="print-shell">
+      <thead>
+        <tr>
+          <td class="print-shell-header">
+            ${generateHeader(reportTitle)}
+          </td>
+        </tr>
+      </thead>
 
-    container.innerHTML = `
-      <div class="report-page">
-        ${generateHeader(reportTitle)}
-        ${tableHtml}
-        ${approvalHtml}
-        ${filterHtml}
-        ${blankSpaceHtml}
-      </div>
-    `;
+      <tbody>
+        <tr>
+          <td class="print-shell-content">
+            ${tableHtml}
+            ${approvalHtml}
+            ${filterHtml}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+`;
 
     // Reuse your existing print CSS
     const style = document.createElement("style");
-
 style.innerHTML = `
   ${getPrintStyles()}
 
   table {
-  border-collapse: collapse !important;
-}
-
-tr {
-  page-break-inside: avoid !important;
-  break-inside: avoid !important;
-}
-
-td,
-th {
-  page-break-inside: avoid !important;
-  break-inside: avoid !important;
-}
-
-thead {
-  display: table-header-group;
-}
-
-tfoot {
-  display: table-footer-group;
-}
-
-  td:not(.approval-table td) {
-    padding: 2px 4px 10px 4px !important;
-    line-height: 1 !important;
-    vertical-align: middle !important;
-    font-size: 7px !important;
+    border-collapse: collapse !important;
   }
 
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+
+  tr {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  td,
   th {
-    padding: 2px 4px 10px 4px !important;
-    line-height: 1 !important;
-    vertical-align: middle !important;
-    font-size: 7px !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
   }
 
-  .approval-table td {
-    height: 100px !important;
-    border: 1px solid #111827;
-    padding: 0 !important;
-    text-align: center;
-    vertical-align: bottom !important;
+  .approval-section,
+  .approval-table {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
-
-  .approval-content {
-    padding-bottom: 8px;
-    font-size: 8px;
-    font-weight: bold;
-  }
-
-  .approval-dept {
-    margin-top: 3px !important;
-    font-size: 8px;
-    color: #4b5563;
-    font-weight: bold;
-  }
-
-  .approval-title {
-    background: #e5e7eb;
-    color: #111827;
-    text-align: left !important;
-    font-size: 8px;
-    font-weight: bold;
-    padding: 2px 4px 10px 4px !important;
-    border: 1px solid #111827;
-  }
-
-  .approval-prepared td {
-    padding: 0 !important;
-    border: 1px solid #111827;
-  }
-     .sno-col {
-      width: 30px !important;
-      font-weight: bold;
-    }
 `;
 
 container.appendChild(style);
@@ -2360,9 +2484,9 @@ container.appendChild(style);
         orientation: isDetailed ? "landscape" : "portrait",
       },
 
-      pagebreak: {
-  mode: ["avoid-all", "css", "legacy"],
-  avoid: ["tr", "td", ".approval-table", ".approval-section"],
+ pagebreak: {
+  mode: ["css", "legacy"],
+  avoid: [".approval-table", ".approval-section"],
 },
     };
 
@@ -2394,7 +2518,7 @@ container.appendChild(style);
 
       // Bottom left
       pdf.text(
-        `User: ${user} | Printed: ${printedDate}`,
+        `User: ${user} | Printed: ${printedDate} | Designed by Abdulwahed Bin Shabib Group`,
         7,
         pageHeight - 5
       );
@@ -2420,9 +2544,8 @@ container.appendChild(style);
 
 const handleExcel = async () => {
   console.log("Exporting to Excel...");
-
-  const isDetailed =
-    reportType === "detailed" && report?.is_detailed === true;
+const isDetailed =
+  reportType === "detailed" && allowDetailed;
 
   const cols = isDetailed
     ? visibleDetailedColumns
