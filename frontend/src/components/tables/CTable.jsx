@@ -488,43 +488,63 @@ const toggleTempColumn = (colName) => {
 
 const saveColumnSelection = async (selectedCols = []) => {
   try {
+    const moduleId = id || currentModule?.module_id;
+
+    if (!moduleId || !activeUserEmail) {
+      console.error("Module ID or user email missing");
+      return;
+    }
+
     const columnSettings = {
       visibleColumns: selectedCols,
       pinnedColumns: pinnedColumns || [],
     };
 
     await upsertCustomizedColumns(
-      currentModule?.module_id,
+      moduleId,
       activeUserEmail,
       columnSettings
     );
 
-    // ✅ UPDATE UI IMMEDIATELY (NO REFRESH NEEDED)
     setVisibleColumnsState(selectedCols);
-
     setSelectedColumns(selectedCols);
     setSavedTableColumns(selectedCols);
+    setColumnOrder(selectedCols);
     setTableColumnMode("custom");
 
   } catch (err) {
     console.error("Failed to save customized columns:", err);
   }
 };
-
 const handlePinColumn = async (columnName) => {
   try {
+    const moduleId = id || currentModule?.module_id;
+
+    if (!moduleId || !activeUserEmail) {
+      console.error("Module ID or user email missing");
+      return;
+    }
+
     const newPinnedColumns = pinnedColumns.includes(columnName)
       ? pinnedColumns.filter((col) => col !== columnName)
       : [...pinnedColumns, columnName];
 
-    setPinnedColumns(newPinnedColumns);
+    const currentVisibleColumns =
+      visibleColumnsState?.length > 0
+        ? visibleColumnsState
+        : columnOrder?.length > 0
+          ? columnOrder
+          : columns.map((c) => c.column_name);
 
     const columnSettingsPin = {
+      visibleColumns: currentVisibleColumns,
       pinnedColumns: newPinnedColumns,
     };
 
+    setPinnedColumns(newPinnedColumns);
+
     await upsertCustomizedColumns(
-      currentModule?.module_id,
+      moduleId,
       activeUserEmail,
       columnSettingsPin
     );
@@ -532,7 +552,7 @@ const handlePinColumn = async (columnName) => {
     setOpenMenu(null);
 
   } catch (err) {
-    console.error(err);
+    console.error("Failed to pin column:", err);
   }
 };
 
@@ -672,22 +692,37 @@ const buildDatePayload = (df) => {
 
 const fetchCustomizedColumns = async () => {
   try {
+    const moduleId = id || currentModule?.module_id;
+
+    if (!moduleId || !activeUserEmail) {
+      return { visibleColumns: [], pinnedColumns: [] };
+    }
+
     const res = await getCustomizedColumns(
-      currentModule?.module_id,
+      moduleId,
       activeUserEmail
     );
 
     const savedColumns = res?.data?.data?.columns;
-    //console.log("Fetched customized columns:", savedColumns);
+
     if (Array.isArray(savedColumns)) {
-      return { visibleColumns: savedColumns, pinnedColumns: [] };
-    }
-    if (savedColumns && typeof savedColumns === "object") {
       return {
-        visibleColumns: Array.isArray(savedColumns.visibleColumns) ? savedColumns.visibleColumns : [],
-        pinnedColumns: Array.isArray(savedColumns.pinnedColumns) ? savedColumns.pinnedColumns : [],
+        visibleColumns: savedColumns,
+        pinnedColumns: [],
       };
     }
+
+    if (savedColumns && typeof savedColumns === "object") {
+      return {
+        visibleColumns: Array.isArray(savedColumns.visibleColumns)
+          ? savedColumns.visibleColumns
+          : [],
+        pinnedColumns: Array.isArray(savedColumns.pinnedColumns)
+          ? savedColumns.pinnedColumns
+          : [],
+      };
+    }
+
     return { visibleColumns: [], pinnedColumns: [] };
 
   } catch (err) {
@@ -1705,27 +1740,40 @@ const loadModule = async (
     const cols = (mod?.columns || []).filter((c) => c.is_active !== false);
     const savedOrder = settings?.visibleColumns || [];
 
-    if (savedOrder.length > 0) {
-      const map = new Map(cols.map((c) => [c.column_name, c]));
+  if (savedOrder.length > 0) {
+  const map = new Map(cols.map((c) => [c.column_name, c]));
 
-      const ordered = savedOrder
-        .map((name) => map.get(name))
-        .filter(Boolean);
+  const ordered = savedOrder
+    .map((name) => map.get(name))
+    .filter(Boolean);
 
-      const remaining = cols.filter(
-        (c) => !savedOrder.includes(c.column_name)
-      );
+  const remaining = cols.filter(
+    (c) => !savedOrder.includes(c.column_name)
+  );
 
-      const finalColumns = [...ordered, ...remaining];
+  const finalColumns = [...ordered, ...remaining];
 
-      setColumns(finalColumns);
-      setVisibleColumnsState(savedOrder);
-      setSelectedColumns(savedOrder);
-      setSavedTableColumns(savedOrder);
-      setTableColumnMode("custom");
-    } else {
-      setColumns(orderColumnsByConfig(cols));
-    }
+  setColumns(finalColumns);
+
+  // Only these columns should be visible
+  setVisibleColumnsState(savedOrder);
+  setSelectedColumns(savedOrder);
+  setSavedTableColumns(savedOrder);
+  setColumnOrder(savedOrder);
+
+  setTableColumnMode("custom");
+} else {
+  const defaultCols = orderColumnsByConfig(cols);
+  const defaultNames = defaultCols.map((c) => c.column_name);
+
+  setColumns(defaultCols);
+  setVisibleColumnsState([]);
+  setSelectedColumns(defaultNames);
+  setSavedTableColumns([]);
+  setColumnOrder(defaultNames);
+
+  setTableColumnMode("default");
+}
   } catch (err) {
     console.error("Load module failed:", err);
     setRows([]);
@@ -2736,14 +2784,14 @@ const handlePrint = () => {
    
 
 
-    useEffect(() => {
-        const saved = localStorage.getItem(`print_columns_${id}`);
-        if (saved) {
-            setSelectedColumns(JSON.parse(saved));
-        } else {
-            setSelectedColumns(columns.map(c => c.column_name)); // default all
-        }
-    }, [columns]);
+    // useEffect(() => {
+    //     const saved = localStorage.getItem(`print_columns_${id}`);
+    //     if (saved) {
+    //         setSelectedColumns(JSON.parse(saved));
+    //     } else {
+    //         setSelectedColumns(columns.map(c => c.column_name)); // default all
+    //     }
+    // }, [columns]);
 
     const toggleColumn = (colName) => {
         setSelectedColumns(prev =>
@@ -4742,48 +4790,113 @@ const printableGroupedRows = React.useMemo(() => {
 //console.log("Printable grouped rows:", printableGroupedRows);
 
 const dragIndexRef = useRef(null);
-
+const isUserColumnDragRef = useRef(false);
 const handleDragStart = (colName) => {
   dragIndexRef.current = colName;
 };
 
-const handleDrop = (dropColName) => {
+// const handleDrop = (dropColName) => {
+//   const dragColName = dragIndexRef.current;
+
+//   if (!dragColName || dragColName === dropColName) return;
+
+//   setColumnOrder((prev) => {
+//     const updated = [...prev];
+
+//     const dragIndex = updated.indexOf(dragColName);
+//     const dropIndex = updated.indexOf(dropColName);
+
+//     if (dragIndex === -1 || dropIndex === -1) return prev;
+
+//     const [removed] = updated.splice(dragIndex, 1);
+//     updated.splice(dropIndex, 0, removed);
+
+//     return updated;
+//   });
+
+//   dragIndexRef.current = null;
+// };
+
+
+
+
+const handleDrop = async (dropColName) => {
   const dragColName = dragIndexRef.current;
 
   if (!dragColName || dragColName === dropColName) return;
 
-  setColumnOrder((prev) => {
-    const updated = [...prev];
+  const updated = [...columnOrder];
 
-    const dragIndex = updated.indexOf(dragColName);
-    const dropIndex = updated.indexOf(dropColName);
+  const dragIndex = updated.indexOf(dragColName);
+  const dropIndex = updated.indexOf(dropColName);
 
-    if (dragIndex === -1 || dropIndex === -1) return prev;
+  if (dragIndex === -1 || dropIndex === -1) return;
 
-    const [removed] = updated.splice(dragIndex, 1);
-    updated.splice(dropIndex, 0, removed);
-
-    return updated;
-  });
+  const [removed] = updated.splice(dragIndex, 1);
+  updated.splice(dropIndex, 0, removed);
 
   dragIndexRef.current = null;
+
+  setColumnOrder(updated);
+
+  // Save only after user drag/drop
+  await saveColumnSelection(updated);
 };
 
+// useEffect(() => {
+//   if (!columnOrder?.length) return;
+
+//   const timeout = setTimeout(() => {
+//     saveColumnSelection(columnOrder);
+//   }, 300); // debounce to avoid spam
+
+//   return () => clearTimeout(timeout);
+// }, [columnOrder]);
+// useEffect(() => {
+//   if (!visibleColumns?.length) return;
+
+//   setColumnOrder(visibleColumns.map(c => c.column_name));
+//   // run only once when columns first arrive
+// }, [visibleColumns?.length]);
+// const visibleColumnKey = useMemo(() => {
+//   return visibleColumns.map((c) => c.column_name).join("|");
+// }, [visibleColumns.length, visibleColumnsState, pinnedColumns]);
+
+const visibleColumnKey = useMemo(() => {
+  return visibleColumnsState.join("|");
+}, [visibleColumnsState]);
+
+// useEffect(() => {
+//   if (!visibleColumns?.length) return;
+
+//   const nextOrder = visibleColumns.map((c) => c.column_name);
+
+//   setColumnOrder((prev) => {
+//     const prevKey = prev.join("|");
+//     const nextKey = nextOrder.join("|");
+
+//     if (prevKey === nextKey) {
+//       return prev;
+//     }
+
+//     return nextOrder;
+//   });
+// }, [visibleColumnKey]);
+
 useEffect(() => {
-  if (!columnOrder?.length) return;
+  if (!visibleColumnsState?.length) return;
 
-  const timeout = setTimeout(() => {
-    saveColumnSelection(columnOrder);
-  }, 300); // debounce to avoid spam
+  setColumnOrder((prev) => {
+    const prevKey = prev.join("|");
+    const nextKey = visibleColumnsState.join("|");
 
-  return () => clearTimeout(timeout);
-}, [columnOrder]);
-useEffect(() => {
-  if (!visibleColumns?.length) return;
+    if (prevKey === nextKey) {
+      return prev;
+    }
 
-  setColumnOrder(visibleColumns.map(c => c.column_name));
-  // run only once when columns first arrive
-}, [visibleColumns?.length]);
+    return visibleColumnsState;
+  });
+}, [visibleColumnKey]);
 
 const toggleTotal = (columnName) => {
   setShowTotals((prev) =>
@@ -4836,12 +4949,22 @@ const openMenuEye = () => {
 
   setHidePopupColumn("__sno__");
 
-  setTempHideColumns(
-    activeViewId === "main"
-      ? visibleColumns.map((c) => c.column_name)
-      : [...tempHideColumns]
-  );
-
+  // setTempHideColumns(
+  //   activeViewId === "main"
+  //     ? visibleColumns.map((c) => c.column_name)
+  //     : [...tempHideColumns]
+  // );
+setTempHideColumns(
+  activeViewId === "main"
+    ? (
+        visibleColumnsState?.length > 0
+          ? visibleColumnsState
+          : columnOrder?.length > 0
+            ? columnOrder
+            : visibleColumns.map((c) => c.column_name)
+      )
+    : [...tempHideColumns]
+);
   setShowHidePopup(true);
 };
 
