@@ -1287,12 +1287,19 @@ const handleGenerate = async () => {
 
   setPreviewFromGenerateModal(false);
 
-  await createprf(
-    payload,
-    activeUserEmail,
-    selectedRow
-  );
+const selectedRowsForApi = Array.isArray(selectedRow)
+  ? selectedRow.map((row) => ({
+      id: row.id,
+    }))
+  : selectedRow?.id
+    ? [{ id: selectedRow.id }]
+    : [];
 
+await createprf(
+  payload,
+  activeUserEmail,
+  selectedRowsForApi
+);
   // Preview can still use original rows
   // setPreviewData({
   //   header: selectedRow,
