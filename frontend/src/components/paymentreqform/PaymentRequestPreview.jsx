@@ -90,7 +90,7 @@ const currencyNames = {
       width: 1,
       fontSize: 9,
       margin: 2,
-      displayValue: true
+      displayValue: false
     });
   }
 }, [details?.prf_num]);

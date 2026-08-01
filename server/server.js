@@ -38,6 +38,8 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use(cookieParser());
+
 app.use(
   session({
     secret: "1234567890", // use a strong secret in production!
@@ -50,7 +52,6 @@ app.use(
 // Mount auth routes under /api/auth
 app.use("/api/auth", authRoutes);
 app.use("/api/itasset", itassetapi); // Mount IT Asset API routes
-app.use(cookieParser());
 
 
 

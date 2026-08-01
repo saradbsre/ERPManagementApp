@@ -14,6 +14,7 @@ export default function EditRowPopup({
   fetchMasterDataForColumn,
   serviceProviders = [],
   vatPercent = 0,
+    popupMode,
 }) {
   const [activeField, setActiveField] = useState(null);
   const [fieldSearch, setFieldSearch] = useState({});
@@ -138,7 +139,9 @@ useEffect(() => {
         {/* HEADER */}
         <div className="flex justify-between items-center p-5 border-b bg-gradient-to-r from-slate-50 to-blue-50">
           <div>
-            <h2 className="text-lg font-semibold text-gray-800">Edit Record</h2>
+           <h2 className="text-xl font-bold text-gray-800">
+  {popupMode === "clone" ? "Clone Transaction" : "Edit Record"}
+</h2>
             
           </div>
 
@@ -310,7 +313,7 @@ useEffect(() => {
             onClick={onSave}
             className="px-5 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium shadow-md transition"
           >
-            Save Changes
+            {popupMode === "clone" ? "Save Clone" : "Save Changes"}
           </button>
         </div>
       </div>

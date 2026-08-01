@@ -188,6 +188,18 @@ export const createPaymentTransactions = (payload, activeUserEmail) => {
   });
 };
 
+export const logoutAllDevices = (email, deviceName,browserName) =>
+  API.post(
+    "/auth/logout-all-devices",
+    { email, deviceName, browserName },
+    { withCredentials: true }
+  );
+
+export const checkCurrentSession = () =>
+  API.get("/auth/check-current-session", {
+    withCredentials: true,
+  });
+
 export const dataTypes = () => {
   return API.get("/data-types");
 }

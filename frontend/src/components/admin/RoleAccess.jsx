@@ -12,6 +12,7 @@ const defaultPermissions = {
   print: false,
   export: false,
   access: true,
+    all_data_access: false,
 };
 
 export default function RoleAccess() {
@@ -67,6 +68,7 @@ export default function RoleAccess() {
       print: role.print,
       export: role.export,
       access: role.access,
+      all_data_access: role.all_data_access,
     });
     setSelectedRoleId(role.id);
     setModalOpen(true);
@@ -172,6 +174,7 @@ export default function RoleAccess() {
         <th className="text-left">DELETE</th>
         <th className="text-left">PRINT</th>
         <th className="text-left">EXPORT</th>
+        <th className="text-left">ALL DATA ACCESS</th>
         <th className="text-right p-4">ACTION</th>
       </tr>
     </thead>
@@ -190,7 +193,7 @@ export default function RoleAccess() {
           <td>{renderPermission(r.delete)}</td>
           <td>{renderPermission(r.print)}</td>
           <td>{renderPermission(r.export)}</td>
-
+<td>{renderPermission(r.all_data_access)}</td>
           <td className="text-right p-4">
             <button
               onClick={() => handleEdit(r)}
@@ -359,7 +362,8 @@ export default function RoleAccess() {
               ["Modify",r.modify],
               ["Delete",r.delete],
               ["Print",r.print],
-              ["Export",r.export]
+              ["Export",r.export],
+              ["All Data Access",r.all_data_access]
             ].map(([name,value])=>(
 
 

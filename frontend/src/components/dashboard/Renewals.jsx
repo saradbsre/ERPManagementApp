@@ -59,7 +59,7 @@ useEffect(() => {
 
     if (diff < 0) {
       return {
-        label: "Overdue",
+        label: "Expired",
         bg: "bg-gray-100",
         border: "border-gray-300",
         text: "text-gray-500",
@@ -118,7 +118,7 @@ useEffect(() => {
 
  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="pt-50  items-center justify-center min-h-screen">
         <Loader type="orbit" />
       </div>
     );

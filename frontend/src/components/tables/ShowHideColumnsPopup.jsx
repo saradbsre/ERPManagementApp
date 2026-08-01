@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { Maximize2 } from "lucide-react";
+
 import {
   restrictToVerticalAxis,
   restrictToParentElement,
@@ -87,6 +89,10 @@ export default function ShowHideColumnsPopup({
 }) {
   const [search, setSearch] = useState("");
   const [activeId, setActiveId] = useState(null);
+
+  const [panelHeight, setPanelHeight] = useState(520);
+const resizingRef = useRef(false);
+
   const panelRef = useRef(null);
   const allColumnNames = columns.map((c) => c.column_name);
  // console.log("ShowHideColumnsPopup rendered with columns:", columns, "and tempHideColumns:", tempHideColumns);
@@ -168,15 +174,53 @@ const activeColumn = columns.find(
     return prev;
   });
 };
+const startResize = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  resizingRef.current = true;
+
+  const startY = e.clientY;
+  const startHeight = panelHeight;
+
+  const handleMouseMove = (moveEvent) => {
+    if (!resizingRef.current) return;
+
+    const newHeight = startHeight + (moveEvent.clientY - startY);
+
+    if (newHeight >= 420 && newHeight <= window.innerHeight - 80) {
+      setPanelHeight(newHeight);
+    }
+  };
+
+  const handleMouseUp = () => {
+    resizingRef.current = false;
+    document.removeEventListener("mousemove", handleMouseMove);
+    document.removeEventListener("mouseup", handleMouseUp);
+  };
+
+  document.addEventListener("mousemove", handleMouseMove);
+  document.addEventListener("mouseup", handleMouseUp);
+};
 
   return (
+    // <div
+    //   ref={panelRef}
+    //   className="fixed z-[10000] w-[340px] rounded-2xl border border-slate-200 bg-white shadow-2xl"
+    //   style={{ top: panelTop, left: panelLeft }}
+    //   onClick={(e) => e.stopPropagation()}
+    // >
     <div
-      ref={panelRef}
-      className="fixed z-[10000] w-[340px] rounded-2xl border border-slate-200 bg-white shadow-2xl"
-      style={{ top: panelTop, left: panelLeft }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="border-b border-slate-100 px-4 py-3 bg-gradient-to-r from-slate-50 to-blue-50 rounded-t-2xl">
+  ref={panelRef}
+  className="fixed z-[10000] w-[340px] rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden relative"
+  style={{
+   top: `-100px`,
+   left: `0px`,
+   height: `${panelHeight}px`,
+  }}
+  onClick={(e) => e.stopPropagation()}
+>
+      <div className="border-b border-slate-100 px-4 py-3 bg-gradient-to-r from-slate-50 to-blue-50 rounded-t-2xl text-[13px]">
         <div className="flex items-center justify-between gap-2">
           <div className="font-semibold text-slate-800">
             Show / Hide Columns
@@ -188,29 +232,29 @@ const activeColumn = columns.find(
             ✕
           </button>
         </div>
-        <div className="text-xs text-slate-500 mt-1">
+        <div className="text-[13px] text-slate-500 mt-1">
           {tempHideColumns.length} / {allColumnNames.length} selected
         </div>
       </div>
 
-      <div className="p-4 space-y-3">
+  <div className="p-4 space-y-3 h-[calc(100%-74px)] flex flex-col text-sm">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search columns..."
-          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
         />
 
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center justify-between text-[13px]">
           <button
-            className="rounded-lg bg-blue-50 px-2.5 py-1 text-blue-700 hover:bg-blue-100"
+            className="rounded-lg bg-blue-50 px-2.5 py-1 text-blue-700 hover:bg-blue-100 text-[13px]"
             onClick={() => setTempHideColumns(allColumnNames)}
           >
             Select All
           </button>
           <button
-            className="rounded-lg bg-rose-50 px-2.5 py-1 text-rose-700 hover:bg-rose-100"
+            className="rounded-lg bg-rose-50 px-2.5 py-1 text-rose-700 hover:bg-rose-100 text-[13px]"
             onClick={() => setTempHideColumns([])}
           >
             Clear All
@@ -239,7 +283,7 @@ const activeColumn = columns.find(
     items={filteredColumns.map(c => c.column_name)}
     strategy={verticalListSortingStrategy}
   >
-    <div className="max-h-72 overflow-y-auto overflow-x-hidden rounded-xl border border-slate-100 p-2">
+<div className="flex-1 overflow-y-auto overflow-x-hidden rounded-xl border border-slate-100 p-2 text-[13px]">
       {filteredColumns.map((c) => (
         <SortableItem
           key={c.column_name}
@@ -254,13 +298,13 @@ const activeColumn = columns.find(
   {activeColumn ? (
     <div
       className="flex items-center justify-between rounded-xl border border-blue-500 bg-white p-2 shadow-2xl"
-      style={{ width: 280 }}
+      style={{ width: 280 }} className="text-[13px]"
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 text-xs">
         <input
           type="checkbox"
           checked={tempHideColumns.includes(activeColumn.column_name)}
-          readOnly
+          readOnly className="text-[13px]"
         />
         <span>{activeColumn.display_name}</span>
       </div>
@@ -272,7 +316,7 @@ const activeColumn = columns.find(
 
 </DndContext>
 
-        <div className="flex justify-end gap-2 pt-1">
+        <div className="flex justify-end gap-2 pt-1 shrink-0">
           <button
             className="px-3 py-1.5 text-slate-600 rounded-lg hover:bg-slate-100"
             onClick={onCancel}
@@ -286,7 +330,34 @@ const activeColumn = columns.find(
           >
             Save
           </button>
+          
         </div>
+       <div
+  onMouseDown={startResize}
+  title="Drag to resize"
+  className="
+    absolute
+    bottom-2
+    right-2
+    pt-3
+    w-6
+    h-6
+    cursor-nwse-resize
+    text-slate-600
+    hover:text-blue-600
+    flex
+    items-center
+    justify-center
+    select-none
+    rounded-md
+    
+  "
+>
+<span className="text-lg">
+  <i className="fa-solid fa-up-right-and-down-left-from-center"></i>
+  ⤡
+</span>
+</div>
       </div>
     </div>
   );

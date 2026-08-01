@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import logo from "../../assets/headerlogo.jpeg";
 import binshabib1 from '../../assets/binshabib1.png';
 import { getDbStatus } from "../../api/api";
-import { loginUser, registerUser } from "../../api/api";
+import { loginUser, registerUser,  logoutAllDevices } from "../../api/api";
 import { useUser } from "../../components/UserContext";
 import DbStatusOverlay from "../../components/DbStatusOverlay";
 
@@ -19,6 +19,7 @@ export default function Login() {
     const [error, setError] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = React.useState(false);
+    const [sessionExists, setSessionExists] = useState(false);
     const [isSignup, setIsSignup] = useState(false);
     const [usernames, setUsernames] = useState(() => {
         try {
@@ -47,6 +48,50 @@ useEffect(() => {
       setDbStatus("error");
     });
 }, []);
+const getDeviceName = () => {
+  const ua = navigator.userAgent.toLowerCase();
+
+  const isTablet =
+    /ipad|tablet/.test(ua) ||
+    (navigator.maxTouchPoints > 1 && /macintosh/.test(ua));
+
+  const isMobile =
+    /android|iphone|ipod|blackberry|iemobile|opera mini/.test(ua);
+
+  if (isTablet) return "Tablet";
+  if (isMobile) return "Mobile";
+
+  return "Laptop / Desktop";
+};
+const getBrowserName = () => {
+  const ua = navigator.userAgent;
+
+  if (ua.includes("Edg")) return "Microsoft Edge";
+  if (ua.includes("Chrome")) return "Google Chrome";
+  if (ua.includes("Firefox")) return "Mozilla Firefox";
+  if (ua.includes("Safari")) return "Safari";
+
+  return "Unknown Browser";
+};
+const handleLogoutAllDevices = async () => {
+  try {
+    setLoading(true);
+    setError(null);
+
+   await logoutAllDevices(username, getDeviceName(), getBrowserName());
+
+    setSessionExists(false);
+    setError("Previous session logged out. Please login again.");
+
+  } catch (err) {
+    setError(
+      err.response?.data?.message ||
+      "Failed to logout all devices."
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
     const handleLogin = async (e) => {
     e.preventDefault();
@@ -79,10 +124,20 @@ useEffect(() => {
         navigate("/dashboard");
 
     } catch (err) {
-        setError(
-            err.response?.data?.message ||
-            "Server error during login. Please try again."
-        );
+  const code = err.response?.data?.code;
+  const message =
+    err.response?.data?.message ||
+    "Server error during login. Please try again.";
+
+  if (code === "SESSION_EXISTS") {
+    setSessionExists(true);
+    setError(message);
+    return;
+  }
+
+  setSessionExists(false);
+  setError(message);
+
     } finally {
         setLoading(false);
     }
@@ -201,10 +256,33 @@ const handleCancel = () => {
                             <>
                                 {/* LOGIN FORM */}
                                 {error && (
-                                    <p className="text-red-500 text-sm mb-2">
-                                        {error}
-                                    </p>
-                                )}
+  <div className="mb-3">
+    <p className="text-red-500 text-sm mb-2">
+      {error}
+    </p>
+
+    {sessionExists && (
+      <button
+        type="button"
+        onClick={handleLogoutAllDevices}
+        disabled={loading}
+        className="
+          w-full
+          bg-red-600
+          text-white
+          py-2
+          rounded
+          text-sm
+          hover:bg-red-700
+          disabled:opacity-60
+          disabled:cursor-not-allowed
+        "
+      >
+        {loading ? "Logging out..." : "Logout All Devices"}
+      </button>
+    )}
+  </div>
+)}
                                 <div>
                                     <label className="text-sm text-white block mb-1">Email</label>
                                     <input

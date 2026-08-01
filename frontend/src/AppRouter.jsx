@@ -16,7 +16,7 @@ import PaymentReqForm from "./pages/PaymentReqForm";
 import Profile from "./pages/Profile";
 import PDFUpload from "./pages/PDFUpload";
 import { useUser } from "./components/UserContext";
-import { sessionHeartbeat, logOut } from "./api/api";
+import { sessionHeartbeat, logOut, checkCurrentSession } from "./api/api";
 import DbStatusOverlay from "./components/DbStatusOverlay";
 import { getAccessToken } from "./api/api";
 
@@ -94,6 +94,60 @@ useEffect(() => {
     clearInterval(interval);
   };
 }, [user, setUser, navigate]);
+
+useEffect(() => {
+  if (!user) return;
+
+  const checkForcedLogout = async () => {
+    try {
+      const res = await checkCurrentSession();
+
+      if (res.data?.active === false) {
+        setInactiveMsg(
+          res.data?.message ||
+            "You have been logged out because your account was logged in from another device/browser."
+        );
+
+        setTimeout(async () => {
+          try {
+            await logOut();
+          } catch (error) {
+            console.error("Logout failed:", error);
+          }
+
+          setUser(null);
+          localStorage.removeItem("user");
+          navigate("/", { replace: true });
+        }, 2500);
+      }
+    } catch (err) {
+      if (err.response?.data?.forcedLogout) {
+        setInactiveMsg(
+          err.response?.data?.message ||
+            "You have been logged out because your account was logged in from another device/browser."
+        );
+
+        setTimeout(async () => {
+          try {
+            await logOut();
+          } catch (error) {
+            console.error("Logout failed:", error);
+          }
+
+          setUser(null);
+          localStorage.removeItem("user");
+          navigate("/", { replace: true });
+        }, 2500);
+      }
+    }
+  };
+
+  checkForcedLogout();
+
+  const interval = setInterval(checkForcedLogout, 10000);
+
+  return () => clearInterval(interval);
+}, [user, navigate, setUser]);
 
 useEffect(() => {
   if (!user) return;

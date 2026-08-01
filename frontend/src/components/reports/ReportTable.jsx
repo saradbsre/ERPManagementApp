@@ -42,6 +42,7 @@ export default function ReportTable() {
     const [file, setFile] = useState(null);
     const printRef = useRef();
     const pageSize = 10;
+    const [tableRecordMode, setTableRecordMode] = useState("paginated");
     const [columnSearch, setColumnSearch] = useState("");
     const [selectedColumns, setSelectedColumns] = useState([]);
     const [masterDataMap, setMasterDataMap] = useState({});
@@ -1042,19 +1043,43 @@ const detailedFlatRows = useMemo(() => {
   }));
 }, [indexedRows, groupBy, reportType]);
 
-const paginatedRows = useMemo(() => {
-  return indexedRows.slice(
-    (page - 1) * pageSize,
-    page * pageSize
-  );
-}, [indexedRows, page, pageSize]);
+// const paginatedRows = useMemo(() => {
+//   return indexedRows.slice(
+//     (page - 1) * pageSize,
+//     page * pageSize
+//   );
+// }, [indexedRows, page, pageSize]);
 
-const paginatedDetailedRows = useMemo(() => {
+const paginatedRows = useMemo(() => {
+  if (tableRecordMode === "full") {
+    return indexedRows;
+  }
+
   return indexedRows.slice(
     (page - 1) * pageSize,
     page * pageSize
   );
-}, [indexedRows, page, pageSize]);
+}, [indexedRows, page, pageSize, tableRecordMode]);
+
+
+
+// const paginatedDetailedRows = useMemo(() => {
+//   return indexedRows.slice(
+//     (page - 1) * pageSize,
+//     page * pageSize
+//   );
+// }, [indexedRows, page, pageSize]);
+
+  const paginatedDetailedRows = useMemo(() => {
+  if (tableRecordMode === "full") {
+    return indexedRows;
+  }
+
+  return indexedRows.slice(
+    (page - 1) * pageSize,
+    page * pageSize
+  );
+}, [indexedRows, page, pageSize, tableRecordMode]);
 
 const fullGroupedRows = useMemo(() => {
   if (reportType !== "detailed") return [];
@@ -1146,11 +1171,85 @@ const totalColIndex = columns.findIndex(col =>
   col.column_name?.toLowerCase().includes("total_amount_aed")
 );
 
+// const groupedPages = useMemo(() => {
+//   if (reportType !== "detailed") return [];
+
+//   const pages = [];
+//   const maxRows = 10;
+
+//   let currentPage = [];
+//   let currentCount = 0;
+
+//   fullGroupedRows.forEach(([groupName, groupRows]) => {
+//     const groupCount = groupRows.length;
+
+//     // Large group (>10) gets its own page
+//     if (groupCount > maxRows) {
+//       // Save current page first
+//       if (currentPage.length) {
+//         pages.push(currentPage);
+//         currentPage = [];
+//         currentCount = 0;
+//       }
+
+//       pages.push([
+//         [
+//           groupName,
+//           groupRows.map((row, idx) => ({
+//             ...row,
+//             _sn: idx + 1,
+//           })),
+//         ],
+//       ]);
+
+//       return;
+//     }
+
+//     // Doesn't fit in current page -> start a new page
+//     if (currentCount + groupCount > maxRows) {
+//       pages.push(currentPage);
+//       currentPage = [];
+//       currentCount = 0;
+//     }
+
+//     currentPage.push([
+//       groupName,
+//       groupRows.map((row, idx) => ({
+//         ...row,
+//         _sn: idx + 1,
+//       })),
+//     ]);
+
+//     currentCount += groupCount;
+//   });
+
+//   if (currentPage.length) {
+//     pages.push(currentPage);
+//   }
+
+//   return pages;
+// }, [fullGroupedRows, reportType]);
+
+  
 const groupedPages = useMemo(() => {
   if (reportType !== "detailed") return [];
 
+  // ================= FULL RECORDS VIEW =================
+  if (tableRecordMode === "full") {
+    return [
+      fullGroupedRows.map(([groupName, groupRows]) => [
+        groupName,
+        groupRows.map((row, idx) => ({
+          ...row,
+          _sn: idx + 1,
+        })),
+      ]),
+    ];
+  }
+
+  // ================= PAGINATED VIEW =================
   const pages = [];
-  const maxRows = 10;
+  const maxRows = pageSize;
 
   let currentPage = [];
   let currentCount = 0;
@@ -1158,9 +1257,7 @@ const groupedPages = useMemo(() => {
   fullGroupedRows.forEach(([groupName, groupRows]) => {
     const groupCount = groupRows.length;
 
-    // Large group (>10) gets its own page
     if (groupCount > maxRows) {
-      // Save current page first
       if (currentPage.length) {
         pages.push(currentPage);
         currentPage = [];
@@ -1180,7 +1277,6 @@ const groupedPages = useMemo(() => {
       return;
     }
 
-    // Doesn't fit in current page -> start a new page
     if (currentCount + groupCount > maxRows) {
       pages.push(currentPage);
       currentPage = [];
@@ -1203,9 +1299,9 @@ const groupedPages = useMemo(() => {
   }
 
   return pages;
-}, [fullGroupedRows, reportType]);
+}, [fullGroupedRows, reportType, tableRecordMode, pageSize]);
 
-  const isNumericColumn = (col) =>
+const isNumericColumn = (col) =>
   col.column_name?.toLowerCase().includes("total_amount_aed");
 
     const parseNum = (val) =>
@@ -1230,13 +1326,52 @@ const buildTotalRow = (rows, cols) => {
   return total;
 };
 
-const paginatedGroupedRows =
-  groupedPages[page - 1] || [];
+// const paginatedGroupedRows =
+//   groupedPages[page - 1] || [];
+
+// const totalPages =
+//   reportType === "detailed"
+//     ? groupedPages.length
+//     : Math.ceil(filteredRows.length / pageSize);
+
+const currentDetailedRows = useMemo(() => {
+  if (reportType !== "detailed") return [];
+
+  if (tableRecordMode === "full") {
+    return indexedRows;
+  }
+
+  return indexedRows.slice(
+    (page - 1) * pageSize,
+    page * pageSize
+  );
+}, [indexedRows, page, pageSize, reportType, tableRecordMode]);
+
+const paginatedGroupedRows = useMemo(() => {
+  if (reportType !== "detailed") return [];
+
+  const grouped = currentDetailedRows.reduce((acc, row) => {
+    const key = groupBy
+      ? row[groupBy] || "Unknown"
+      : "All Records";
+
+    if (!acc[key]) acc[key] = [];
+
+    acc[key].push({
+      ...row,
+      _sn: row._globalSn,
+    });
+
+    return acc;
+  }, {});
+
+  return Object.entries(grouped);
+}, [currentDetailedRows, groupBy, reportType]);
 
 const totalPages =
-  reportType === "detailed"
-    ? groupedPages.length
-    : Math.ceil(filteredRows.length / pageSize);
+  tableRecordMode === "full"
+    ? 1
+    : Math.max(1, Math.ceil(indexedRows.length / pageSize));
 
 const grandTotalRow = useMemo(() => {
   return buildTotalRow(filteredRows, visibleDetailedColumns);
@@ -1276,6 +1411,10 @@ useEffect(() => {
     yearlyVisibleColumns.map((c) => c.column_name)
   );
 }, [yearlyVisibleColumns]);
+
+useEffect(() => {
+  setPage(1);
+}, [tableRecordMode, reportType]);
 
 const yearlyDetailedColumns = useMemo(() => {
   if (!yearlyVisibleColumns?.length) return [];
@@ -2822,7 +2961,7 @@ const NoRecordsRow = ({ colSpan }) => (
                         }...`
                       : "Search records..."
                   }
-                  className="border px-3 py-2 rounded-lg w-60"
+                  className="border px-3 py-2 rounded-lg w-60  text-[13px] w-[120px]"
                   value={search}
                   onChange={(e) => {
                     const value = e.target.value;
@@ -2844,12 +2983,12 @@ const NoRecordsRow = ({ colSpan }) => (
                 value={dateFilters.startDate}
                 onChange={onInputChange}
                 className="
-                  h-9 w-[130px]
+                  h-9 w-[120px]
                   rounded-xl
                   border border-gray-200
                   bg-white
                   px-4
-                  text-sm
+                  text-[13px]
                   shadow-sm
                   hover:border-gray-300
                   focus:outline-none
@@ -2867,12 +3006,12 @@ const NoRecordsRow = ({ colSpan }) => (
                 value={dateFilters.endDate}
                 onChange={onInputChange}
                 className="
-                  h-9 w-[130px]
+                  h-9 w-[120px]
                   rounded-xl
                   border border-gray-200
                   bg-white
                   px-4
-                  text-sm
+                  text-[13px]
                   shadow-sm
                   hover:border-gray-300
                   focus:outline-none
@@ -2887,12 +3026,12 @@ const NoRecordsRow = ({ colSpan }) => (
                 onChange={(e) => handleQuickDateChange(e.target.value)}
                 className="
                   h-9
-                  min-w-[140px]
+                  min-w-[110px]
                   rounded-xl
                   border border-gray-200
                   bg-white
-                  px-4
-                  text-sm
+                  px-2
+                  text-[13px]
                   shadow-sm
                   hover:border-gray-300
                   focus:outline-none
@@ -2929,16 +3068,17 @@ const NoRecordsRow = ({ colSpan }) => (
               <button
                 onClick={applyDateFilter}
                 className="
-                  h-9
-                  px-5
-                  rounded-xl
-                  bg-blue-600
-                  text-white
-                  text-sm
-                  font-medium
-                  shadow-sm
-                  hover:bg-blue-700
-                  transition
+            h-9
+      px-1
+      w-[50px]
+      rounded-md
+      bg-blue-600
+      text-white
+      text-[13px]
+      font-medium
+      shadow-sm
+      hover:bg-blue-700
+      transition
                 "
               >
                 Search
@@ -2948,16 +3088,17 @@ const NoRecordsRow = ({ colSpan }) => (
               <button
                 onClick={handleClear}
                 className="
-                  h-9
-                  px-5
-                  rounded-xl
-                  border border-gray-200
-                  bg-white
-                  text-sm
-                  font-medium
-                  shadow-sm
-                  hover:bg-gray-50
-                  transition
+                 h-9
+   
+      w-[50px]
+      rounded-md
+      border border-gray-200
+      bg-white
+     text-[13px]
+      font-medium
+      shadow-sm
+      hover:bg-gray-50
+      transition
                 "
               >
                 Clear
@@ -2972,7 +3113,7 @@ const NoRecordsRow = ({ colSpan }) => (
   onClick={() => handleReportTypeChange("summary")}
   disabled={!allowDetailed}
     className={`
-      px-4 py-1.5 text-sm font-medium rounded-lg transition-all
+      px-4 py-1.5 text-[13px] font-medium rounded-lg transition-all
       ${
         reportType === "summary"
           ? "bg-white text-blue-600 shadow"
@@ -2988,7 +3129,7 @@ const NoRecordsRow = ({ colSpan }) => (
   onClick={() => handleReportTypeChange("detailed")}
   disabled={!allowDetailed}
     className={`
-      px-4 py-1.5 text-sm font-medium rounded-lg transition-all
+      px-4 py-1.5 text-[13px] font-medium rounded-lg transition-all
       ${
         reportType === "detailed"
           ? "bg-white text-blue-600 shadow"
@@ -3004,7 +3145,7 @@ const NoRecordsRow = ({ colSpan }) => (
     <button
       onClick={() => handleEquivalentReport()}
       className={`
-        px-4 py-1.5 text-sm font-medium rounded-lg transition-all
+        px-4 py-1.5 text-[13px] font-medium rounded-lg transition-all
         ${
           reportType === "equivalent"
             ? "bg-white text-blue-600 shadow"
@@ -3016,11 +3157,32 @@ const NoRecordsRow = ({ colSpan }) => (
     </button>
   )}
 </div>
-
+<select
+  value={tableRecordMode}
+  onChange={(e) => {
+    setTableRecordMode(e.target.value);
+    setPage(1);
+  }}
+  className="
+    h-8
+    rounded-md
+    border border-gray-300
+    bg-white
+    px-1
+    text-[13px]
+    text-gray-700
+    focus:outline-none
+    focus:ring-2
+    focus:ring-blue-500
+  "
+>
+  <option value="paginated">Pagination</option>
+  <option value="full">All Records</option>
+</select>
               {/* Right side: Pagination + Total */}
-            <div className="ml-auto flex items-center gap-4">
-              {!isYearlyReport && (
-  <div className="flex items-end gap-2 text-sm">
+            <div className="ml-auto flex items-center gap-2">
+              {tableRecordMode === "paginated" && (
+  <div className="flex items-end gap-1 text-[10px]">
     <button
       disabled={page === 1}
       onClick={() => setPage(1)}
@@ -3063,8 +3225,8 @@ const NoRecordsRow = ({ colSpan }) => (
   </div>
 )}
 
-              <span className="text-sm text-gray-500">
-                {/* Total: {finalRows.length} */}
+              <span className="text-[13px] text-gray-500">
+                Total: {filteredRows.length}
               </span>
             </div>
               </div>
@@ -3341,7 +3503,7 @@ const NoRecordsRow = ({ colSpan }) => (
         {paginatedRows.map((row, i) => (
           <tr key={i}>
             <td className="px-4 py-3 border-b">
-              {(page - 1) * pageSize + i + 1}
+           {row._globalSn || i + 1}
             </td>
 
             {columns.map((col) => (

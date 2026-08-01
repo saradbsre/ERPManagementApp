@@ -23,7 +23,8 @@ exports.getAllUsers = async (req, res) => {
         COALESCE(ur.[delete], r.[delete], 0) AS [delete],
         COALESCE(ur.[print], r.[print], 0)   AS [print],
         COALESCE(ur.[export], r.[export], 0) AS [export],
-        COALESCE(ur.[access], r.[access], 0) AS [access]
+        COALESCE(ur.[access], r.[access], 0) AS [access],
+        COALESCE(ur.all_data_access, r.all_data_access, 0) AS all_data_access
 
       FROM users u
 
@@ -297,6 +298,7 @@ exports.updateUserPermissions = async (req, res) => {
       .input("export", sql.Bit, permissions.export || 0)
       .input("access", sql.Bit, permissions.access ?? 1)
       .input("userid", sql.NVarChar, activeUserEmail)
+      .input("all_data_access", sql.Bit, permissions.all_data_access || 0)
       .query(`
         IF EXISTS (SELECT 1 FROM userRoles WHERE userid = @userid)
         BEGIN
@@ -310,6 +312,8 @@ exports.updateUserPermissions = async (req, res) => {
             [print] = @print,
             [export] = @export,
             [access] = @access,
+            all_data_access = @all_data_access
+
             sysdate = GETDATE(),
             audit_rev = ISNULL(audit_rev, 0) + 1,
             userid = @userid
@@ -318,9 +322,9 @@ exports.updateUserPermissions = async (req, res) => {
         ELSE
         BEGIN
           INSERT INTO userRoles
-            (username, role, [add], [modify], [delete], [print], [export], [access], userid)
+            (username, role, [add], [modify], [delete], [print], [export], [access],all_data_access, userid)
           VALUES
-            (@username, @role, @add, @modify, @delete, @print, @export, @access, @userid)
+            (@username, @role, @add, @modify, @delete, @print, @export, @access,@all_data_access, @userid)
         END
       `);
 
@@ -382,6 +386,7 @@ exports.createRole = async (req, res) => {
       print,
       export: exp,
       access,
+       all_data_access,
       email,
       activeUserEmail
     } = req.body;
@@ -399,10 +404,11 @@ exports.createRole = async (req, res) => {
       .input("print", sql.Bit, print || 0)
       .input("export", sql.Bit, exp || 0)
       .input("access", sql.Bit, access ?? 1)
+      .input("all_data_access", sql.Bit, all_data_access || 0)
       .input("activeUserEmail", sql.NVarChar, activeUserEmail)
       .query(`
-        INSERT INTO role (role, [add], [modify], [delete], [print], [export], [access], userid)
-        VALUES (@role, @add, @modify, @delete, @print, @export, @access, @activeUserEmail)
+        INSERT INTO role (role, [add], [modify], [delete], [print], [export], [access],all_data_access, userid)
+        VALUES (@role, @add, @modify, @delete, @print, @export, @access,@all_data_access, @activeUserEmail)
       `);
 
     // 2️⃣ AUDIT SUCCESS
@@ -450,6 +456,7 @@ exports.updateRole = async (req, res) => {
       print,
       export: exp,
       access,
+        all_data_access,
       activeUserEmail
     } = req.body;
 
@@ -467,6 +474,7 @@ exports.updateRole = async (req, res) => {
       .input("print", sql.Bit, print || 0)
       .input("export", sql.Bit, exp || 0)
       .input("access", sql.Bit, access ?? 1)
+      .input("all_data_access", sql.Bit, all_data_access || 0)
       .input("activeUserEmail", sql.NVarChar, activeUserEmail)
       .query(`
         UPDATE role 
@@ -478,6 +486,7 @@ exports.updateRole = async (req, res) => {
           [print] = @print,
           [export] = @export,
           [access] = @access,
+          all_data_access = @all_data_access,
           audit_rev = ISNULL(audit_rev, 0) + 1,
           userid = @activeUserEmail,
           sysdate = GETDATE()

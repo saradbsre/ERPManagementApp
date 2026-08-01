@@ -12,7 +12,7 @@ import { fetchSections,fetchMasters, getModuleData, createModuleRow, updateModul
 createModuleView,
 updateModuleView,
 deleteModuleView,
-setDefaultModuleView, updateRequiresPrf  } from "../../api/api";
+setDefaultModuleView, updateRequiresPrf, createPaymentTransactions  } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -160,6 +160,7 @@ export default function DynamicTablePage() {
     const [file, setFile] = useState(null);
     const printRef = useRef();
     const pageSize = 10;
+    const [tableRecordMode, setTableRecordMode] = useState("paginated");
     const [columnSearch, setColumnSearch] = useState("");
     const [showColumnSelector, setShowColumnSelector] = useState(false);
     const [selectedColumns, setSelectedColumns] = useState([]);
@@ -184,6 +185,7 @@ export default function DynamicTablePage() {
     const activeUserName = activeUser?.name;
     const isUserHavePrfAccess = activeUser?.prf_access;
     const userRole = activeUser?.role;
+    const [transactionTypes, setTransactionTypes] = useState([]);
     const [vatPercent, setVatPercent] = useState(0);
     const [providerPlansMap, setProviderPlansMap] = useState({});
     const [providerPlans, setProviderPlans] = useState([]);
@@ -216,6 +218,7 @@ export default function DynamicTablePage() {
     const [popupType, setPopupType] = useState("");
     const [vendors, setVendors] = useState([]);
     const [company, setCompany] = useState([]);
+    const [companyMaster, setCompanyMaster] = useState([]);
     const [serviceProviders, setServiceProviders] = useState([]);
     const [creditCards, setCreditCards] = useState([]);
     const [serviceTypes, setServiceTypes] = useState([]);
@@ -235,6 +238,8 @@ export default function DynamicTablePage() {
     const [pinnedColumns, setPinnedColumns] = useState([]);
     const [visibleColumnsState, setVisibleColumnsState] = useState([]);
     const [showEditPopup, setShowEditPopup] = useState(false);
+    const [popupMode, setPopupMode] = useState("edit");
+
     const [showCustomizeDrawer, setShowCustomizeDrawer] = useState(false);
     const [columnChips, setColumnChips] = useState([]);
     const [sortConfig, setSortConfig] = useState([]);
@@ -366,16 +371,31 @@ useEffect(() => {
         setCreditCards(result);
       //  console.log("Credit Cards:", result);
       });
-    getMasterData("company", activeUserEmail).then(res => {
+
+      getMasterData("transaction_types", activeUserEmail).then(res => {
+  const result = Array.isArray(res?.data) ? res.data : [];
+  setTransactionTypes(result);
+});
+//     getMasterData("company", activeUserEmail).then(res => {
+//   const result = Array.isArray(res?.data) ? res.data : [];
+
+//   const tradeNames = result.map(item => item.com_name);
+
+//   setCompany(tradeNames);
+
+//  // console.log("Company trade names:", tradeNames);
+// });
+ getMasterData("company", activeUserEmail).then(res => {
   const result = Array.isArray(res?.data) ? res.data : [];
 
+  setCompanyMaster(result);
+
   const tradeNames = result.map(item => item.com_name);
-
   setCompany(tradeNames);
-
- // console.log("Company trade names:", tradeNames);
 });
     }, []);
+
+   
 
 function getCurrentMonth() {
   const now = new Date();
@@ -2080,13 +2100,258 @@ useEffect(() => {
     setEditRowId(null);
 };
 
+const handleClone = (row) => {
+  const clonedRow = { ...row };
+
+  // Remove system/generated fields so it will save as a new record
+  delete clonedRow.id;
+  delete clonedRow.prf_num;
+  delete clonedRow.is_posted;
+  delete clonedRow.pdf_path;
+  delete clonedRow.pdf_file_name;
+  delete clonedRow.sysdate;
+  delete clonedRow.created_at;
+  delete clonedRow.updated_at;
+  delete clonedRow.last_updated_by;
+  delete clonedRow.last_updated_at;
+
+  // Optional: reset PRF selection fields
+  clonedRow.requires_prf_form = false;
+
+  // Created by should become current login user
+  clonedRow.userid = activeUserEmail;
+
+  setPopupMode("clone");
+  setEditRowId(null);
+  setEditRow(clonedRow);
+  setOriginalRow({});
+  setShowEditPopup(true);
+};
+
+const handleSaveClone = async () => {
+  try {
+    setLoading(true);
+
+    const payload = { ...editRow };
+
+    // ================= REMOVE OLD RECORD FIELDS =================
+    delete payload.id;
+    delete payload.prf_num;
+    delete payload.is_posted;
+    delete payload.pdf_path;
+    delete payload.pdf_file_name;
+    delete payload.sysdate;
+    delete payload.created_at;
+    delete payload.updated_at;
+    delete payload.last_updated_by;
+    delete payload.last_updated_at;
+    delete payload.audit_rev;
+
+    // ================= RESET NEW RECORD VALUES =================
+    payload.userid = activeUserEmail;
+    payload.requires_prf_form = false;
+    payload.deleted = false;
+    payload.is_active = true;
+
+    // ================= CONVERT MASTER DISPLAY NAME TO CODE =================
+    Object.keys(payload).forEach((key) => {
+      payload[key] = normalizeCloneMasterValue(key, payload[key]);
+    });
+
+    // ================= REMOVE FRONTEND ONLY COLUMNS =================
+    Object.keys(payload).forEach((key) => {
+      if (
+        key.startsWith("amount_") ||
+        key === "_globalSn" ||
+        key === "_group" ||
+        key === "_sn"
+      ) {
+        delete payload[key];
+      }
+    });
+
+    // ================= MAP DB FIELD NAMES TO createPaymentTransactions FIELD NAMES =================
+    const cloneRow = {
+      invoiceDate: payload.date || null,
+      vendorName: payload.vend_code || null,
+      product: payload.prd_code || null,
+      productType: payload.prdtype_code || null,
+      plan: payload.plan_code || null,
+      department: payload.dep_code || null,
+      billingCompany: payload.com_code || null,
+      term: payload.billcycle_code || null,
+      creditCard: payload.crcd_code || null,
+      currency: payload.curr_code || null,
+
+      amount: Number(payload.amount || 0),
+      totalAmountAED: Number(payload.total_amount_aed || 0),
+      expiryDate: payload.expiry_date || null,
+      costCenter: payload.dv_code || null,
+      remarks: payload.remarks || null,
+      vatAmount: Number(payload.vat_amount || 0),
+      totalAmount: Number(payload.total_amount || 0),
+
+      invoiceNumber: payload.invoice_number || null,
+      transactionType: payload.trntype_code || null,
+      projects: payload.prj_code || null,
+      itRequestNum: payload.it_request_no || null,
+      requestedBy: payload.requested_by || null,
+      qty: Number(payload.qty || 0),
+
+      lpoNo: payload.lpo_no || null,
+      lpoDate: payload.lpo_date || null,
+      deliveryDate: payload.delivery_date || null,
+
+      // cloned record should be fresh, PRF not selected
+      prfRequired: false,
+    };
+
+    console.log("Clone row for createPaymentTransactions:", cloneRow);
+
+    await createPaymentTransactions(
+      {
+        rows: [cloneRow],
+      },
+      activeUserEmail
+    );
+
+    setPopupMessage("Record cloned successfully");
+    setPopupType("success");
+
+    setShowEditPopup(false);
+    setPopupMode("edit");
+    setEditRow({});
+    setEditRowId(null);
+    setOriginalRow({});
+
+    await loadModule();
+  } catch (err) {
+    console.error("Clone save failed:", err);
+    console.error("Backend error:", err.response?.data);
+
+    setPopupMessage(
+      err.response?.data?.error ||
+        err.response?.data?.message ||
+        "Error cloning record"
+    );
+    setPopupType("error");
+  } finally {
+    setLoading(false);
+  }
+};
+
     const handleEdit = (row) => {
+       setPopupMode("edit");
         setEditRowId(row.id);
         setEditRow({ ...row });
         setOriginalRow({ ...row });
       setShowEditPopup(true);
     };
+const cleanText = (value) => {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+};
 
+const resolveFromList = (value, list, codeKeys = [], nameKeys = []) => {
+  if (value === null || value === undefined || value === "") return value;
+
+  const input = cleanText(
+    typeof value === "object"
+      ? value.key ?? value.id ?? value.value ?? ""
+      : value
+  );
+
+  const found = (list || []).find((item) => {
+    const codes = codeKeys.map((key) => cleanText(item?.[key]));
+    const names = nameKeys.map((key) => cleanText(item?.[key]));
+
+    return codes.includes(input) || names.includes(input);
+  });
+
+  if (!found) return value;
+
+  for (const key of codeKeys) {
+    if (found?.[key]) return found[key];
+  }
+
+  return value;
+};
+
+const normalizeCloneMasterValue = (columnName, value) => {
+  const key = String(columnName || "").toLowerCase();
+
+  // Vendor
+  if (key === "vend_code") {
+    return resolveFromList(
+      value,
+      vendors,
+      ["vend_code", "vendor_code", "code"],
+      ["vend_name", "vendor_name", "value", "name"]
+    );
+  }
+if (key === "curr_code") {
+  return resolveFromList(
+    value,
+    currencies,
+    ["curr_code", "currency_code", "code"],
+    ["curr_name", "currency_name", "value", "name"]
+  );
+}
+  // Product
+  if (key === "prd_code") {
+    return resolveFromList(
+      value,
+      serviceProviders,
+      ["prd_code", "product_code", "code"],
+      ["prd_name", "product_name", "value", "name"]
+    );
+  }
+
+
+    if (key === "trntype_code") {
+    return resolveFromList(
+      value,
+      transactionTypes,
+      ["trntype_code", "transaction_type_code", "code"],
+      ["trntype_name", "transaction_type_name", "value", "name"]
+    );
+  }
+
+  // Product Type / Service Type
+  if (key === "prdtype_code") {
+    return resolveFromList(
+      value,
+      serviceTypes,
+      ["prdtype_code", "product_type_code", "service_type_code", "code"],
+      ["prdtype_name", "product_type_name", "service_type_name", "value", "name"]
+    );
+  }
+
+  // Credit Card
+  if (key === "crcd_code") {
+    return resolveFromList(
+      value,
+      creditCards,
+      ["crcd_code", "crcd_last4num", "card_code", "code"],
+      ["crcd_holder_name", "card_name", "value", "name"]
+    );
+  }
+
+  // Company
+  if (key === "com_code") {
+    return resolveFromList(
+      value,
+      companyMaster,
+      ["com_code", "company_code", "code"],
+      ["com_name", "company_name", "trade_name", "value", "name"]
+    );
+  }
+
+  // Other normal master columns
+  return toMasterKey(columnName, value);
+};
     const toMasterKey = (columnName, rawVal) => {
 if (rawVal === null || rawVal === undefined || rawVal === "") return rawVal;
 
@@ -2099,13 +2364,46 @@ const input = String(rawVal).trim().toLowerCase();
 const hit = options.find(o => {
 const key = String(o?.key ?? o?.id ?? o?.value ?? "").trim().toLowerCase();
 const val = String(o?.value ?? o ?? "").trim().toLowerCase();
+ console.log(`Comparing input "${input}" with key "${key}" and value "${val}"`);
+
 return input === key || input === val;
 });
 
 return hit ? (hit.key ?? hit.id ?? hit.value) : rawVal;
 };
 
+// const toMasterKey = (columnName, rawVal) => {
+//   if (rawVal === null || rawVal === undefined || rawVal === "") {
+//     return rawVal;
+//   }
 
+//   const col = columns.find(
+//     (c) => String(c.column_name).toLowerCase() === String(columnName).toLowerCase()
+//   );
+
+//   if (!col?.master && !col?.master1) {
+//     return rawVal;
+//   }
+
+//   const options = getMasterOptions(col, "");
+
+//   const input = String(
+//     typeof rawVal === "object"
+//       ? rawVal.key ?? rawVal.id ?? rawVal.value ?? ""
+//       : rawVal
+//   )
+//     .trim()
+//     .toLowerCase();
+
+//   const hit = options.find((o) => {
+//     const key = String(o?.key ?? o?.id ?? "").trim().toLowerCase();
+//     const value = String(o?.value ?? o ?? "").trim().toLowerCase();
+   
+//     return input === key || input === value;
+//   });
+
+//   return hit ? hit.key ?? hit.id ?? hit.value : rawVal;
+// };
 
     const handleSaveEdit = async () => {
         setLoading(true);
@@ -2847,7 +3145,11 @@ const finalRows = filteredRows;
     [`amount_${currency}`]: row.amount
   };
 });
-    const totalPages = Math.ceil(normalizedRows.length / pageSize);
+    // const totalPages = Math.ceil(normalizedRows.length / pageSize);
+    const totalPages =
+  tableRecordMode === "full"
+    ? 1
+    : Math.ceil(normalizedRows.length / pageSize);
 
 
 // ======================================================
@@ -4262,16 +4564,52 @@ const groupedByRows = React.useMemo(() => {
 
 
 // 3. PAGINATE INSIDE GROUPS
+// const paginatedGroupedRows = React.useMemo(() => {
+
+//   const result = [];
+
+//   let count = 0;
+
+//   groupedByRows.forEach(group => {
+
+//     const rows = group.rows.filter(() => {
+
+//       const show =
+//         count >= (page - 1) * pageSize &&
+//         count < page * pageSize;
+
+//       count++;
+
+//       return show;
+//     });
+
+
+//     if(rows.length){
+//       result.push({
+//         group: group.group,
+//         rows
+//       });
+//     }
+
+//   });
+
+
+//   return result;
+
+// }, [groupedByRows, page, pageSize]);
+//console.log("Paginated grouped rows:", paginatedGroupedRows);
 const paginatedGroupedRows = React.useMemo(() => {
+  // ================= FULL RECORDS VIEW =================
+  if (tableRecordMode === "full") {
+    return groupedByRows;
+  }
 
+  // ================= PAGINATED VIEW =================
   const result = [];
-
   let count = 0;
 
-  groupedByRows.forEach(group => {
-
+  groupedByRows.forEach((group) => {
     const rows = group.rows.filter(() => {
-
       const show =
         count >= (page - 1) * pageSize &&
         count < page * pageSize;
@@ -4281,22 +4619,16 @@ const paginatedGroupedRows = React.useMemo(() => {
       return show;
     });
 
-
-    if(rows.length){
+    if (rows.length) {
       result.push({
         group: group.group,
-        rows
+        rows,
       });
     }
-
   });
 
-
   return result;
-
-}, [groupedByRows, page, pageSize]);
-//console.log("Paginated grouped rows:", paginatedGroupedRows);
-
+}, [groupedByRows, page, pageSize, tableRecordMode]);
 
 
 const totalColumns = visibleColumns.length + 2;
@@ -5279,7 +5611,7 @@ const normalizedFilters = nextFilters.map((filter) => ({
             }...`
           : "Search records..."
       }
-      className="border border-gray-200 px-3 py-2 rounded-lg w-50"
+      className="border border-gray-200 px-3 py-2 rounded-lg w-50 text-[13px] w-[150px]"
       value={search}
       onChange={(e) => {
         const value = e.target.value;
@@ -5302,12 +5634,12 @@ const normalizedFilters = nextFilters.map((filter) => ({
     value={dateFilters.startDate}
     onChange={onInputChange}
     className="
-      h-9 w-[130px]
+      h-9 w-[120px]
       rounded-md
       border border-gray-200
       bg-white
       px-4
-      text-sm
+      text-[13px]
       shadow-sm
       hover:border-gray-300
       focus:outline-none
@@ -5325,12 +5657,12 @@ const normalizedFilters = nextFilters.map((filter) => ({
     value={dateFilters.endDate}
     onChange={onInputChange}
     className="
-      h-9 w-[130px]
+      h-9 w-[120px]
       rounded-md
       border border-gray-200
       bg-white
       px-4
-      text-sm
+      text-[13px]
       shadow-sm
       hover:border-gray-300
       focus:outline-none
@@ -5345,12 +5677,12 @@ const normalizedFilters = nextFilters.map((filter) => ({
     onChange={(e) => handleQuickDateChange(e.target.value)}
     className="
       h-9
-      min-w-[140px]
+      max-w-[150px]
       rounded-md
       border border-gray-200
       bg-white
-      px-4
-      text-sm
+      px-2
+      text-[13px]
       shadow-sm
       hover:border-gray-300
       focus:outline-none
@@ -5379,11 +5711,12 @@ const normalizedFilters = nextFilters.map((filter) => ({
     onClick={applyDateFilter}
     className="
       h-9
-      px-5
+      px-1
+      w-[50px]
       rounded-md
       bg-blue-600
       text-white
-      text-sm
+      text-[13px]
       font-medium
       shadow-sm
       hover:bg-blue-700
@@ -5398,11 +5731,12 @@ const normalizedFilters = nextFilters.map((filter) => ({
     onClick={handleClear}
     className="
       h-9
-      px-5
+   
+      w-[50px]
       rounded-md
       border border-gray-200
       bg-white
-      text-sm
+     text-[13px]
       font-medium
       shadow-sm
       hover:bg-gray-50
@@ -5415,13 +5749,36 @@ const normalizedFilters = nextFilters.map((filter) => ({
    onClick={() => setShowFilters(true)}
    className="px-2 py-2 text-sm rounded-md border border-gray-300 bg-white 
                hover:bg-orange-50 hover:border-orange-400 hover:text-orange-600 transition">
-        <Funnel size={15} />
+        <Funnel size={13} />
    </button>
 </div>
-
+<select
+  value={tableRecordMode}
+  onChange={(e) => {
+    const value = e.target.value;
+    setTableRecordMode(value);
+    setPage(1);
+  }}
+  className="
+    h-8
+    rounded-md
+    border border-gray-300
+    bg-white
+    px-3
+    text-[13px]
+    text-black-700
+    focus:outline-none
+    focus:ring-2
+    focus:ring-blue-500
+  "
+>
+  <option value="paginated">Pagination</option>
+  <option value="full">All Records</option>
+</select>
   {/* Right side: Pagination + Total */}
 <div className="ml-auto flex items-center gap-4">
-  <div className="flex items-end gap-1 text-sm">
+ {tableRecordMode === "paginated" && (
+  <div className="flex items-end gap-1 text-[13px]">
     <button
       disabled={page === 1}
       onClick={() => setPage(1)}
@@ -5461,15 +5818,18 @@ const normalizedFilters = nextFilters.map((filter) => ({
     >
       ⏭
     </button>
-  </div>
+      </div>
+)}
 
-  <span className="text-sm text-gray-500">
-    Total: {finalRows.length}
+
+  <span className="text-[13px] text-gray-500">
+ Total: {finalRows.length}
   </span>
 </div>
   </div>
 
 </div>
+
           
 
 
@@ -5878,41 +6238,42 @@ onDrop={() => handleDrop(col.column_name)}
       className="h-4 w-4 mr-3 cursor-pointer shrink-0"
       title="PRF Required"
     />
-    <div className="flex items-center gap-2">
-    {/* {row.pdf_path && (
+
+    <div className="flex items-center gap-2 min-w-[170px]">
+
+  {/* CLONE - fixed position */}
+  <PermissionButton
+    user={activeUser}
+    permission="add"
+    onClick={() => handleClone(row)}
+    title="Clone Transaction"
+    className="p-1 rounded hover:bg-blue-50 transition w-7 h-7 flex items-center justify-center"
+  >
+    <Copy size={18} className="text-gray-500" />
+  </PermissionButton>
+
+  {/* EYE - fixed position */}
   <button
     type="button"
-    onClick={() => setPreviewPdfUrl(getPdfUrl(row.pdf_path))}
-    title="View Invoice"
-    className="p-1 rounded hover:bg-blue-50 transition"
+    onClick={() => {
+      if (!row.pdf_path) return;
+      setPreviewPdfUrl(getPdfUrl(row.pdf_path));
+    }}
+    title={row.pdf_path ? "View Invoice" : "No invoice uploaded"}
+    disabled={!row.pdf_path}
+    className={`
+      p-1 rounded transition
+      w-7 h-7
+      flex items-center justify-center
+      ${
+        row.pdf_path
+          ? "hover:bg-blue-50 cursor-pointer"
+          : "cursor-not-allowed opacity-40"
+      }
+    `}
   >
     <EyeIcon className="w-5 h-5 text-gray-600" />
   </button>
-)} */}
-<button
-  type="button"
-  onClick={() => {
-    if (!row.pdf_path) return;
-    setPreviewPdfUrl(getPdfUrl(row.pdf_path));
-  }}
-  title={row.pdf_path ? "View Invoice" : ""}
-  disabled={!row.pdf_path}
-  className={`
-    p-1 rounded transition
-    w-7 h-7
-    flex items-center justify-center
-    ${
-      row.pdf_path
-        ? "hover:bg-blue-50 cursor-pointer"
-        : "invisible pointer-events-none"
-    }
-  `}
->
-  <EyeIcon className="w-5 h-5 text-gray-600" />
-</button>
-    
-
-
 
     {editRowId === row.id ? (
       <>
@@ -5922,7 +6283,7 @@ onDrop={() => handleDrop(col.column_name)}
           title="Save Edit"
           className="p-1 rounded hover:bg-gray-200 transition"
         >
-          <SavePlus size={18} className="text-green-600" />
+          <Save size={18} className="text-green-600" />
         </button>
 
         {/* CANCEL EDIT */}
@@ -5994,6 +6355,7 @@ onDrop={() => handleDrop(col.column_name)}
         >
           <FileSearch size={18} className="text-gray-500" />
         </button>
+       
       </>
     ) : (
       <>
@@ -6010,6 +6372,16 @@ onDrop={() => handleDrop(col.column_name)}
         >
           <Pencil size={18} className="text-gray-500" />
         </PermissionButton>
+{/* 
+        <PermissionButton
+  user={activeUser}
+  permission="add"
+  onClick={() => handleClone(row)}
+  title="Clone"
+  className="p-1 rounded hover:bg-blue-50 transition"
+>
+  <Copy size={18} className="text-blue-600" />
+</PermissionButton> */}
 
         {row.is_active ? (
           <PermissionButton
@@ -6530,14 +6902,24 @@ onDrop={() => handleDrop(col.column_name)}
                                                       "
                                                     onMouseDown={() => {
                                                     
-                                                      const selectedLabel =
-                                                      typeof val === "object"
-                                                      ? val.value
-                                                      : val;
+                                                      // const selectedLabel =
+                                                      // typeof val === "object"
+                                                      // ? val.value
+                                                      // : val;
 
-                                                      setEditRow(prev => ({
-                                                      ...prev,
-                                                      [col.column_name]: selectedLabel,
+                                                      // setEditRow(prev => ({
+                                                      // ...prev,
+                                                      // [col.column_name]: selectedLabel,
+                                                      // }));
+
+                                                      const selectedValue =
+                                                        typeof val === "object"
+                                                          ? val.key ?? val.id ?? val.value
+                                                          : val;
+
+                                                      setEditRow((prev) => ({
+                                                        ...prev,
+                                                        [col.column_name]: selectedValue,
                                                       }));
 
                                                       setActiveDropdown(null);
@@ -6672,26 +7054,55 @@ onDrop={() => handleDrop(col.column_name)}
   </React.Fragment>
 ))}
                       {showEditPopup && (
+                        // <EditRowPopup
+                        //   visibleColumns={visibleColumns}
+                        //   editRow={editRow}
+                        //   setEditRow={setEditRow}
+                        //   columns={columns}
+                        //   getMasterOptions={getMasterOptions}
+                        //   loadingMaster={loadingMaster}
+                        //   fetchMasterDataForColumn={fetchMasterDataForColumn}
+                        //   serviceProviders={serviceProviders}
+                        //   vatPercent={vatPercent}
+                        //   onClose={() => {
+                        //     setShowEditPopup(false);
+                        //     setEditRowId(null);
+                        //   }}
+                        //   onSave={async () => {
+                        //     await handleSaveEdit();
+                        //     setShowEditPopup(false);
+                        //     setEditRowId(null);
+                        //   }}
+                        // />
+
                         <EditRowPopup
-                          visibleColumns={visibleColumns}
-                          editRow={editRow}
-                          setEditRow={setEditRow}
-                          columns={columns}
-                          getMasterOptions={getMasterOptions}
-                          loadingMaster={loadingMaster}
-                          fetchMasterDataForColumn={fetchMasterDataForColumn}
-                          serviceProviders={serviceProviders}
-                          vatPercent={vatPercent}
-                          onClose={() => {
-                            setShowEditPopup(false);
-                            setEditRowId(null);
-                          }}
-                          onSave={async () => {
-                            await handleSaveEdit();
-                            setShowEditPopup(false);
-                            setEditRowId(null);
-                          }}
-                        />
+  visibleColumns={visibleColumns}
+  editRow={editRow}
+  setEditRow={setEditRow}
+  columns={columns}
+  getMasterOptions={getMasterOptions}
+  loadingMaster={loadingMaster}
+  fetchMasterDataForColumn={fetchMasterDataForColumn}
+  serviceProviders={serviceProviders}
+  vatPercent={vatPercent}
+  popupMode={popupMode}
+  onClose={() => {
+    setShowEditPopup(false);
+    setEditRowId(null);
+    setPopupMode("edit");
+  }}
+  onSave={async () => {
+    if (popupMode === "clone") {
+      await handleSaveClone();
+    } else {
+      await handleSaveEdit();
+    }
+
+    setShowEditPopup(false);
+    setEditRowId(null);
+    setPopupMode("edit");
+  }}
+/>
                       )}
                       </tbody>
                      <tfoot className="sticky bottom-0 bg-gray-100 border-t-2 border-gray-300 z-30">
