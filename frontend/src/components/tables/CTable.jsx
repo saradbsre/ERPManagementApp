@@ -399,25 +399,7 @@ useEffect(() => {
 });
     }, []);
 
-    getMasterData("department", activeUserEmail).then(res => {
-  const result = Array.isArray(res?.data) ? res.data : [];
-  setDepartments(result);
-});
-
-getMasterData("division", activeUserEmail).then(res => {
-  const result = Array.isArray(res?.data) ? res.data : [];
-  setDivisions(result);
-});
-
-getMasterData("plans", activeUserEmail).then(res => {
-  const result = Array.isArray(res?.data) ? res.data : [];
-  setPlans(result);
-});
-
-getMasterData("billing_cycle", activeUserEmail).then(res => {
-  const result = Array.isArray(res?.data) ? res.data : [];
-  setBillingCycles(result);
-});
+   
 
    
 
@@ -2421,39 +2403,23 @@ if (key === "curr_code") {
       ["com_name", "company_name", "trade_name", "value", "name"]
     );
   }if (key === "dep_code") {
-  return resolveFromList(
-    value,
-    departments,
-    ["dep_code", "department_code", "code", "key", "id"],
-    ["dep_name", "department_name", "value", "name"]
-  );
+  return toMasterKey("dep_code", value);
 }
 
 if (key === "dv_code") {
-  return resolveFromList(
-    value,
-    divisions,
-    ["dv_code", "division_code", "code", "key", "id"],
-    ["dv_name", "division_name", "value", "name"]
-  );
+  return toMasterKey("dv_code", value);
+}
+
+if (key === "prj_code") {
+  return toMasterKey("prj_code", value);
 }
 
 if (key === "plan_code") {
-  return resolveFromList(
-    value,
-    plans,
-    ["plan_code", "code", "key", "id"],
-    ["plan_name", "plan_desc", "value", "name"]
-  );
+  return toMasterKey("plan_code", value);
 }
 
 if (key === "billcycle_code") {
-  return resolveFromList(
-    value,
-    billingCycles,
-    ["billcycle_code", "billing_cycle_code", "code", "key", "id"],
-    ["billcycle_name", "billing_cycle_name", "value", "name"]
-  );
+  return toMasterKey("billcycle_code", value);
 }
   // Other normal master columns
   return toMasterKey(columnName, value);
@@ -2484,13 +2450,13 @@ const toMasterKey = (columnName, rawVal) => {
     .toLowerCase();
 
   const hit = options.find((o) => {
-    const key = String(o?.key ?? o?.id ?? "").trim().toLowerCase();
-    const value = String(o?.value ?? o ?? "").trim().toLowerCase();
+    const key = String(o?.key ?? o?.id ?? o?.code ?? "").trim().toLowerCase();
+    const value = String(o?.value ?? o?.name ?? o ?? "").trim().toLowerCase();
 
     return input === key || input === value;
   });
 
-  return hit ? hit.key ?? hit.id ?? hit.value : rawVal;
+  return hit ? hit.key ?? hit.id ?? hit.code ?? hit.value : rawVal;
 };
 
 // const toMasterKey = (columnName, rawVal) => {
@@ -3233,7 +3199,7 @@ useEffect(() => {
       ));
     }
   });
-}, [editRowId, visibleColumns, masterDataMap]);
+}, [editRowId, columns.length, masterDataMap]);
 
 const isPrfBlockedProductType = (productTypeValue) => {
   const raw =
