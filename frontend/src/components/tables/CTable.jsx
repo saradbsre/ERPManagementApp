@@ -6227,30 +6227,33 @@ onDrop={() => handleDrop(col.column_name)}
   >
     <Copy size={18} className="text-gray-500" />
   </PermissionButton>
+{/* EYE - fixed position */}
+<button
+  type="button"
+  onClick={() => {
+    if (!row.pdf_file_name) return;
 
-  {/* EYE - fixed position */}
-  <button
-    type="button"
-    onClick={() => {
-      if (!row.pdf_path) return;
-      setPreviewPdfUrl(getPdfUrl(row.pdf_path));
-    }}
-    title={row.pdf_path ? "View Invoice" : "No invoice uploaded"}
-    disabled={!row.pdf_path}
-    className={`
-      p-1 rounded transition
-      w-7 h-7
-      flex items-center justify-center
-      ${
-        row.pdf_path
-          ? "hover:bg-blue-50 cursor-pointer"
-          : "cursor-not-allowed opacity-40"
-      }
-    `}
-  >
-    <EyeIcon className="w-5 h-5 text-gray-600" />
-  </button>
+    const baseUrl = import.meta.env.VITE_API_URL || "";
 
+    setPreviewPdfUrl(
+      `${baseUrl}/payment-transactions/${row.id}/invoice-pdf`
+    );
+  }}
+  title={row.pdf_file_name ? "View Invoice" : "No invoice uploaded"}
+  disabled={!row.pdf_file_name}
+  className={`
+    p-1 rounded transition
+    w-7 h-7
+    flex items-center justify-center
+    ${
+      row.pdf_file_name
+        ? "hover:bg-blue-50 cursor-pointer"
+        : "cursor-not-allowed opacity-40"
+    }
+  `}
+>
+  <EyeIcon className="w-5 h-5 text-gray-600" />
+</button>
     {editRowId === row.id ? (
       <>
         {/* SAVE */}
