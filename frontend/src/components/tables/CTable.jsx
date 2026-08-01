@@ -219,6 +219,10 @@ export default function DynamicTablePage() {
     const [vendors, setVendors] = useState([]);
     const [company, setCompany] = useState([]);
     const [companyMaster, setCompanyMaster] = useState([]);
+    const [departments, setDepartments] = useState([]);
+const [divisions, setDivisions] = useState([]);
+const [plans, setPlans] = useState([]);
+const [billingCycles, setBillingCycles] = useState([]);
     const [serviceProviders, setServiceProviders] = useState([]);
     const [creditCards, setCreditCards] = useState([]);
     const [serviceTypes, setServiceTypes] = useState([]);
@@ -394,6 +398,26 @@ useEffect(() => {
   setCompany(tradeNames);
 });
     }, []);
+
+    getMasterData("department", activeUserEmail).then(res => {
+  const result = Array.isArray(res?.data) ? res.data : [];
+  setDepartments(result);
+});
+
+getMasterData("division", activeUserEmail).then(res => {
+  const result = Array.isArray(res?.data) ? res.data : [];
+  setDivisions(result);
+});
+
+getMasterData("plans", activeUserEmail).then(res => {
+  const result = Array.isArray(res?.data) ? res.data : [];
+  setPlans(result);
+});
+
+getMasterData("billing_cycle", activeUserEmail).then(res => {
+  const result = Array.isArray(res?.data) ? res.data : [];
+  setBillingCycles(result);
+});
 
    
 
@@ -2204,6 +2228,7 @@ const handleSaveClone = async () => {
     // ================= CONVERT MASTER DISPLAY NAME TO CODE =================
     Object.keys(payload).forEach((key) => {
       payload[key] = normalizeCloneMasterValue(key, payload[key]);
+      console.log("Normalized clone payload:", payload);
     });
 
     // ================= REMOVE FRONTEND ONLY COLUMNS =================
@@ -2395,29 +2420,77 @@ if (key === "curr_code") {
       ["com_code", "company_code", "code"],
       ["com_name", "company_name", "trade_name", "value", "name"]
     );
-  }
+  }if (key === "dep_code") {
+  return resolveFromList(
+    value,
+    departments,
+    ["dep_code", "department_code", "code", "key", "id"],
+    ["dep_name", "department_name", "value", "name"]
+  );
+}
 
+if (key === "dv_code") {
+  return resolveFromList(
+    value,
+    divisions,
+    ["dv_code", "division_code", "code", "key", "id"],
+    ["dv_name", "division_name", "value", "name"]
+  );
+}
+
+if (key === "plan_code") {
+  return resolveFromList(
+    value,
+    plans,
+    ["plan_code", "code", "key", "id"],
+    ["plan_name", "plan_desc", "value", "name"]
+  );
+}
+
+if (key === "billcycle_code") {
+  return resolveFromList(
+    value,
+    billingCycles,
+    ["billcycle_code", "billing_cycle_code", "code", "key", "id"],
+    ["billcycle_name", "billing_cycle_name", "value", "name"]
+  );
+}
   // Other normal master columns
   return toMasterKey(columnName, value);
 };
-    const toMasterKey = (columnName, rawVal) => {
-if (rawVal === null || rawVal === undefined || rawVal === "") return rawVal;
+const toMasterKey = (columnName, rawVal) => {
+  if (rawVal === null || rawVal === undefined || rawVal === "") {
+    return rawVal;
+  }
 
-const col = columns.find(c => c.column_name === columnName);
-if (!col?.master) return rawVal;
+  const col = columns.find(
+    (c) =>
+      String(c.column_name).toLowerCase() ===
+      String(columnName).toLowerCase()
+  );
 
-const options = getMasterOptions(col, "");
-const input = String(rawVal).trim().toLowerCase();
+  if (!col?.master && !col?.master1) {
+    return rawVal;
+  }
 
-const hit = options.find(o => {
-const key = String(o?.key ?? o?.id ?? o?.value ?? "").trim().toLowerCase();
-const val = String(o?.value ?? o ?? "").trim().toLowerCase();
- console.log(`Comparing input "${input}" with key "${key}" and value "${val}"`);
+  const options = getMasterOptions(col, "");
 
-return input === key || input === val;
-});
+  const input = String(
+    typeof rawVal === "object"
+      ? rawVal.key ?? rawVal.id ?? rawVal.value ?? ""
+      : rawVal
+  )
+    .trim()
+    .toLowerCase();
 
-return hit ? (hit.key ?? hit.id ?? hit.value) : rawVal;
+  const hit = options.find((o) => {
+    const key = String(o?.key ?? o?.id ?? "").trim().toLowerCase();
+    const value = String(o?.value ?? o ?? "").trim().toLowerCase();
+
+    return input === key || input === value;
+  });
+
+  return hit ? hit.key ?? hit.id ?? hit.value : rawVal;
 };
 
 // const toMasterKey = (columnName, rawVal) => {
