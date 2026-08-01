@@ -1,4 +1,4 @@
-import React,{ useEffect, useState, useRef, useLayoutEffect, act, use, useMemo } from "react";
+import React,{ useEffect, useState, useRef, useMemo } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
 import {
   Pin,
@@ -8,11 +8,12 @@ import {
   ChevronRight,
   Funnel, PinOff
 } from "lucide-react";
-import { fetchSections,fetchMasters, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, getApprovalWorkflow, getPreviewPRF, unpostPRFTransaction, postPRFTransaction,getModuleViews,
+import { fetchSections,fetchMasters, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, 
+  getApprovalWorkflow, getPreviewPRF, unpostPRFTransaction, postPRFTransaction,getModuleViews,
 createModuleView,
 updateModuleView,
 deleteModuleView,
-setDefaultModuleView, updateRequiresPrf, createPaymentTransactions  } from "../../api/api";
+setDefaultModuleView, updateRequiresPrf, clonePaymentTransaction } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -219,10 +220,6 @@ export default function DynamicTablePage() {
     const [vendors, setVendors] = useState([]);
     const [company, setCompany] = useState([]);
     const [companyMaster, setCompanyMaster] = useState([]);
-    const [departments, setDepartments] = useState([]);
-const [divisions, setDivisions] = useState([]);
-const [plans, setPlans] = useState([]);
-const [billingCycles, setBillingCycles] = useState([]);
     const [serviceProviders, setServiceProviders] = useState([]);
     const [creditCards, setCreditCards] = useState([]);
     const [serviceTypes, setServiceTypes] = useState([]);
@@ -2154,11 +2151,12 @@ useEffect(() => {
     setEditRowId(null);
 };
 
+
 const handleClone = (row) => {
   const clonedRow = { ...row };
 
-  // Remove system/generated fields so it will save as a new record
-  delete clonedRow.id;
+  clonedRow.originalId = row.id;
+
   delete clonedRow.prf_num;
   delete clonedRow.is_posted;
   delete clonedRow.pdf_path;
@@ -2169,105 +2167,37 @@ const handleClone = (row) => {
   delete clonedRow.last_updated_by;
   delete clonedRow.last_updated_at;
 
-  // Optional: reset PRF selection fields
   clonedRow.requires_prf_form = false;
-
-  // Created by should become current login user
   clonedRow.userid = activeUserEmail;
 
   setPopupMode("clone");
   setEditRowId(null);
   setEditRow(clonedRow);
-  setOriginalRow({});
+
+  // keep original row for comparison
+  setOriginalRow(row);
+
   setShowEditPopup(true);
 };
-
 const handleSaveClone = async () => {
   try {
     setLoading(true);
 
-    const payload = { ...editRow };
+    const changedData = {};
 
-    // ================= REMOVE OLD RECORD FIELDS =================
-    delete payload.id;
-    delete payload.prf_num;
-    delete payload.is_posted;
-    delete payload.pdf_path;
-    delete payload.pdf_file_name;
-    delete payload.sysdate;
-    delete payload.created_at;
-    delete payload.updated_at;
-    delete payload.last_updated_by;
-    delete payload.last_updated_at;
-    delete payload.audit_rev;
-
-    // ================= RESET NEW RECORD VALUES =================
-    payload.userid = activeUserEmail;
-    payload.requires_prf_form = false;
-    payload.deleted = false;
-    payload.is_active = true;
-
-    // ================= CONVERT MASTER DISPLAY NAME TO CODE =================
-    Object.keys(payload).forEach((key) => {
-      payload[key] = normalizeCloneMasterValue(key, payload[key]);
-      console.log("Normalized clone payload:", payload);
-    });
-
-    // ================= REMOVE FRONTEND ONLY COLUMNS =================
-    Object.keys(payload).forEach((key) => {
+    Object.keys(editRow).forEach((key) => {
       if (
-        key.startsWith("amount_") ||
-        key === "_globalSn" ||
-        key === "_group" ||
-        key === "_sn"
+        key !== "originalId" &&
+        editRow[key] !== originalRow[key]
       ) {
-        delete payload[key];
+        changedData[key] = editRow[key];
       }
     });
 
-    // ================= MAP DB FIELD NAMES TO createPaymentTransactions FIELD NAMES =================
-    const cloneRow = {
-      invoiceDate: payload.date || null,
-      vendorName: payload.vend_code || null,
-      product: payload.prd_code || null,
-      productType: payload.prdtype_code || null,
-      plan: payload.plan_code || null,
-      department: payload.dep_code || null,
-      billingCompany: payload.com_code || null,
-      term: payload.billcycle_code || null,
-      creditCard: payload.crcd_code || null,
-      currency: payload.curr_code || null,
-
-      amount: Number(payload.amount || 0),
-      totalAmountAED: Number(payload.total_amount_aed || 0),
-      expiryDate: payload.expiry_date || null,
-      costCenter: payload.dv_code || null,
-      remarks: payload.remarks || null,
-      vatAmount: Number(payload.vat_amount || 0),
-      totalAmount: Number(payload.total_amount || 0),
-
-      invoiceNumber: payload.invoice_number || null,
-      transactionType: payload.trntype_code || null,
-      projects: payload.prj_code || null,
-      itRequestNum: payload.it_request_no || null,
-      requestedBy: payload.requested_by || null,
-      qty: Number(payload.qty || 0),
-
-      lpoNo: payload.lpo_no || null,
-      lpoDate: payload.lpo_date || null,
-      deliveryDate: payload.delivery_date || null,
-
-      // cloned record should be fresh, PRF not selected
-      prfRequired: false,
-    };
-
-    console.log("Clone row for createPaymentTransactions:", cloneRow);
-
-    await createPaymentTransactions(
-      {
-        rows: [cloneRow],
-      },
-      activeUserEmail
+    await clonePaymentTransaction(
+      editRow.originalId,
+      activeUserEmail,
+      changedData
     );
 
     setPopupMessage("Record cloned successfully");
@@ -2280,16 +2210,17 @@ const handleSaveClone = async () => {
     setOriginalRow({});
 
     await loadModule();
+
   } catch (err) {
     console.error("Clone save failed:", err);
-    console.error("Backend error:", err.response?.data);
 
     setPopupMessage(
+      err.response?.data?.message ||
       err.response?.data?.error ||
-        err.response?.data?.message ||
-        "Error cloning record"
+      "Error cloning record"
     );
     setPopupType("error");
+
   } finally {
     setLoading(false);
   }
@@ -2302,128 +2233,11 @@ const handleSaveClone = async () => {
         setOriginalRow({ ...row });
       setShowEditPopup(true);
     };
-const cleanText = (value) => {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
-};
-
-const resolveFromList = (value, list, codeKeys = [], nameKeys = []) => {
-  if (value === null || value === undefined || value === "") return value;
-
-  const input = cleanText(
-    typeof value === "object"
-      ? value.key ?? value.id ?? value.value ?? ""
-      : value
-  );
-
-  const found = (list || []).find((item) => {
-    const codes = codeKeys.map((key) => cleanText(item?.[key]));
-    const names = nameKeys.map((key) => cleanText(item?.[key]));
-
-    return codes.includes(input) || names.includes(input);
-  });
-
-  if (!found) return value;
-
-  for (const key of codeKeys) {
-    if (found?.[key]) return found[key];
-  }
-
-  return value;
-};
-
-const normalizeCloneMasterValue = (columnName, value) => {
-  const key = String(columnName || "").toLowerCase();
-
-  // Vendor
-  if (key === "vend_code") {
-    return resolveFromList(
-      value,
-      vendors,
-      ["vend_code", "vendor_code", "code"],
-      ["vend_name", "vendor_name", "value", "name"]
-    );
-  }
-if (key === "curr_code") {
-  return resolveFromList(
-    value,
-    currencies,
-    ["curr_code", "currency_code", "code"],
-    ["curr_name", "currency_name", "value", "name"]
-  );
-}
-  // Product
-  if (key === "prd_code") {
-    return resolveFromList(
-      value,
-      serviceProviders,
-      ["prd_code", "product_code", "code"],
-      ["prd_name", "product_name", "value", "name"]
-    );
-  }
 
 
-    if (key === "trntype_code") {
-    return resolveFromList(
-      value,
-      transactionTypes,
-      ["trntype_code", "transaction_type_code", "code"],
-      ["trntype_name", "transaction_type_name", "value", "name"]
-    );
-  }
 
-  // Product Type / Service Type
-  if (key === "prdtype_code") {
-    return resolveFromList(
-      value,
-      serviceTypes,
-      ["prdtype_code", "product_type_code", "service_type_code", "code"],
-      ["prdtype_name", "product_type_name", "service_type_name", "value", "name"]
-    );
-  }
 
-  // Credit Card
-  if (key === "crcd_code") {
-    return resolveFromList(
-      value,
-      creditCards,
-      ["crcd_code", "crcd_last4num", "card_code", "code"],
-      ["crcd_holder_name", "card_name", "value", "name"]
-    );
-  }
 
-  // Company
-  if (key === "com_code") {
-    return resolveFromList(
-      value,
-      companyMaster,
-      ["com_code", "company_code", "code"],
-      ["com_name", "company_name", "trade_name", "value", "name"]
-    );
-  }if (key === "dep_code") {
-  return toMasterKey("dep_code", value);
-}
-
-if (key === "dv_code") {
-  return toMasterKey("dv_code", value);
-}
-
-if (key === "prj_code") {
-  return toMasterKey("prj_code", value);
-}
-
-if (key === "plan_code") {
-  return toMasterKey("plan_code", value);
-}
-
-if (key === "billcycle_code") {
-  return toMasterKey("billcycle_code", value);
-}
-  // Other normal master columns
-  return toMasterKey(columnName, value);
-};
 const toMasterKey = (columnName, rawVal) => {
   if (rawVal === null || rawVal === undefined || rawVal === "") {
     return rawVal;

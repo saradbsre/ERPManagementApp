@@ -262,6 +262,12 @@ export const getAlertData = (filter = "today_tomorrow") => {
   });
 };
 
+export const clonePaymentTransaction = (id, activeUserEmail, changedData = {}) =>
+  API.post(`/payment-transactions/${id}/clone`, {
+    activeUserEmail,
+    changedData,
+  });
+
 export const getRecentTransactions = () => {
   return API.get("/recent-transactions");
 }
