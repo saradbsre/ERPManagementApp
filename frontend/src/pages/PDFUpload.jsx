@@ -317,7 +317,7 @@ const convertPdfToImages = async (pdfFile) => {
 
     const page = await pdf.getPage(pageNo);
 
-    const viewport = page.getViewport({ scale: 1.2 });
+    const viewport = page.getViewport({ scale: 0.9 });
 
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
@@ -330,7 +330,7 @@ const convertPdfToImages = async (pdfFile) => {
       viewport
     }).promise;
 
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.65);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.45);
 
     imagePages.push({
       pageNo,
@@ -341,7 +341,14 @@ const convertPdfToImages = async (pdfFile) => {
 
   return imagePages;
 };
- const postToBackend = async (body) => {
+const postToBackend = async (body) => {
+  const payloadSizeMB = JSON.stringify(body).length / 1024 / 1024;
+  console.log("PDF extract payload size:", payloadSizeMB.toFixed(2), "MB");
+
+  if (payloadSizeMB > 45) {
+    throw new Error("PDF payload is too large. Please upload a smaller PDF or reduce scanned pages.");
+  }
+
   const response = await fetch(`${API_URL}/pdf/extract`, {
     method: "POST",
     headers: {
@@ -354,6 +361,7 @@ const convertPdfToImages = async (pdfFile) => {
   const responseText = await response.text();
 
   let result;
+
   try {
     result = JSON.parse(responseText);
   } catch (err) {
@@ -364,8 +372,6 @@ const convertPdfToImages = async (pdfFile) => {
       "Backend did not return JSON. Check API URL, route, authentication, or backend error."
     );
   }
-
-
 
   if (!response.ok || !result.success) {
     throw new Error(result.error || "Failed to extract PDF data");
