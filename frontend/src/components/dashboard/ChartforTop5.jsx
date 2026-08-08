@@ -20,7 +20,10 @@ const fetchTopExpenses = async (prdtype_code = "") => {
   setLoading(true);
 
   try {
-    const result = await getTopExpensiveAssets(prdtype_code);
+     const activeUser = JSON.parse(localStorage.getItem("user"));
+    const activeUserEmail = activeUser?.email || "";
+
+    const result = await getTopExpensiveAssets(activeUserEmail, prdtype_code);
 
     setData(result.data.transactions || []);
     setProductTypes(result.data.productTypes || []);

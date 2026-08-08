@@ -247,16 +247,19 @@ export const deleteMasterData = (masterName, id, activeUserEmail) => {
   });
 }
 
-export const getTopExpensiveAssets = (prdtype_code = "") =>
+export const getTopExpensiveAssets = (activeUserEmail, prdtype_code = "") =>
   API.get("/top-expensive-assets", {
     params: {
+      activeUserEmail,
       prdtype_code
     }
   });
 
-export const getAlertData = (filter = "today_tomorrow") => {
+export const getAlertData = (activeUserEmail, filter = "today_tomorrow") => {
   return API.get("/alerts", {
+    
     params: {
+        activeUserEmail,
       filter,
     },
   });
@@ -268,9 +271,13 @@ export const clonePaymentTransaction = (id, activeUserEmail, changedData = {}) =
     changedData,
   });
 
-export const getRecentTransactions = () => {
-  return API.get("/recent-transactions");
-}
+export const getRecentTransactions = (activeUserEmail,) => {
+  return API.get("/recent-transactions", {
+    params: {
+      activeUserEmail,
+    },
+  });
+};
 
 export const getLogs = (params = {}) => {
   return API.get("/logs", { params });

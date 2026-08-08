@@ -27,7 +27,7 @@ export default function RecentTransactions() {
     setLoading(true);
 
     try {
-      const res = await getRecentTransactions();
+      const res = await getRecentTransactions(activeUserEmail);
       const result = res?.data?.data || [];
 
       setData(result);

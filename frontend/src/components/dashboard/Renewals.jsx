@@ -14,7 +14,7 @@ const fetchAlerts = async (filter = "today") => {
   setLoading(true);
 
   try {
-    const res = await getAlertData(filter);
+    const res = await getAlertData(activeUserEmail, filter);
     setData(res?.data?.data || []);
   } catch (err) {
     console.error(err);
