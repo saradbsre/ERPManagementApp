@@ -300,7 +300,7 @@ exports.updateUserPermissions = async (req, res) => {
       .input("userid", sql.NVarChar, activeUserEmail)
       .input("all_data_access", sql.Bit, permissions.all_data_access || 0)
       .query(`
-        IF EXISTS (SELECT 1 FROM userRoles WHERE userid = @userid)
+        IF EXISTS (SELECT 1 FROM userRoles WHERE username = @username)
         BEGIN
           UPDATE userRoles
           SET 
@@ -312,8 +312,7 @@ exports.updateUserPermissions = async (req, res) => {
             [print] = @print,
             [export] = @export,
             [access] = @access,
-            all_data_access = @all_data_access
-
+            all_data_access = @all_data_access,
             sysdate = GETDATE(),
             audit_rev = ISNULL(audit_rev, 0) + 1,
             userid = @userid

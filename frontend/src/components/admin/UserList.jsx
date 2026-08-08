@@ -82,6 +82,7 @@ const usersWithPermissions = res.data.map((u) => ({
     export: Number(u.export) === 1,
     modify: Number(u.modify) === 1,
     print: Number(u.print) === 1,
+     all_data_access: Number(u.all_data_access) === 1,
   },
 }));
 
@@ -119,6 +120,7 @@ const usersWithPermissions = res.data.map((u) => ({
       export: u.export,
       modify: u.modify,
       print: u.print,
+      all_data_access: Number(u.all_data_access) === 1,
     },
   }));
   setUsers(usersWithPermissions);
@@ -155,6 +157,7 @@ useEffect(() => {
         export: roleObj.export,
         modify: roleObj.modify,
         print: roleObj.print,
+          all_data_access: Number(roleObj.all_data_access) === 1,
       });
     }
   }
@@ -721,9 +724,11 @@ style={{
       : "repeat(3,1fr)",
   }}
 >
-          {["print", "add", "modify", "delete", "export", "access"].map((key) => (
+          {["print", "add", "modify", "delete", "export", "access", "all_data_access"].map((key) => (
             <div key={key} style={permissionBox}>
-              <span style={{ textTransform: "capitalize" }}>{key}</span>
+              <span style={{ textTransform: "capitalize" }}>
+  {key === "all_data_access" ? "All Data Access" : key}
+</span>
 
               <input
                 type="checkbox"
@@ -1221,7 +1226,7 @@ return (
         <div style={permissionMobileGrid}>
 
         {
-        ["print","add","modify","delete","export","access"]
+        ["print","add","modify","delete","export","access","all_data_access"]
         .map(key=>(
 
           <label 
@@ -1230,7 +1235,7 @@ return (
           >
 
             <span>
-              {key}
+              {key === "all_data_access" ? "All Data Access" : key}
             </span>
 
             <input
