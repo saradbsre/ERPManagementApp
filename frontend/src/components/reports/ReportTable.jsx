@@ -702,7 +702,7 @@ const transformCurrencyRows = (data = []) => {
 const getCellValue = (row, col, isTotalRow = false) => {
   const value = row[col.column_name];
   const name = (col.column_name || "").toLowerCase();
-
+  console.log("getCellValue:", name, value);
   // ================= TOTAL ROW =================
   if (isTotalRow) {
     if (
@@ -736,8 +736,6 @@ const getCellValue = (row, col, isTotalRow = false) => {
 
   // ================= NUMERIC COLUMNS =================
   if (
-    name.startsWith("cr") ||
-    name.startsWith("bc") ||
     name.includes("amount") ||
     name.includes("price") ||
     name.includes("total") ||
@@ -747,7 +745,7 @@ const getCellValue = (row, col, isTotalRow = false) => {
   }
 
   // ================= PAYMENT METHOD =================
-  if (name.includes("paymentmethod")) {
+  if (name.includes("crcd_code") || name.includes("paymentmethod")) {
     return value ? `**** ${value.slice(-4)}` : "-";
   }
 
@@ -1120,7 +1118,7 @@ const fullGroupedRows = useMemo(() => {
 //     : Math.ceil(filteredRows.length / pageSize);
 const isRightAligned = (col) => {
       const name = (col.column_name || "").toLowerCase();
-      return name.includes("bc") || name.includes("cr") || name.includes("cost") || name.includes("total") || name.includes("amount");
+      return  name.includes("cost") || name.includes("total") || name.includes("amount");
     };
 
     const groupSerialMap = useMemo(() => {
