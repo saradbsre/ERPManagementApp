@@ -312,9 +312,8 @@ export const reportToExcel = async (
 
   const isNumericCol = (colName) =>
     colName?.toLowerCase().includes("amount") ||
-    colName?.toLowerCase().includes("total") ||
-    colName?.toLowerCase().includes("cr") ||
-    colName?.toLowerCase().includes("bc");
+    colName?.toLowerCase().includes("total") 
+
 
   const parseValue = (val) => {
     if (val === "-" || val === "" || val == null) return 0;

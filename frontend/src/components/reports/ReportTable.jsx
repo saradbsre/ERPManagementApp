@@ -699,10 +699,20 @@ const transformCurrencyRows = (data = []) => {
   });
 };
 
+const getProductDescription = (row) => {
+  return [
+    row.prd_code,
+    row.prdtype_code,
+    row.plan_code,
+  ]
+    .filter(Boolean)
+    .join(" - ") || "-";
+};
+
 const getCellValue = (row, col, isTotalRow = false) => {
   const value = row[col.column_name];
   const name = (col.column_name || "").toLowerCase();
-  console.log("getCellValue:", name, value);
+  //console.log("getCellValue:", name, value);
   // ================= TOTAL ROW =================
   if (isTotalRow) {
     if (
@@ -757,6 +767,10 @@ const getCellValue = (row, col, isTotalRow = false) => {
   if (name.includes("yearly_amount_aed")) {
     return "Yearly Amount (AED)";
   }
+
+if (col.column_name === "product_description") {
+  return getProductDescription(row);
+}
 
   // ================= DEFAULT =================
   return value ?? "-";
@@ -1403,7 +1417,7 @@ const yearlyVisibleColumns = useMemo(() => {
     .map((name) => columns.find((c) => c.column_name === name))
     .filter(Boolean);
 }, [columns, visibleColumnsState]);
-
+console.log("yearlyVisibleColumns:", yearlyVisibleColumns);
 useEffect(() => {
   setTempHideColumns(
     yearlyVisibleColumns.map((c) => c.column_name)
@@ -1414,14 +1428,57 @@ useEffect(() => {
   setPage(1);
 }, [tableRecordMode, reportType]);
 
+// const yearlyDetailedColumns = useMemo(() => {
+//   if (!yearlyVisibleColumns?.length) return [];
+
+//   return yearlyVisibleColumns.filter(
+//     (col) => col.column_name !== report?.group_by
+//   );
+// }, [yearlyVisibleColumns, report]);
 const yearlyDetailedColumns = useMemo(() => {
   if (!yearlyVisibleColumns?.length) return [];
 
-  return yearlyVisibleColumns.filter(
+  const productFields = ["prd_code", "prdtype_code", "plan_code"];
+
+  // Find where prd_code was originally
+  const productIndex = yearlyVisibleColumns.findIndex(
+    (col) => col.column_name === "prd_code"
+  );
+
+  const hasProductFields = yearlyVisibleColumns.some((col) =>
+    productFields.includes(col.column_name)
+  );
+
+  // Remove prd_code, prdtype_code, plan_code
+  const withoutProductFields = yearlyVisibleColumns.filter(
+    (col) => !productFields.includes(col.column_name)
+  );
+
+  if (!hasProductFields) {
+    return withoutProductFields.filter(
+      (col) => col.column_name !== report?.group_by
+    );
+  }
+
+  // Replace the product fields with ONE column
+  const mergedProductColumn = {
+    column_name: "product_description",
+    display_name: "Product Description",
+  };
+
+  const cols = [...withoutProductFields];
+
+  // Put product_description exactly where prd_code was
+  const safeIndex =
+    productIndex >= 0 ? productIndex : cols.length;
+
+  cols.splice(safeIndex, 0, mergedProductColumn);
+
+  return cols.filter(
     (col) => col.column_name !== report?.group_by
   );
 }, [yearlyVisibleColumns, report]);
-
+//console.log("yearlyDetailedColumns:", yearlyDetailedColumns);
 
 const openColumnPopup = () => {
   const rect = snoRef.current?.getBoundingClientRect();
@@ -1664,9 +1721,13 @@ const getColumnWidth = (col) => {
   const name = (col.column_name || "").toLowerCase();
 
  if (name.includes("com_code")) return "110px";
+ if (name.includes("product_description")) return "90px";
+ if (name.includes("date")) {
+  return "30px";
+}
 
   if (
-    name.includes("date") ||
+  
     name.includes("podate") ||
     name.includes("expiry") ||
     name.includes("start") ||
@@ -1675,7 +1736,7 @@ const getColumnWidth = (col) => {
     name.includes("number") ||
     name.includes("dep_code")
   ) {
-    return "45px";
+    return "40px";
   }
  if (name.includes("billcycle_code")) {
   return "35px";
@@ -1685,11 +1746,11 @@ if (name.includes("curr_code")) {
   return "38px";
 }
   if (name.includes("prf")) {
-    return "35px";
+    return "30px";
   }
 
  if (name.includes("total_amount_aed")) {
-  return "45px";
+  return "47px";
 }
 
 if (
@@ -1697,11 +1758,11 @@ if (
   name.includes("price") ||
   name.includes("total")
 ) {
-  return "38px";
+  return "35px";
 }
 
-if (name.includes("curr_code")) {
-  return "38px";
+if (name.includes("crcd_code")) {
+  return "30px";
 }
 
   if (
@@ -1881,46 +1942,45 @@ const generateSummaryTable = () => {
 
 const generateDetailedTable = () => {
   const isR011 = report?.report_id === "R011" || report?.report_id === "R012";
-  //console.log("visible colmns",yearlyVisibleColumns)
-  const grandTotal = buildTotalRow(rows || [], yearlyVisibleColumns);
 
-const firstAmountIndex = yearlyVisibleColumns.findIndex((c) => {
-  const name = (c.column_name || "").toLowerCase();
+  // Use same columns as UI table (includes product_description combo)
+  const printColumns = yearlyDetailedColumns;
+  console.log("printColumns:", printColumns);
+  const grandTotal = buildTotalRow(rows || [], printColumns);
 
-  return (
-    name.includes("amount") ||
-    name.includes("price") ||
-    name.includes("total")
-  );
-});
+  const firstAmountIndex = printColumns.findIndex((c) => {
+    const name = (c.column_name || "").toLowerCase();
+    return name.includes("amount") || name.includes("price") || name.includes("total");
+  });
 
-const totalLabelIndex =
-  firstAmountIndex > 0 ? firstAmountIndex - 1 : yearlyVisibleColumns.length - 1;
+  const totalLabelIndex =
+    firstAmountIndex > 0 ? firstAmountIndex - 1 : printColumns.length - 1;
+
   return `
     <table>
       <thead>
         <tr>
           <th class="sno-col">S/N</th>
-          ${yearlyVisibleColumns
+          ${printColumns
             .map(
               (col) => `
                 <th
-  class="${
-    isRightAligned(col) ? "text-right" : "text-left"
-  } ${
-    col.column_name?.toLowerCase().includes("total_amount_aed") ||
-    col.column_name?.toLowerCase().includes("amount")
-      ? "amount-header"
-      : ""
-  } ${
-    col.column_name?.toLowerCase().includes("curr_code")
-      ? "currency-header"
-      : ""
-  }"
-  style="width:${getColumnWidth(col)}"
->
-  ${col.display_name}
-</th>
+                  class="${
+                    isRightAligned(col) ? "text-right" : "text-left"
+                  } ${
+                    col.column_name?.toLowerCase().includes("total_amount_aed") ||
+                    col.column_name?.toLowerCase().includes("amount")
+                      ? "amount-header"
+                      : ""
+                  } ${
+                    col.column_name?.toLowerCase().includes("curr_code")
+                      ? "currency-header"
+                      : ""
+                  }"
+                  style="width:${getColumnWidth(col)}"
+                >
+                  ${col.display_name}
+                </th>
               `
             )
             .join("")}
@@ -1928,7 +1988,6 @@ const totalLabelIndex =
       </thead>
 
       <tbody>
-
         ${
           isR011
             ? `
@@ -1937,26 +1996,23 @@ const totalLabelIndex =
                   (row, i) => `
                     <tr>
                       <td class="sno-col" style="text-align:center">${i + 1}</td>
-
-                      ${yearlyVisibleColumns
+                      ${printColumns
                         .map(
                           (col) => `
-                          <td class="${
-  isRightAligned(col)
-    ? "text-right"
-    : "text-left"
-} ${
-  col.column_name?.toLowerCase().includes("total_amount_aed") ||
-  col.column_name?.toLowerCase().includes("amount")
-    ? "amount-cell num"
-    : ""
-} ${
-  col.column_name?.toLowerCase().includes("curr_code")
-    ? "currency-cell"
-    : ""
-}">
-  ${getCellValue(row, col)}
-</td>
+                            <td class="${
+                              isRightAligned(col) ? "text-right" : "text-left"
+                            } ${
+                              col.column_name?.toLowerCase().includes("total_amount_aed") ||
+                              col.column_name?.toLowerCase().includes("amount")
+                                ? "amount-cell num"
+                                : ""
+                            } ${
+                              col.column_name?.toLowerCase().includes("curr_code")
+                                ? "currency-cell"
+                                : ""
+                            }">
+                              ${getCellValue(row, col)}
+                            </td>
                           `
                         )
                         .join("")}
@@ -1967,21 +2023,16 @@ const totalLabelIndex =
             `
             : fullGroupedRows
                 .map(([groupName, groupRows]) => {
-                  const groupTotal = buildTotalRow(
-                    groupRows,
-                    yearlyVisibleColumns
-                  );
+                  const groupTotal = buildTotalRow(groupRows, printColumns);
 
                   return `
                     <tr>
-                      <td colspan="${yearlyVisibleColumns.length + 1}"
-                          style="background:#e5e7eb;font-weight:bold;">
+                      <td colspan="${printColumns.length + 1}" style="background:#e5e7eb;font-weight:bold;">
                         ${(
                           displayNames[report?.group_by] ||
                           report?.group_by ||
                           "GROUP"
-                        ).toUpperCase()} :
-                        ${groupName}
+                        ).toUpperCase()} : ${groupName}
                       </td>
                     </tr>
 
@@ -1990,15 +2041,10 @@ const totalLabelIndex =
                         (row, i) => `
                           <tr>
                             <td style="text-align:center">${i + 1}</td>
-
-                            ${yearlyVisibleColumns
+                            ${printColumns
                               .map(
                                 (col) => `
-                                  <td class="${
-                                    isRightAligned(col)
-                                      ? "text-right"
-                                      : "text-left"
-                                  }">
+                                  <td class="${isRightAligned(col) ? "text-right" : "text-left"}">
                                     ${getCellValue(row, col)}
                                   </td>
                                 `
@@ -2011,11 +2057,9 @@ const totalLabelIndex =
 
                     <tr class="total-row">
                       <td></td>
-
-                      ${yearlyVisibleColumns
+                      ${printColumns
                         .map((col, index) => {
                           const isLabel = index === totalLabelIndex;
-
                           return `
                             <td class="text-right">
                               ${
@@ -2037,11 +2081,9 @@ const totalLabelIndex =
 
         <tr class="total-row">
           <td></td>
-
-          ${yearlyVisibleColumns
+          ${printColumns
             .map((col, index) => {
               const isLabel = index === totalLabelIndex;
-
               return `
                 <td class="text-right">
                   ${
@@ -2058,7 +2100,6 @@ const totalLabelIndex =
             })
             .join("")}
         </tr>
-
       </tbody>
     </table>
   `;
@@ -2680,94 +2721,63 @@ container.appendChild(style);
 };
 
 const handleExcel = async () => {
-  console.log("Exporting to Excel...");
-const isDetailed =
-  reportType === "detailed" && allowDetailed;
+  const isDetailed = reportType === "detailed" && allowDetailed;
 
-  const cols = isDetailed
-    ? visibleDetailedColumns
-    : columns;
-  
-  
+  // Use same merged columns as UI/print (prd_code + prdtype_code + plan_code => product_description)
+  const excelDetailedColumns =
+    yearlyDetailedColumns?.length ? yearlyDetailedColumns : visibleDetailedColumns;
+
+  const cols = isDetailed ? excelDetailedColumns : columns;
+
   const isR011 = ["R011", "R012"].includes(
     String(report?.report_id || "").toUpperCase()
   );
   const moduleName = report?.description || "Report";
-
   const groups = isDetailed ? fullGroupedRows || [] : null;
 
-  const printCompany = 'ABDULWAHED BIN SHABIB GROUP';
-  const printLable = `${moduleName} ${reportType} (${formatPrintDate(dateFilters.startDate)} to ${formatPrintDate(dateFilters.endDate)})`;
+  const printCompany = "ABDULWAHED BIN SHABIB GROUP";
+  const printLable = `${moduleName} ${reportType} (${formatPrintDate(
+    dateFilters.startDate
+  )} to ${formatPrintDate(dateFilters.endDate)})`;
 
-  const exportRows = []; // ✅ NEW SAFE ARRAY
+  const exportRows = [];
   let serialNo = 1;
 
-  // ================= SUMMARY =================
   if (!isDetailed) {
     (rows || []).forEach((row) => {
-      const newRow = {
-        SNo: serialNo++
-      };
-
+      const newRow = { SNo: serialNo++ };
       cols.forEach((col) => {
         newRow[col.display_name] = getCellValue(row, col);
       });
-
-      exportRows.push(newRow); // ✅ FIXED
+      exportRows.push(newRow);
     });
-  }
-
-  // ================= DETAILED =================
-  else {
+  } else {
     groups.forEach(([groupName, groupRows]) => {
-      exportRows.push({
-        SNo: "",
-        Group: groupName,
-        __type: "group_header"
-      });
+      exportRows.push({ SNo: "", Group: groupName, __type: "group_header" });
 
       groupRows.forEach((row) => {
-        const newRow = {
-          SNo: serialNo++,
-          Group: groupName
-        };
-
+        const newRow = { SNo: serialNo++, Group: groupName };
         cols.forEach((col) => {
           newRow[col.display_name] = getCellValue(row, col);
         });
-
         exportRows.push(newRow);
       });
 
-      exportRows.push({
-        SNo: "",
-        Group: "",
-        __type: "group_footer"
-      });
+      exportRows.push({ SNo: "", Group: "", __type: "group_footer" });
     });
   }
 
-const exportCols = visibleColumnsState
-  .map((colName) =>
-    cols.find((col) => col.column_name === colName)
-  )
-  .filter(Boolean);
+  const finalCols = cols;
 
-const useExportCols = isR011 && reportType === "detailed";
-
-const finalCols = useExportCols ? exportCols : cols;
-
-reportToExcel(
-  exportRows,
-  printCompany,
-  printLable,
-  finalCols.map((c) => c.display_name),
-  moduleName,
-  isR011 ? "R011" : "",
-  finalCols
-);
-
-
+  reportToExcel(
+    exportRows,
+    printCompany,
+    printLable,
+    finalCols.map((c) => c.display_name),
+    moduleName,
+    isR011 ? "R011" : "",
+    finalCols
+  );
 };
 
 const handleHeaderMenuToggle = (columnName, e) => {

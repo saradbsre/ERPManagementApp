@@ -4103,6 +4103,26 @@ const handleQuickDateChange = async (value) => {
 
   if (range) {
     setDateFilters(range);
+
+    // ✅ trigger API call immediately like upcoming renewals does
+    try {
+      setLoading(true);
+      setPage(1);
+
+      const payload = {
+        search,
+        filters: JSON.stringify(filters || []),
+        dateFilters: JSON.stringify(buildDatePayload(range)),
+      };
+
+      const res = await getModuleData(id, activeUserEmail, payload, userRole);
+      setRows(res.data || []);
+    } catch (err) {
+      console.error(err);
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
   }
 };
 
@@ -4249,26 +4269,29 @@ const isNextMonthRenewalRow = (row, range) => {
 const applyUpcomingRenewalFilter = async (customRange = null) => {
   try {
     setLoading(true);
-
+    
     const upcomingRange = customRange || getUpcomingRenewalRange();
 
     setDateFilters(upcomingRange);
     setActiveDateFilter("upcomingRenewals");
 
+    const isUpcomingRenewals = true;
+
     const payload = {
       search,
       filters: JSON.stringify(filters || []),
-
+      
       // Do not use normal invoice date filtering here.
       // Upcoming Renewals must be filtered by expiry_date in frontend.
-      dateFilters: JSON.stringify({}),
+      dateFilters: JSON.stringify(buildDatePayload(upcomingRange)),
     };
 
     const res = await getModuleData(
       id,
       activeUserEmail,
       payload,
-      userRole
+      userRole,
+      isUpcomingRenewals
     );
 
     const apiRows = res.data || [];

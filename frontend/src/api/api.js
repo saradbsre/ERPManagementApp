@@ -104,14 +104,15 @@ export const fetchSections = () => {
   return API.get("/sections");
 }
 
-export const getModuleData = (moduleId, activeUserEmail, filters = {}, userRole) => {
+export const getModuleData = (moduleId, activeUserEmail, filters = {}, userRole, isUpcomingRenewals = false) => {
   return API.get(`/module-data/${moduleId}`, {
     params: {
       activeUserEmail,
       search: filters.search || "",
       filters: filters.filters || "[]",
       dateFilters: filters.dateFilters || "{}",
-      userRole: userRole || ""
+      userRole: userRole || "",
+      isUpcomingRenewals
     }
   });
 };
