@@ -766,17 +766,25 @@ const addMasterValue = async (masterName, value) => {
         console.error("Master add failed:", err); } 
     };
 
-  const generateNextPrfNumber = async () => {
-  // Option 1: If you have an API endpoint to get the latest PRF number:
-  const res = await getLastPRFNumber(); // implement this API if needed
-  const latest = res.data?.lastPRFNumber || "IT/000336";
-  //console.log("Latest PRF from API:", latest);
-  // Extract the numeric part and increment
-  const match = latest.match(/IT\/(\d{6})/);
-  let nextNum = 1;
-  if (match) {
-    nextNum = parseInt(match[1], 10) + 1;
+const generateNextPrfNumber = async (advertising = false) => {
+  const res = await getLastPRFNumber(advertising);
+  const latest = res.data?.lastPRFNumber;
+
+  if (advertising) {
+    // ================= ADVERTISING =================
+    if (!latest) {
+      return "SPEEDY-META/0001";
+    }
+
+    const match = latest.match(/SPEEDY-META\/(\d+)/i);
+    const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
+    return `SPEEDY-META/${String(nextNum).padStart(4, "0")}`;
   }
+
+  // ================= NORMAL =================
+  const fallback = latest || "IT/000336";
+  const match = fallback.match(/IT\/(\d{6})/);
+  const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
   return `IT/${String(nextNum).padStart(6, "0")}`;
 };
 
@@ -787,6 +795,17 @@ useEffect(() => {
   };
   fetchPrf();
 }, []);
+
+useEffect(() => {
+  if (!showGenerateModal) return;
+
+  const fetchPrfForAdvertising = async () => {
+    const num = await generateNextPrfNumber(isAdvertising);
+    setPrfNumber(num);
+  };
+
+  fetchPrfForAdvertising();
+}, [isAdvertising, showGenerateModal]);
 
 const ApprovalWorkflow = async () => {
   try {

@@ -395,9 +395,11 @@ export const getPaymentRequests = (activeUserEmail, startDate, endDate) => {
   });
 }
 
-export const getLastPRFNumber = () => {
-  return API.get("/last-prf-number");
-}
+export const getLastPRFNumber = (isAdvertising = false) => {
+  return API.get("/last-prf-number", {
+    params: { isAdvertising }
+  });
+};
 
 export const updatePaymentRequest = (id, data, activeUserEmail) => {
   return API.put(`/payment-requests/${id}`, data, {
