@@ -76,6 +76,8 @@ const [costCenters, setCostCenters] = useState([]);
 const [openDropdown, setOpenDropdown] = useState(null);
 const [dropdownSearch, setDropdownSearch] = useState("");
 const [validationErrors, setValidationErrors] = useState({});
+const [showZeroAmountConfirm, setShowZeroAmountConfirm] = useState(false);
+//const [pendingSave, setPendingSave] = useState(false);
 useEffect(() => {
   loadDropdownData();
 }, []);
@@ -980,26 +982,30 @@ const validateRows = () => {
     // Amount
     // if (!row.amount || Number(row.amount) <= 0)
     //   rowErrors.amount = true;
-    const isCancellation = isCancellationTransaction(row.transactionType);
-    const amountValue = Number(row.amount || 0);
+   // Amount
+  // Amount
+const isCancellation = isCancellationTransaction(row.transactionType);
 
-    if (isCancellation) {
-      if (
-        row.amount === "" ||
-        row.amount === null ||
-        row.amount === undefined
-      ) {
-        rowErrors.amount = true;
-      }
-    } else {
-      if (
-        row.amount === "" ||
-        row.amount === null ||
-        amountValue <= 0
-      ) {
-        rowErrors.amount = true;
-      }
-    }
+const amountValue = row.amount;
+
+// Empty amount = validation error
+if (
+  amountValue === "" ||
+  amountValue === null ||
+  amountValue === undefined
+) {
+  rowErrors.amount = true;
+}
+// Invalid number = validation error
+else if (Number.isNaN(Number(amountValue))) {
+  rowErrors.amount = true;
+}
+// Negative amount = validation error, except cancellation
+else if (!isCancellation && Number(amountValue) < 0) {
+  rowErrors.amount = true;
+}
+
+
 
     // Transaction Type
     if ( !row.transactionType )
@@ -1299,7 +1305,7 @@ const calculateInvoiceAmounts = (row) => {
     : 0;
 
   const totalAmount = Number((amount + vatAmount).toFixed(2));
-  console.log("Calculating amounts for row:", "vatPercent:", vatPercent, "vatAmount:", vatAmount, "totalAmount:", totalAmount);
+
   let totalAmountAED = totalAmount;
 
   if (String(currencyCode).toUpperCase() !== "AED") {
@@ -1622,9 +1628,16 @@ const isValidVendor = (vendorCode) =>
     (vendor) => String(vendor.vend_code) === String(vendorCode)
   );
 
+const confirmZeroAmountSave = () => {
+  setShowZeroAmountConfirm(false);
+  handleSaveTransactions(true);
+};
 
+const cancelZeroAmountSave = () => {
+  setShowZeroAmountConfirm(false);
+};
 
-const handleSaveTransactions = async () => {
+const handleSaveTransactions = async (confirmedZeroAmount = false) => {
   try {
     if (!invoiceRows.length) {
       setMessage({
@@ -1634,6 +1647,7 @@ const handleSaveTransactions = async () => {
       return;
     }
 
+    // FIRST: required field validation
     if (!validateRows()) {
       setMessage({
         type: "error",
@@ -1642,11 +1656,42 @@ const handleSaveTransactions = async () => {
       return;
     }
 
+    // SECOND: check for ACTUAL zero amount
+  const hasZeroAmount = invoiceRows.some((row) => {
+    console.log("Checking row amount:", row.amount, "type:", typeof row.amount);
+  if (
+    row.amount === "" ||
+    row.amount === null ||
+    row.amount === undefined
+  ) {
+    return false;
+  }
+
+  return Number(row.amount) === 0;
+});
+
+
+    // Show confirmation only the first time
+if (hasZeroAmount && !confirmedZeroAmount) {
+  // console.log("OPENING ZERO AMOUNT POPUP");
+  setShowZeroAmountConfirm(true);
+  return;
+}
+
+    // =========================
+    // CONTINUE WITH SAVE
+    // =========================
+
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email || "";
 
     const validRows = invoiceRows.filter((row) => {
-      return row.product || row.vendorName || row.invoiceNumber || row.amount;
+      return (
+        row.product ||
+        row.vendorName ||
+        row.invoiceNumber ||
+        row.amount === 0
+      );
     });
 
     if (!validRows.length) {
@@ -1668,7 +1713,10 @@ const handleSaveTransactions = async () => {
       term: row.term || null,
       creditCard: row.creditCard || null,
       currency: row.currency || null,
+
+      // IMPORTANT: preserve 0
       amount: Number(row.amount || 0),
+
       totalAmountAED: Number(row.totalAmountAED || 0),
       expiryDate: formatDateForInput(row.expiryDate) || null,
       costCenter: row.costCenter || null,
@@ -1685,8 +1733,6 @@ const handleSaveTransactions = async () => {
       lpoDate: formatDateForInput(row.lpoDate) || null,
       deliveryDate: formatDateForInput(row.deliveryDate) || null,
       prfRequired: row.prfRequired || false,
-
-      // important for saving PDF path in backend
       pdfFileName: row.fileName || null,
     }));
 
@@ -1703,8 +1749,6 @@ const handleSaveTransactions = async () => {
       formData.append("pdfFiles", pdfFile, pdfFile.name);
     });
 
-    console.log("Saving transactions:", payloadRows);
-
     await createPaymentTransactions(formData, activeUserEmail);
 
     setMessage({
@@ -1718,10 +1762,12 @@ const handleSaveTransactions = async () => {
     setFiles([]);
     setPdfText("");
     setValidationErrors({});
+    setShowZeroAmountConfirm(false);
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+
   } catch (error) {
     console.error("Save transaction error:", error);
 
@@ -1732,6 +1778,8 @@ const handleSaveTransactions = async () => {
         error.message ||
         "Failed to save transactions.",
     });
+
+    setShowZeroAmountConfirm(false);
   }
 };
 
@@ -1984,14 +2032,14 @@ const handleSaveTransactions = async () => {
             </div>
 
             <div className="flex gap-3 mt-5" style={{ justifyContent: "center", fontSize: "11px" }}>
-             <button
-  onClick={handleSaveTransactions}
+            <button
+  onClick={() => handleSaveTransactions()}   
   disabled={!invoiceRows.length || loading}
   className="px-5 py-2 bg-blue-600 text-xs text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
 >
   Save Transactions
 </button>
-          {console.log("available validation errors when discarding:", validationErrors)}
+          {/* {console.log("available validation errors when discarding:", validationErrors)} */}
               <button
              
   onClick={() => {
@@ -2040,6 +2088,119 @@ const handleSaveTransactions = async () => {
         )}
 
       </div>
+ {showZeroAmountConfirm && (
+  <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+    <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+
+      {/* Header */}
+      <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-4">
+        <div className="flex items-center justify-center w-11 h-11 rounded-full bg-amber-100">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-6 h-6 text-amber-600"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 9v3.75m0 3.75h.007M10.29 3.86l-7.4 13A2 2 0 004.63 20h14.74a2 2 0 001.74-3.14l-7.4-13a2 2 0 00-3.42 0z"
+            />
+          </svg>
+        </div>
+
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">
+            Confirm Transaction
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Zero amount transaction
+          </p>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="px-6 py-6">
+        <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-4">
+          <div className="flex gap-3">
+            <div className="mt-0.5">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="w-5 h-5 text-amber-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 9v3.75m0 3.75h.007M10.29 3.86l-7.4 13A2 2 0 004.63 20h14.74a2 2 0 001.74-3.14l-7.4-13a2 2 0 00-3.42 0z"
+                />
+              </svg>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-gray-800">
+                This transaction amount is 0.
+              </p>
+
+              <p className="text-sm text-gray-600 mt-1">
+                Are you sure you want to proceed with saving this transaction?
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+        <button
+          type="button"
+          onClick={cancelZeroAmountSave}
+          className="
+            px-5 py-2.5
+            text-sm font-medium
+            text-gray-700
+            bg-white
+            border border-gray-300
+            rounded-lg
+            hover:bg-gray-100
+            focus:outline-none
+            focus:ring-2
+            focus:ring-gray-300
+            transition
+          "
+        >
+          Cancel
+        </button>
+
+        <button
+          type="button"
+          onClick={confirmZeroAmountSave}
+          className="
+            px-5 py-2.5
+            text-sm font-medium
+            text-white
+            bg-[#264d86]
+            rounded-lg
+            hover:bg-[#1f4173]
+            focus:outline-none
+            focus:ring-2
+            focus:ring-blue-300
+            shadow-sm
+            transition
+          "
+        >
+          Yes, Proceed
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
     </div>
   );
 }
