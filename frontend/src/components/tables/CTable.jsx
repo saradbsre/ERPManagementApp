@@ -773,12 +773,12 @@ const generateNextPrfNumber = async (advertising = false) => {
   if (advertising) {
     // ================= ADVERTISING =================
     if (!latest) {
-      return "SPEEDY-META/0001";
+      return "SP/000001";
     }
 
-    const match = latest.match(/SPEEDY-META\/(\d+)/i);
+    const match = latest.match(/SP\/(\d+)/i);
     const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
-    return `SPEEDY-META/${String(nextNum).padStart(4, "0")}`;
+    return `SP/${String(nextNum).padStart(6, "0")}`;
   }
 
   // ================= NORMAL =================
