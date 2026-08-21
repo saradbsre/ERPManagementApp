@@ -1014,8 +1014,10 @@ useEffect(() => {
       const res = await getVatPercentage();
 
       const vat =
-        parseFloat(res.data?.vatPercentage) || 0;
-
+        Array.isArray(res?.data?.vatPercentages)
+      ? res.data.vatPercentages
+      : [];
+      console.log("Fetched VAT percentage:", vat);
       setVatPercent(vat);
 
     } catch (err) {
@@ -4022,6 +4024,7 @@ function calculateRowTotals({ amount, currency, service_provider_id }) {
   const provider = serviceProviders.find(p => p.id === service_provider_id);
  // console.log("Calculating totals for amount:", amount, "currency:", currency, "provider ID:", service_provider_id, "provider:", provider);
   const isVat = provider?.prd_is_vat;
+  console.log("provider:", provider, "isVat:", isVat);
   const amt = Number(amount) || 0;
   const vat = isVat ? (amt * vatPercent) / 100 : 0;
   const total = amt + vat;
@@ -7112,7 +7115,7 @@ onDrop={() => handleDrop(col.column_name)}
   loadingMaster={loadingMaster}
   fetchMasterDataForColumn={fetchMasterDataForColumn}
   serviceProviders={serviceProviders}
-  vatPercent={vatPercent}
+  vatSettings={vatPercent}
   popupMode={popupMode}
   onClose={() => {
     setShowEditPopup(false);

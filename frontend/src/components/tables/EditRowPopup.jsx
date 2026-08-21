@@ -13,9 +13,10 @@ export default function EditRowPopup({
   loadingMaster,
   fetchMasterDataForColumn,
   serviceProviders = [],
-  vatPercent = 0,
+  vatSettings  = [],
     popupMode,
 }) {
+  console.log("vatPercent in EditRowPopup:", vatSettings );
   const [activeField, setActiveField] = useState(null);
   const [fieldSearch, setFieldSearch] = useState({});
   //const popupRef = useRef(null);
@@ -69,16 +70,20 @@ export default function EditRowPopup({
 
         const amount = parseFloat(updatedRow.amount || 0);
 
-        if (!Number.isNaN(amount)) {
-          if (matchedProvider?.prd_is_vat) {
-            const vat = (amount * Number(vatPercent || 0)) / 100;
-            updatedRow.vat_amount = vat.toFixed(2);
-            updatedRow.total_amount = (amount + vat).toFixed(2);
-          } else {
-            updatedRow.vat_amount = "0.00";
-            updatedRow.total_amount = amount.toFixed(2);
-          }
-        }
+       if (!Number.isNaN(amount)) {
+  const vatPercentForProduct = getVatPercent(matchedProvider);
+
+  if (matchedProvider?.prd_is_vat) {
+    const vat = (amount * vatPercentForProduct) / 100;
+
+    updatedRow.vat_amount = vat.toFixed(2);
+    updatedRow.total_amount = (amount + vat).toFixed(2);
+  } else {
+    updatedRow.vat_amount = "0.00";
+    updatedRow.total_amount = amount.toFixed(2);
+  }
+}
+
       }
 
       return updatedRow;
@@ -132,6 +137,16 @@ useEffect(() => {
     document.removeEventListener("mousedown", handleClick);
   };
 }, []);
+
+const getVatPercent = (product) => {
+  if (!product?.prd_vatper) return 0;
+
+  const setting = vatSettings.find(
+    (item) => Number(item.id) === Number(product.prd_vatper)
+  );
+
+  return Number(setting?.setting_value || 0);
+};
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center px-4">

@@ -7,8 +7,28 @@ import Loader from "../Loader";
 export default function RecentTransactions() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = React.useState(true);
-  const activeUserEmail =
-    JSON.parse(localStorage.getItem("user"))?.email || "";
+  const activeUserEmail = JSON.parse(localStorage.getItem("user"))?.email || "";
+  const [groupByValue, setGroupByValue] = useState(true);
+  const [groupByDate, setGroupByDate] = useState(false);
+
+  const today = new Date();
+
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(today.getDate() - 30);
+
+  const formatInputDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  };
+
+  const minDate = formatInputDate(thirtyDaysAgo);
+  const maxDate = formatInputDate(today);
+
+  const [fromDate, setFromDate] = useState(minDate);
+  const [toDate, setToDate] = useState(maxDate);
 
   // -----------------------------
   // FILTER STATES test
@@ -120,21 +140,52 @@ export default function RecentTransactions() {
   // -----------------------------
   // FILTER TRANSACTIONS
   // -----------------------------
-  const filteredTransactions = useMemo(() => {
-    if (!selectedMaster || !selectedValue) return transactions;
+ const filteredTransactions = useMemo(() => {
+  let result = transactions;
 
+  // GROUP BY VALUE
+  if (groupByValue && selectedMaster && selectedValue) {
     const masterInfo = masterOptions.find(
       (m) => m.master === selectedMaster
     );
 
-    if (!masterInfo) return transactions;
+    if (masterInfo) {
+      result = result.filter(
+        (row) =>
+          String(row[masterInfo.column_name] || "") ===
+          String(selectedValue)
+      );
+    }
+  }
 
-    return transactions.filter(
-      (row) =>
-        String(row[masterInfo.column_name] || "") ===
-        String(selectedValue)
-    );
-  }, [transactions, selectedMaster, selectedValue, masterOptions]);
+  // GROUP BY DATE
+  if (groupByDate && fromDate && toDate) {
+    const startDate = new Date(`${fromDate}T00:00:00`);
+    const endDate = new Date(`${toDate}T23:59:59`);
+
+    result = result.filter((row) => {
+      if (!row.date) return false;
+
+      const transactionDate = new Date(row.date);
+
+      return (
+        transactionDate >= startDate &&
+        transactionDate <= endDate
+      );
+    });
+  }
+
+  return result;
+}, [
+  transactions,
+  groupByValue,
+  groupByDate,
+  selectedMaster,
+  selectedValue,
+  fromDate,
+  toDate,
+  masterOptions,
+]);
 
 
     if (loading) {
@@ -166,44 +217,141 @@ export default function RecentTransactions() {
         </div>
       </div>
 
-      {/* FILTERS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+    {/* FILTERS */}
+<div className="space-y-3 mb-5">
 
-        {/* MASTER */}
-        <select
-          value={selectedMaster}
-          onChange={(e) => setSelectedMaster(e.target.value)}
+  {/* GROUP BY OPTIONS */}
+  <div className="flex items-center gap-5">
+
+    {/* VALUE */}
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={groupByValue}
+        onChange={() => {
+          setGroupByValue(true);
+          setGroupByDate(false);
+        }}
+        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+      />
+
+      <span className="text-[12px] text-gray-700">
+        Group By Value
+      </span>
+    </label>
+
+
+    {/* DATE */}
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={groupByDate}
+        onChange={() => {
+          setGroupByDate(true);
+          setGroupByValue(false);
+
+          // Optional: clear value filter
+          setSelectedMaster("");
+          setSelectedValue("");
+        }}
+        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+      />
+
+      <span className="text-[12px] text-gray-700">
+        Group By Date
+      </span>
+    </label>
+
+  </div>
+
+
+  {/* VALUE FILTER */}
+  {groupByValue && (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+      {/* MASTER */}
+      <select
+        value={selectedMaster}
+        onChange={(e) => {
+          setSelectedMaster(e.target.value);
+          setSelectedValue("");
+        }}
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[12px]"
+      >
+        <option value="">Group By</option>
+
+        {masterOptions.map((m) => (
+          <option
+            key={`${m.master}-${m.column_name}`}
+            value={m.master}
+          >
+            {m.display_name}
+          </option>
+        ))}
+      </select>
+
+
+      {/* VALUE */}
+      <select
+        value={selectedValue}
+        disabled={!selectedMaster}
+        onChange={(e) => setSelectedValue(e.target.value)}
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[12px] cursor-pointer disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+      >
+        <option value="">Value</option>
+
+        {masterValues.map((item, i) => (
+          <option key={i} value={item.code}>
+            {item.name}
+          </option>
+        ))}
+      </select>
+
+    </div>
+  )}
+
+
+  {/* DATE FILTER */}
+  {groupByDate && (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+      {/* FROM DATE */}
+      <div>
+        <label className="block text-[11px] text-gray-400 mb-1">
+          From Date
+        </label>
+
+        <input
+          type="date"
+          value={fromDate}
+          min={minDate}
+          max={toDate || maxDate}
+          onChange={(e) => setFromDate(e.target.value)}
           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[12px]"
-        >
-          <option value="">Group By</option>
-
-          {masterOptions.map((m) => (
-            <option
-              key={`${m.master}-${m.column_name}`}
-              value={m.master}
-            >
-              {m.display_name}
-            </option>
-          ))}
-        </select>
-
-        {/* VALUE */}
-        <select
-          value={selectedValue}
-          disabled={!selectedMaster}
-          onChange={(e) => setSelectedValue(e.target.value)}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[12px] cursor-pointer disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
-        >
-          <option value=""> Value</option>
-
-          {masterValues.map((item, i) => (
-            <option key={i} value={item.code}>
-               {item.name}
-            </option>
-          ))}
-        </select>
-
+        />
       </div>
+
+
+      {/* TO DATE */}
+      <div>
+        <label className="block text-[11px] text-gray-400 mb-1">
+          To Date
+        </label>
+
+        <input
+          type="date"
+          value={toDate}
+          min={fromDate || minDate}
+          max={maxDate}
+          onChange={(e) => setToDate(e.target.value)}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[12px]"
+        />
+      </div>
+
+    </div>
+  )}
+
+</div>
 
       {/* LIST */}
       <div className={`space-y-3 ${

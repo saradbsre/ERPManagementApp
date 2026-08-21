@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, act } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { getMasterData, createMasterData, updateMasterData, deleteMasterData, saveProviderPlans,getProviderPlans } from "../../api/api"; // 👈 create this API
+import { getMasterData, createMasterData, updateMasterData, deleteMasterData, saveProviderPlans,getProviderPlans, getVatPercentage } from "../../api/api"; // 👈 create this API
 import masterTableConfig from "../../utils/masterTableConfig"; 
 import { getAlignClass } from "../../utils/leftAlign";
 import { handleNumericInput, isNumericColumn } from "../../utils/numberValidation";
@@ -74,6 +74,7 @@ export default function MasterTablePage() {
     const [unmappedPlans, setUnmappedPlans] = useState([]);
     const [selectedPlanToAdd, setSelectedPlanToAdd] = useState("");
     const [inventoryType, setInventoryType] = useState([]);
+    const [vatPercentageList, setVatPercentageList] = useState([]);
     const [confirmData, setConfirmData] = useState({
       title: "Are you sure?",
       message: "This action cannot be undone.",
@@ -109,21 +110,29 @@ export default function MasterTablePage() {
       );
     };
     const formatForInput = (value, type) => {
-  if (!value) return "";
+      if (!value) return "";
 
-  const date = new Date(value);
+      const date = new Date(value);
 
-  if (isNaN(date.getTime())) return "";
+      if (isNaN(date.getTime())) return "";
 
-  if (type === "datetime-local") {
-    return date.toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM
-  }
+      if (type === "datetime-local") {
+        return date.toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM
+      }
 
-  if (type === "date") {
-    return date.toISOString().split("T")[0]; // YYYY-MM-DD
-  }
+      if (type === "date") {
+        return date.toISOString().split("T")[0]; // YYYY-MM-DD
+      }
 
-  return value;
+      return value;
+    };
+
+const getVatDisplayValue = (value) => {
+  const vat = vatPercentageList.find(
+    item => String(item.id) === String(value)
+  );
+
+  return vat ? `${vat.setting_value}%` : "-";
 };
 const handleCreatePlan = async () => {
   if (!newPlanName.trim()) return;
@@ -303,6 +312,27 @@ useEffect(() => {
     }
   };
   loadInventoryType();
+}, [activeUserEmail]);
+
+useEffect(() => {
+  const loadVatPercentage = async () => {
+    try {
+      const res = await getVatPercentage(activeUserEmail);
+
+      console.log("VAT API RESPONSE:", res);
+
+      const vatData = res?.data?.vatPercentages || [];
+
+      console.log("VAT DATA:", vatData);
+
+      setVatPercentageList(vatData);
+    } catch (err) {
+      console.error("Error loading VAT percentage:", err);
+      setVatPercentageList([]);
+    }
+  };
+
+  loadVatPercentage();
 }, [activeUserEmail]);
 
 
@@ -552,6 +582,14 @@ const getLabel = (key, value) => {
   return value ? "YES" : "NO";
 };
 
+const isVatApplicableEnabled = (row) => {
+  const vatColumn = columns.find(col =>
+    col.key?.toLowerCase().includes("is_vat")
+  );
+
+  return vatColumn ? Number(row?.[vatColumn.key]) === 1 : false;
+};
+
 const renderDesktop = () => (
   <>
     <div className="h-full flex flex-col">
@@ -762,6 +800,8 @@ const renderDesktop = () => (
 
       const isIcannFee = col.key.toLowerCase() === "icann_fee";
 
+      const isVatPercentage =col.key?.toLowerCase() === "prd_vatper";
+
       return (
 
         <td
@@ -832,17 +872,56 @@ const renderDesktop = () => (
 
             </select>
 
-          ) : isToggle ? (
+          ) : isVatPercentage ? (
+
+           
+           <select
+    className="border px-2 py-1 rounded w-full"
+    value={newRow[col.key] ?? ""}
+    disabled={!isVatApplicableEnabled(newRow)}
+    onChange={(e) => {
+      setNewRow(prev => ({
+        ...prev,
+        [col.key]: e.target.value
+      }));
+    }}
+  >
+    <option value="">
+      {isVatApplicableEnabled(newRow)
+        ? "Select VAT"
+        : "Enable VAT Applicable"}
+    </option>
+
+    {vatPercentageList.map(vat => (
+      <option
+        key={vat.id}
+        value={vat.id}
+      >
+        {vat.setting_value}%
+      </option>
+    ))}
+  </select>
+
+            ) : isToggle ? (
 
             /* ================= TOGGLE ================= */
 
             <button
-              onClick={() =>
-                setNewRow(prev => ({
-                  ...prev,
-                  [col.key]: prev[col.key] ? 0 : 1
-                }))
-              }
+            onClick={() =>
+  setNewRow(prev => {
+    const newValue = prev[col.key] ? 0 : 1;
+
+    return {
+      ...prev,
+      [col.key]: newValue,
+
+      ...(col.key.toLowerCase().includes("is_vat") &&
+        newValue === 0
+        ? { prd_vatper: "" }
+        : {})
+    };
+  })
+}
              // disabled={isCodeColumn || (isIcannFee && !newRow.is_icann)}
               className={`
                 w-12 h-6 flex items-center
@@ -1060,9 +1139,8 @@ const renderDesktop = () => (
         const isService =
           (col.key.toLowerCase() === "prd_type" || col.key.toLowerCase() === "prdtype_code") && masterName === "products";
 
-       
-      const isVendor =
-        col.key.toLowerCase() === "vend_code" && masterName === "products";
+        const isVatPercentage = col.key?.toLowerCase() === "prd_vatper";
+        const isVendor = col.key.toLowerCase() === "vend_code" && masterName === "products";
        
 
         const inputType = "date";
@@ -1177,16 +1255,54 @@ const renderDesktop = () => (
 
                 </select>
 
+              ) : isVatPercentage ? (
+
+                  <select
+    className="border px-2 py-1 rounded w-full"
+    value={editRow[col.key] ?? ""}
+    disabled={!isVatApplicableEnabled(editRow)}
+    onChange={(e) => {
+      setEditRow(prev => ({
+        ...prev,
+        [col.key]: e.target.value
+      }));
+    }}
+  >
+    <option value="">
+      {isVatApplicableEnabled(editRow)
+        ? "Select VAT"
+        : "Enable VAT Applicable"}
+    </option>
+
+    {vatPercentageList.map(vat => (
+      <option
+        key={vat.id}
+        value={vat.id}
+      >
+        {vat.setting_value}%
+      </option>
+    ))}
+  </select>
+
               ) : isToggle ? (
 
                 /* ================= TOGGLE ================= */
                 <button
-                  onClick={() =>
-                    setEditRow(prev => ({
-                      ...prev,
-                      [col.key]: prev[col.key] ? 0 : 1
-                    }))
-                  }
+               onClick={() =>
+  setEditRow(prev => {
+    const newValue = prev[col.key] ? 0 : 1;
+
+    return {
+      ...prev,
+      [col.key]: newValue,
+
+      ...(col.key.toLowerCase().includes("is_vat") &&
+        newValue === 0
+        ? { prd_vatper: "" }
+        : {})
+    };
+  })
+}
                   //disabled={isCodeColumn || (isIcannFee && !editRow.is_icann)}
                   className={`
                     w-12 h-6 flex items-center rounded-full p-1 transition
@@ -1269,7 +1385,11 @@ const renderDesktop = () => (
 
                 formatDate(row[col.key])
 
-              ) : isVendor ? (
+              ) : isVatPercentage ? (
+
+                  getVatDisplayValue(row[col.key])
+
+                ) : isVendor ? (
 
                 vendorList.find(
                   v => v.vend_code === row[col.key]

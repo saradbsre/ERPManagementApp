@@ -71,17 +71,18 @@ const [departments, setDepartments] = useState([]);
 const [terms, setTerms] = useState([]);
 const [creditCards, setCreditCards] = useState([]);
 const [projects, setProjects] = useState([]);
-const [vatPercent, setVatPercent] = useState(0);
+const [vatPercentageList, setVatPercentageList] = useState([]);
 const [costCenters, setCostCenters] = useState([]);
 const [openDropdown, setOpenDropdown] = useState(null);
 const [dropdownSearch, setDropdownSearch] = useState("");
 const [validationErrors, setValidationErrors] = useState({});
 const [showZeroAmountConfirm, setShowZeroAmountConfirm] = useState(false);
+
 //const [pendingSave, setPendingSave] = useState(false);
 useEffect(() => {
   loadDropdownData();
 }, []);
-
+console.log(products, "products");
 const rightAlignedColumns = [
   "amount",
   "vatAmount",
@@ -132,6 +133,7 @@ useEffect(() => {
           const id = product.prd_code || "";
           return String(id) === String(matchedProduct);
         });
+        console.log("Selected product for row:", selectedProduct);
 
         nextRow = {
           ...nextRow,
@@ -162,7 +164,8 @@ useEffect(() => {
   companies,
   transactionTypes,
   invoiceRows.length,
-  vatPercent,
+  //vatPercent,
+  vatPercentageList
 ]);
 
 useEffect(() => {
@@ -575,7 +578,6 @@ const getInvoiceProductRows = (invoices) => {
   return rows;
 };
 const loadDropdownData = async () => {
-  
   try {
     const activeUser = JSON.parse(localStorage.getItem("user"));
     const activeUserEmail = activeUser?.email || "";
@@ -594,8 +596,6 @@ const loadDropdownData = async () => {
       productTypeRes,
       costCenterRes,
       vatRes,
-      
-      
     ] = await Promise.all([
       getMasterData("products", activeUserEmail),
       getMasterData("vendors", activeUserEmail),
@@ -611,21 +611,39 @@ const loadDropdownData = async () => {
       getMasterData("division", activeUserEmail),
       getVatPercentage(),
     ]);
+
     setProducts(Array.isArray(productRes?.data) ? productRes.data : []);
     setVendors(Array.isArray(vendorRes?.data) ? vendorRes.data : []);
     setCurrencies(Array.isArray(currencyRes?.data) ? currencyRes.data : []);
     setCompanies(Array.isArray(companyRes?.data) ? companyRes.data : []);
-    setTransactionTypes(Array.isArray(transactionRes?.data) ? transactionRes.data : []);
+    setTransactionTypes(
+      Array.isArray(transactionRes?.data) ? transactionRes.data : []
+    );
     setPlans(Array.isArray(planRes?.data) ? planRes.data : []);
-    setDepartments(Array.isArray(departmentRes?.data) ? departmentRes.data : []);
+    setDepartments(
+      Array.isArray(departmentRes?.data) ? departmentRes.data : []
+    );
     setTerms(Array.isArray(termRes?.data) ? termRes.data : []);
-    setCreditCards(Array.isArray(creditCardRes?.data) ? creditCardRes.data : []);
+    setCreditCards(
+      Array.isArray(creditCardRes?.data) ? creditCardRes.data : []
+    );
     setProjects(Array.isArray(projectRes?.data) ? projectRes.data : []);
-    setProductTypes(Array.isArray(productTypeRes?.data) ? productTypeRes.data : []);
-    setCostCenters(Array.isArray(costCenterRes?.data) ? costCenterRes.data : []);
-    setVatPercent(Number(vatRes?.data?.vatPercentage || 0));
+    setProductTypes(
+      Array.isArray(productTypeRes?.data) ? productTypeRes.data : []
+    );
+    setCostCenters(
+      Array.isArray(costCenterRes?.data) ? costCenterRes.data : []
+    );
 
-    
+    // VAT percentage list
+    const vatList = Array.isArray(vatRes?.data?.vatPercentages)
+      ? vatRes.data.vatPercentages
+      : [];
+
+    console.log("VAT Percentage Response:", vatRes);
+    console.log("VAT List from API:", vatList);
+
+    setVatPercentageList(vatList);
   } catch (error) {
     console.error("Dropdown loading failed:", error);
   }
@@ -1300,22 +1318,67 @@ const calculateInvoiceAmounts = (row) => {
   const amount = Number(row.amount || 0);
   const currencyCode = row.currency || "AED";
 
-  const vatAmount = row.vatApplicable
-    ? Number(((amount * Number(vatPercent || 0)) / 100).toFixed(2))
-    : 0;
+  // Selected product
+  const selectedProduct = products.find(
+    (product) =>
+      String(product.prd_code) === String(row.product)
+  );
 
-  const totalAmount = Number((amount + vatAmount).toFixed(2));
+  // Product stores VAT setting ID
+  const vatSettingId = selectedProduct?.prd_vatper;
+
+  // Find VAT setting using the ID
+  const vatSetting = vatPercentageList.find(
+    (vat) =>
+      String(vat.id) === String(vatSettingId)
+  );
+
+  console.log("vat SettingId:", vatSettingId, "vatSetting:", vatSetting);
+
+  
+
+  // Actual VAT percentage comes from setting_value
+  const vatPercent = Number(
+    vatSetting?.setting_value || 0
+  );
+
+  console.log("VAT Calculation Details:", {
+    product: row.product,
+    vatSettingId,
+    vatPercent,
+    amount,
+    currencyCode,
+  });
+
+  // Calculate VAT
+  const vatAmount = Number(
+    ((amount * vatPercent) / 100).toFixed(2)
+  );
+
+  const totalAmount = Number(
+    (amount + vatAmount).toFixed(2)
+  );
 
   let totalAmountAED = totalAmount;
 
   if (String(currencyCode).toUpperCase() !== "AED") {
     const rate = getCurrencyRate(currencyCode);
 
-    // Your currency table shows USD = 0.2723, meaning 1 AED = 0.2723 USD.
-    // So USD to AED = USD / 0.2723
-    totalAmountAED = rate ? Number((totalAmount / rate).toFixed(2)) : totalAmount;
+    totalAmountAED = rate
+      ? Number((totalAmount / rate).toFixed(2))
+      : totalAmount;
   }
-  console.log("totalAmountAED:", totalAmountAED, "currencyCode:", currencyCode, "rate:", getCurrencyRate(currencyCode));
+
+  console.log("VAT Calculation:", {
+    product: row.product,
+    vatSettingId,
+    vatPercent,
+    amount,
+    vatAmount,
+    totalAmount,
+    totalAmountAED,
+  });
+
   return {
     vatAmount,
     totalAmount,
@@ -1346,7 +1409,7 @@ const handleProductChange = (rowIndex, productId) => {
       product: String(productId),
       vendorName: String(vendorId),
       productType: String(productTypeCode),
-      vatApplicable: isVatApplicable(selectedProduct),
+      //vatApplicable: isVatApplicable(selectedProduct),
     };
 
     const calculated = calculateInvoiceAmounts(nextRow);

@@ -43,6 +43,7 @@ const masterTableConfig = {
       { key: "prd_approved", label: "Approved By", data_type: "boolean" },
       { key: "prd_descr", label: "Description", data_type: "string" },
       { key: "prd_is_vat", label: "VAT Applicable", data_type: "boolean" },
+      { key: "prd_vatper", label: "VAT PERCENTAGE", data_type: "string" },
       { key: "prd_is_inventory", label: "Inventory Type", data_type: "boolean" },
       { key: "prd_is_active", label: "Active Status", data_type: "boolean" },
     ]
