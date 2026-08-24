@@ -395,10 +395,17 @@ export const getPaymentRequests = (activeUserEmail, startDate, endDate) => {
   });
 }
 
-export const getLastPRFNumber = (isAdvertising = false) => {
+export const getLastPRFNumber = (isAdvertising = false, editedPrefix = "") => {
   return API.get("/last-prf-number", {
-    params: { isAdvertising }
+    params: { isAdvertising, editedPrefix }
   });
+};
+
+export const saveApprovalLabels = async (data) => {
+  return API.post(
+    `/approval-labels`,
+    data
+  );
 };
 
 export const updatePaymentRequest = (id, data, activeUserEmail) => {

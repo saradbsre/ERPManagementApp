@@ -6,10 +6,10 @@ import {
   Share2,
   ChevronsUpDown,
   ChevronRight,
-  Funnel, PinOff
+  Funnel, PinOff, Edit2, Check
 } from "lucide-react";
 import { fetchSections,fetchMasters, getModuleData, createModuleRow, updateModuleRow, deleteModuleRow, exportColumnNames, importTable, getMasterValues, currencises, exportPdf, getProviderPlans,upsertSavedFilter, getCustomizedColumns, upsertCustomizedColumns, getMasterData, addMasterData, cancelModuleRow, undoCancelModuleRow, getVatPercentage, getLastPRFNumber, createprf, 
-  getApprovalWorkflow, getPreviewPRF, unpostPRFTransaction, postPRFTransaction,getModuleViews,
+  getApprovalWorkflow, getPreviewPRF, unpostPRFTransaction, postPRFTransaction,getModuleViews, saveApprovalLabels,
 createModuleView,
 updateModuleView,
 deleteModuleView,
@@ -227,6 +227,7 @@ export default function DynamicTablePage() {
     const [selectedRow, setSelectedRow] = useState(null);
     const [modalItems, setModalItems] = useState([]);
     const [prfNumber, setPrfNumber] = useState("");
+    const [prfNumberLoading, setPrfNumberLoading] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
     const [previewData, setPreviewData] = useState(null);
     const [previewPdfUrl, setPreviewPdfUrl] = useState("");
@@ -247,7 +248,46 @@ export default function DynamicTablePage() {
     const [groupByColumn, setGroupByColumn] = useState(null);
    // const [columnOrder, setColumnOrder] = useState(visibleColumns.map(c => c.column_name));
     const [printOption, setPrintOption] = useState("all"); // "all" | "prf"
+    const [isEditingPrf, setIsEditingPrf] = useState(false);
+    const [prfPrefix, setPrfPrefix] = useState("IT");
+    const [approvalWorkflowId, setApprovalWorkflowId] = useState(null);
+    const defaultApprovalLabels = {
+      prepared_by: {
+        value: "IT DEPARTMENT",
+        required: true,
+      },
+      checked_by: {
+        value: "OPERATIONS",
+        required: true,
+      },
+      verified_by_it: {
+        value: "IT DEPARTMENT",
+        required: true,
+      },
+      verified_by: {
+        value: "ACCOUNTS",
+        required: true,
+      },
+      signed_by: {
+        value: "FINANCE MANAGER",
+        required: true,
+      },
+      approved_by: {
+        value: "FOUNDER & CEO",
+        required: true,
+      },
+    };
 
+    const [showApprovalLabelModal, setShowApprovalLabelModal] = useState(false);
+
+    const [approvalLabels, setApprovalLabels] = useState(defaultApprovalLabels);
+
+    
+useEffect(() => {
+  if (!isEditingPrf) {
+    setPrfPrefix(String(prfNumber || "").substring(0, 2));
+  }
+}, [prfNumber, isEditingPrf]);
    
     const orderColumnsByConfig = (cols = []) => {
       if (!Array.isArray(cols)) return [];
@@ -766,26 +806,60 @@ const addMasterValue = async (masterName, value) => {
         console.error("Master add failed:", err); } 
     };
 
-const generateNextPrfNumber = async (advertising = false) => {
-  const res = await getLastPRFNumber(advertising);
-  const latest = res.data?.lastPRFNumber;
+const generateNextPrfNumber = async (
+  advertising = false,
+  editedPrefix = null
+) => {
+  setPrfNumberLoading(true);
 
-  if (advertising) {
-    // ================= ADVERTISING =================
-    if (!latest) {
-      return "SP/000001";
+  try {
+    const res = await getLastPRFNumber(advertising, editedPrefix);
+
+    const latest = res.data?.lastPRFNumber;
+
+    // Use edited prefix if provided
+    const prefix =
+      editedPrefix?.trim()?.toUpperCase() ||
+      (advertising ? "SP" : "IT");
+
+    // =====================================================
+    // NO PREVIOUS PRF FOR THIS PREFIX
+    // =====================================================
+
+    if (!latest || !String(latest).trim()) {
+      const newPrfNumber = `${prefix}/000001`;
+
+      setPrfNumber(newPrfNumber);
+
+      return newPrfNumber;
     }
 
-    const match = latest.match(/SP\/(\d+)/i);
-    const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
-    return `SP/${String(nextNum).padStart(6, "0")}`;
-  }
+    // =====================================================
+    // GET NUMBER FROM LAST PRF
+    // =====================================================
 
-  // ================= NORMAL =================
-  const fallback = latest || "IT/000336";
-  const match = fallback.match(/IT\/(\d{6})/);
-  const nextNum = match ? parseInt(match[1], 10) + 1 : 1;
-  return `IT/${String(nextNum).padStart(6, "0")}`;
+    const match = String(latest).match(
+      /^[A-Z0-9]+\/(\d+)$/i
+    );
+
+    const nextNum = match
+      ? parseInt(match[1], 10) + 1
+      : 1;
+
+    const newPrfNumber =
+      `${prefix}/${String(nextNum).padStart(6, "0")}`;
+
+    setPrfNumber(newPrfNumber);
+
+    return newPrfNumber;
+
+  } catch (error) {
+    console.error("Failed to generate PRF number:", error);
+    return null;
+
+  } finally {
+    setPrfNumberLoading(false);
+  }
 };
 
 useEffect(() => {
@@ -805,7 +879,7 @@ useEffect(() => {
   };
 
   fetchPrfForAdvertising();
-}, [isAdvertising, showGenerateModal]);
+}, [showGenerateModal, isAdvertising]);
 
 const ApprovalWorkflow = async () => {
   try {
@@ -1304,6 +1378,7 @@ const handleGenerate = async () => {
     remarks: form.remarks,
     period_start : form.period_start,
     period_end : form.period_end,
+    approvalworkflowid : approvalWorkflowId
   };
 
   setPreviewFromGenerateModal(false);
@@ -1393,6 +1468,37 @@ const handleDraftPreviewFromModal = () => {
     0
   );
 
+  const approval_labels = {
+    prepared_by: {
+      value: approvalLabels.prepared_by?.value || "",
+      required: approvalLabels.prepared_by?.required ?? true,
+    },
+    checked_by: {
+      value: approvalLabels.checked_by?.value || "",
+      required: approvalLabels.checked_by?.required ?? true,
+    },
+
+    verified_by_it: {
+      value: approvalLabels.verified_by_it?.value || "",
+      required: approvalLabels.verified_by_it?.required ?? true,
+    },
+
+    verified_by: {
+      value: approvalLabels.verified_by?.value || "",
+      required: approvalLabels.verified_by?.required ?? true,
+    },
+
+    signed_by: {
+      value: approvalLabels.signed_by?.value || "",
+      required: approvalLabels.signed_by?.required ?? true,
+    },
+
+    approved_by: {
+      value: approvalLabels.approved_by?.value || "",
+      required: approvalLabels.approved_by?.required ?? true,
+    },
+  };
+
   const covertedExchangeRate = 1 / exchange_rate;
   console.log("Exchange Rate:", exchange_rate, "Converted:", covertedExchangeRate);
   const previewDetails = {
@@ -1414,6 +1520,7 @@ const handleDraftPreviewFromModal = () => {
     remarks: form.remarks || "",
     period_start: form.period_start || "",
     period_end: form.period_end || "",
+    approval_labels: approval_labels,
   };
  
   const paidByName =
@@ -5238,6 +5345,71 @@ const handleRequiresPrfChange = async (row, checked) => {
   }
 };
 
+const handleSaveApprovalLabels = async () => {
+  try {
+    const payload = {
+      prefix: prfPrefix,
+      userid: activeUserEmail,
+
+      prepared_by: {
+        value: approvalLabels.prepared_by.value,
+        required: true,
+      },
+
+      checked_by: {
+        value: approvalLabels.checked_by.value,
+        required: true,
+      },
+
+      verified_by_it: {
+        value: approvalLabels.verified_by_it.value,
+        required: true,
+      },
+
+      verified_by: {
+        value: approvalLabels.verified_by.value,
+        required: true,
+      },
+
+      signed_by: {
+        value: approvalLabels.signed_by.value,
+        required: true,
+      },
+
+      approved_by: {
+        value: approvalLabels.approved_by.value,
+        required: true,
+      },
+    };
+
+    console.log("Approval Labels Payload:", payload);
+
+    // IMPORTANT: capture API response
+    const response = await saveApprovalLabels(payload);
+
+    console.log("Save Approval Workflow Response:", response.data);
+
+    // Store ID returned from system_settings
+    const savedId = response.data?.id;
+
+    if (savedId) {
+      setApprovalWorkflowId(savedId);
+      console.log("Approval Workflow ID:", savedId);
+    }
+
+    setShowApprovalLabelModal(false);
+
+    setPopupMessage("Approval labels saved successfully.");
+    setPopupType("success");
+
+  } catch (error) {
+    console.error("Failed to save approval labels:", error);
+
+    setPopupMessage("Failed to save approval labels.");
+    setPopupType("error");
+  }
+};
+
     return (
         <div className="h-full flex flex-col">
              <ValidatePopups
@@ -7480,17 +7652,193 @@ onDrop={() => handleDrop(col.column_name)}
   {/* HEADER */}
   <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-xl border-b border-slate-200 px-6 py-4 flex items-center justify-between rounded-t-[26px]">
 
-    <div>
+ <div>
+  <h2 className="text-xl font-bold text-slate-800">
+    Payment Request Form
+  </h2>
 
-      <h2 className="text-xl font-bold text-slate-800">
-        Payment Request Form
-      </h2>
+<div className="flex items-center gap-2 mt-1">
+  <span className="text-sm text-slate-500">
+    PRF NUMBER :
+  </span>
 
-      <p className="text-sm text-slate-500 mt-1">
-        PRF NUMBER : {prfNumber}
-      </p>
+  {!isEditingPrf ? (
+    <>
+      {/* ================= NORMAL MODE ================= */}
+      <span className="text-sm font-medium text-slate-700">
+        {prfNumber}
+      </span>
 
-    </div>
+      {/* ================= EDIT BUTTON ================= */}
+      <button
+        type="button"
+        onClick={() => {
+          const currentValue = String(prfNumber || "");
+
+          // Take first 2 digits only
+          const prefix = currentValue.substring(0, 2);
+
+          console.log("Starting PRF edit");
+          console.log("Current PRF:", currentValue);
+          console.log("Current Prefix:", prefix);
+
+          setPrfPrefix(prefix);
+          setIsEditingPrf(true);
+        }}
+        className="
+          p-1
+          text-slate-500
+          hover:text-blue-600
+          hover:bg-blue-50
+          rounded
+          transition
+        "
+        title="Edit PRF number"
+      >
+        <Edit2 size={15} />
+      </button>
+    </>
+  ) : (
+    <>
+      {/* ================= EDIT MODE ================= */}
+      <div className="flex items-center">
+
+        {/* EDITABLE FIRST 2 CHARACTERS */}
+        <input
+          type="text"
+          value={prfPrefix}
+          maxLength={2}
+          autoFocus
+
+          onChange={(e) => {
+            const value = e.target.value.toUpperCase();
+
+            // Letters/digits only; empty allowed while editing
+            if (/^[A-Z0-9]{0,2}$/.test(value)) {
+              setPrfPrefix(value);
+            }
+          }}
+
+          className="
+            w-12
+            h-8
+            border-2
+            border-blue-400
+            rounded-l-lg
+            px-2
+            py-1
+            text-sm
+            text-center
+            bg-white
+            text-slate-800
+            focus:outline-none
+            focus:ring-2
+            focus:ring-blue-200
+          "
+        />
+
+        {/* REMAINING PRF NUMBER */}
+        <span
+          className="
+            h-8
+            flex
+            items-center
+            px-2
+            bg-slate-100
+            border
+            border-l-0
+            border-slate-300
+            rounded-r-lg
+            text-sm
+            text-slate-600
+          "
+        >
+          {String(prfNumber || "").substring(2)}
+        </span>
+      </div>
+
+      {/* ================= SAVE ================= */}
+     <button
+  type="button"
+  onClick={async () => {
+    if (prfPrefix.length !== 2) {
+      setPopupMessage(
+        "Please enter exactly 2 characters for the PRF prefix."
+      );
+      setPopupType("error");
+      return;
+    }
+
+    try {
+      const currentPrf = String(prfNumber || "");
+
+      console.log("Old PRF:", currentPrf);
+      console.log("Edited Prefix:", prfPrefix);
+
+      // Generate next PRF using edited prefix
+      const newPrfNumber = await generateNextPrfNumber(
+        isAdvertising,
+        prfPrefix
+      );
+
+      console.log("Generated New PRF:", newPrfNumber);
+
+      // Set generated PRF
+      setPrfNumber(newPrfNumber);
+
+      // Exit edit mode
+      setIsEditingPrf(false);
+
+      // Optional success message
+      setPopupMessage(`PRF number changed to ${newPrfNumber}`);
+      setPopupType("success");
+
+    } catch (error) {
+      console.error("Failed to generate PRF number:", error);
+
+      setPopupMessage(
+        "Failed to generate PRF number."
+      );
+      setPopupType("error");
+    }
+  }}
+  className="
+    p-1
+    text-green-600
+    hover:bg-green-50
+    rounded
+    transition
+  "
+  title="Save"
+>
+  <Check size={17} />
+</button>
+
+      {/* ================= CANCEL ================= */}
+      <button
+        type="button"
+        onClick={() => {
+          const originalPrefix =
+            String(prfNumber || "").substring(0, 2);
+
+          setPrfPrefix(originalPrefix);
+          setIsEditingPrf(false);
+        }}
+        className="
+          p-1
+          text-red-500
+          hover:bg-red-50
+          rounded
+          transition
+        "
+        title="Cancel"
+      >
+        <X size={17} />
+      </button>
+    </>
+  )}
+</div>
+</div>
 
     <button
       onClick={() => setShowGenerateModal(false)}
@@ -7737,38 +8085,45 @@ onDrop={() => handleDrop(col.column_name)}
     {/* ================= APPROVAL ================= */}
   <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
 
- <div className="px-5 py-4 border-b bg-gradient-to-r from-slate-50 to-indigo-50 flex items-center justify-between">
-
+<div className="px-5 py-4 border-b bg-gradient-to-r from-slate-50 to-indigo-50 flex items-center justify-between">
   <h3 className="font-semibold text-slate-800">
     Approval Workflow
   </h3>
 
-  <label className="flex items-center gap-3 cursor-pointer select-none">
+  <div className="flex items-center gap-4">
 
-    <span className="text-sm font-medium text-slate-700">
-      Advertising
-    </span>
+    {/* EDIT LABELS */}
+    <button
+      type="button"
+      onClick={() => setShowApprovalLabelModal(true)}
+      className="px-3 py-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 text-sm font-medium transition"
+    >
+      Edit Labels
+    </button>
 
-    <div className="relative">
-      <input
-        type="checkbox"
-        checked={isAdvertising}
-        onChange={(e) => setIsAdvertising(e.target.checked)}
-        className="sr-only peer"
-      />
+    {/* ADVERTISING */}
+    <label className="flex items-center gap-3 cursor-pointer select-none">
+      <span className="text-sm font-medium text-slate-700">
+        Advertising
+      </span>
 
-      <div
-        className="
+      <div className="relative">
+        <input
+          type="checkbox"
+          checked={isAdvertising}
+          onChange={(e) => setIsAdvertising(e.target.checked)}
+          className="sr-only peer"
+        />
+
+        <div className="
           w-12 h-6
           bg-slate-300
           rounded-full
           transition-all duration-300
           peer-checked:bg-indigo-600
-        "
-      />
+        " />
 
-      <div
-        className="
+        <div className="
           absolute top-0.5 left-0.5
           w-5 h-5
           bg-white
@@ -7776,12 +8131,11 @@ onDrop={() => handleDrop(col.column_name)}
           shadow-md
           transition-all duration-300
           peer-checked:translate-x-6
-        "
-      />
-    </div>
+        " />
+      </div>
+    </label>
 
-  </label>
-
+  </div>
 </div>
 
 <div className="p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -7850,15 +8204,208 @@ onDrop={() => handleDrop(col.column_name)}
     </button>
 
     <button
-      onClick={handleGenerate}
-      className="px-6 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-md text-sm font-medium"
-    >
-      Save & Generate
-    </button>
+  onClick={handleGenerate}
+  disabled={prfNumberLoading || isEditingPrf}
+  className={`px-6 py-2.5 rounded-xl text-white shadow-md text-sm font-medium ${
+    prfNumberLoading || isEditingPrf
+      ? "bg-blue-400 cursor-not-allowed"
+      : "bg-blue-600 hover:bg-blue-700"
+  }`}
+>
+    Save & Generate
+</button>
 
   </div>
 
 </div>
+{showApprovalLabelModal && (
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+
+    <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-200">
+
+      {/* HEADER */}
+      <div className="flex items-center justify-between px-6 py-4 border-b">
+        <div>
+          <h2 className="text-lg font-bold text-slate-800">
+            Edit Approval Labels
+          </h2>
+
+          <p className="text-xs text-slate-500 mt-1">
+            Customize the approval department/designation labels.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowApprovalLabelModal(false)}
+          className="p-2 rounded-lg hover:bg-slate-100 text-slate-500"
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      {/* BODY */}
+      <div className="p-6 space-y-4">
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Prepared By
+          </label>
+
+          <input
+            type="text"
+            value={approvalLabels.prepared_by.value}
+            onChange={(e) =>
+              setApprovalLabels(prev => ({
+                ...prev,
+                prepared_by: {
+                  ...prev.prepared_by,
+                  value: e.target.value,
+                },
+              }))
+            }
+            className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+          />
+        </div>
+
+        {/* CHECKED */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Checked By
+          </label>
+
+          <input
+            type="text"
+            value={approvalLabels.checked_by.value}
+            disabled={!isAdvertising}
+            onChange={(e) =>
+              setApprovalLabels(prev => ({
+                ...prev,
+                checked_by: {
+                  ...prev.checked_by,
+                  value: e.target.value,
+                },
+              }))
+            }
+            className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+          />
+        </div>
+
+        {/* VERIFIED BY IT */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Verified By IT
+          </label>
+
+          <input
+            type="text"
+            value={approvalLabels.verified_by_it.value}
+            onChange={(e) =>
+              setApprovalLabels(prev => ({
+                ...prev,
+                verified_by_it: {
+                  ...prev.verified_by_it,
+                  value: e.target.value,
+                },
+              }))
+            }
+            className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+          />
+        </div>
+
+        {/* VERIFIED BY ACCOUNTS */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Verified By Accounts
+          </label>
+
+          <input
+            type="text"
+            value={approvalLabels.verified_by.value}
+            onChange={(e) =>
+              setApprovalLabels(prev => ({
+                ...prev,
+                verified_by: {
+                  ...prev.verified_by,
+                  value: e.target.value,
+                },
+              }))
+            }
+            className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+          />
+        </div>
+
+        {/* SIGNED */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Signed By
+          </label>
+
+          <input
+            type="text"
+            value={approvalLabels.signed_by.value}
+            onChange={(e) =>
+              setApprovalLabels(prev => ({
+                ...prev,
+                signed_by: {
+                  ...prev.signed_by,
+                  value: e.target.value,
+                },
+              }))
+            }
+            className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+          />
+        </div>
+
+        {/* APPROVED */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Approved By
+          </label>
+
+          <input
+            type="text"
+            value={approvalLabels.approved_by.value}
+            onChange={(e) =>
+              setApprovalLabels(prev => ({
+                ...prev,
+                approved_by: {
+                  ...prev.approved_by,
+                  value: e.target.value,
+                },
+              }))
+            }
+            className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+          />
+        </div>
+
+      </div>
+
+      {/* FOOTER */}
+      <div className="flex justify-end gap-3 px-6 py-4 border-t bg-slate-50 rounded-b-2xl">
+
+        <button
+          type="button"
+          onClick={() => setShowApprovalLabelModal(false)}
+          className="px-4 py-2 rounded-lg border border-slate-300 text-sm hover:bg-white"
+        >
+          Cancel
+        </button>
+
+        <button
+          type="button"
+          onClick={handleSaveApprovalLabels}
+          className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+        >
+          Save Labels
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+)}
 
   </div>
 

@@ -1467,7 +1467,7 @@ const currentDate = new Date();
         </div>
 
         <div className="mt-2 text-[8px] ">
-          IT DEPARTMENT
+          {details?.approval_labels?.prepared_by?.value || "IT DEPARTMENT"}
         </div>
 
       </td>
@@ -1481,7 +1481,7 @@ const currentDate = new Date();
         </div>
 
         <div className="mt-2 text-[8px] ">
-          OPERATIONS
+          {details?.approval_labels?.checked_by?.value || "OPERATIONS"}
         </div>
 
       </td>
@@ -1495,7 +1495,7 @@ const currentDate = new Date();
         </div>
 
         <div className="mt-2 text-[8px] ">
-          IT DEPARTMENT
+          {details?.approval_labels?.verified_by_it?.value || "IT DEPARTMENT"}
         </div>
 
       </td>
@@ -1508,7 +1508,7 @@ const currentDate = new Date();
         </div>
 
         <div className="mt-2 text-[8px] ">
-          ACCOUNTS
+          {details?.approval_labels?.verified_by?.value || "ACCOUNTS"}
         </div>
 
       </td>
@@ -1521,7 +1521,7 @@ const currentDate = new Date();
         </div>
 
         <div className="mt-2 text-[8px] ">
-          FINANCE MANAGER
+          {details?.approval_labels?.signed_by?.value || "FINANCE MANAGER"}
         </div>
 
       </td>
@@ -1534,7 +1534,7 @@ const currentDate = new Date();
         </div>
 
         <div className="mt-2 text-[8px]">
-          FOUNDER & CEO
+          {details?.approval_labels?.approved_by?.value || "FOUNDER & CEO"}
         </div>
 
       </td>

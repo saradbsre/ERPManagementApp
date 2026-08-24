@@ -193,7 +193,7 @@ useEffect(() => {
                    <span
                     className={`text-[12px] font-semibold`}
                   >
-                    { item.currency_name} {Number(item.total_amount_aed || 0).toFixed(2)}
+                    { item.currency_name} {Number(item.total_amount || 0).toFixed(2)}
                   </span>
                 </div>
               </div>
