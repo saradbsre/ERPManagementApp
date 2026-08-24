@@ -874,12 +874,12 @@ useEffect(() => {
   if (!showGenerateModal) return;
 
   const fetchPrfForAdvertising = async () => {
-    const num = await generateNextPrfNumber(isAdvertising);
+    const num = await generateNextPrfNumber(isAdvertising, prfPrefix);
     setPrfNumber(num);
   };
 
   fetchPrfForAdvertising();
-}, [showGenerateModal, isAdvertising]);
+}, [showGenerateModal, isAdvertising, prfPrefix]);
 
 const ApprovalWorkflow = async () => {
   try {
