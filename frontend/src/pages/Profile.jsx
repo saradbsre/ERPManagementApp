@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import UserProfileCard from "../components/profiles/PersInfo";
 import Settings from "../components/profiles/Settings";
 import AccountCenter from "../components/profiles/AccountInfo";
+import WorkflowInfo from "../components/profiles/WorkFlowInfo";
 import { ArrowLeft } from "lucide-react";
 
 
@@ -10,7 +11,8 @@ import { ArrowLeft } from "lucide-react";
 const tabs = [
     // { label: "Personal Info", component: <UserProfileCard /> },
     // { label: "Settings", component: <Settings /> },
-    { label: "Account Info", component: <AccountCenter /> }
+    { label: "Account Info", component: <AccountCenter /> },
+    { label: "Workflow Info", component: <WorkflowInfo /> }
 ];
 
 export default function Profile() {

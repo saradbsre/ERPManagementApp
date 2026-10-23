@@ -13,7 +13,7 @@ import { fetchSections,fetchMasters, getModuleData, createModuleRow, updateModul
 createModuleView,
 updateModuleView,
 deleteModuleView,
-setDefaultModuleView, updateRequiresPrf, clonePaymentTransaction } from "../../api/api";
+setDefaultModuleView, updateRequiresPrf, clonePaymentTransaction,getDefaultWorkflow } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -125,6 +125,41 @@ function SortableColumnItem({ col, checked, toggleTempColumn}) {
   );
 }
 
+export const getWorkflowForPrint = async (activeUserEmail) => {
+  const { data } = await getDefaultWorkflow(activeUserEmail);
+  const v = data.values || {};
+  const l = data.labels || {};
+
+  return {
+    is_advertising: !!v.advertising,
+    prepared_by: {
+      label: l.prepared_by || "",
+      name: v.prepared_by || "",
+    },
+    checked_by: {
+      label: l.checked_by || "",
+      name: v.checked_by || "",
+      hide: !v.advertising,
+    },
+    verified_by_it: {
+      label: l.verified_by_it || "",
+      name: v.verified_by_it || "",
+    },
+    verified_by: {
+      label: l.verified_by || "",
+      name: v.verified_by || "",
+    },
+    signed_by: {
+      label: l.signed_by || "",
+      name: v.signed_by || "",
+    },
+    approved_by: {
+      label: l.approved_by || "",
+      name: v.approved_by || "",
+    },
+  };
+};
+
 
 const getPdfUrl = (pdfPath) => {
   if (!pdfPath) return "";
@@ -141,7 +176,7 @@ const getPdfUrl = (pdfPath) => {
 
 
 
-export default function DynamicTablePage() {
+export default  function DynamicTablePage() {
     const { id } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
@@ -251,6 +286,32 @@ export default function DynamicTablePage() {
     const [isEditingPrf, setIsEditingPrf] = useState(false);
     const [prfPrefix, setPrfPrefix] = useState("IT");
     const [approvalWorkflowId, setApprovalWorkflowId] = useState(null);
+    const [approvals, setApprovals] = useState([]);
+
+    useEffect(() => {
+      let isMounted = true;
+
+      const fetchApprovals = async () => {
+        try {
+          const result = await getWorkflowForPrint(activeUserEmail);
+
+          if (isMounted) {
+            setApprovals(result);
+            console.log("Approvals:", result);
+          }
+        } catch (error) {
+          console.error("Failed to load approvals:", error);
+        }
+      };
+
+      if (activeUserEmail) {
+        fetchApprovals();
+      }
+
+      return () => {
+        isMounted = false;
+      };
+    }, [activeUserEmail]);
     const defaultApprovalLabels = {
       prepared_by: {
         value: "IT DEPARTMENT",
@@ -2761,7 +2822,8 @@ const handlePrint = () => {
   openPrintWindow({
     content: generateTableHTML(
       cols,
-      printableGroupedRows
+      printableGroupedRows,
+      approvals,
     ),
     userName: activeUser?.name || "User",
   });
@@ -3314,7 +3376,8 @@ const getLatestReportPrfInfo = (groupedData = []) => {
     barcodeValue: prfNo,
   };
 };
-const generateTableHTML = (cols, groupedData) => {
+const generateTableHTML = (cols, groupedData, approvals = []) => {
+  console.log('Approvals:now',approvals)
   const rows = groupedData.flatMap((g) => g.rows);
 const barcodeInfo = getLatestReportPrfInfo(groupedData);
 const barcodeSvg = generateBarcodeSvg(barcodeInfo.barcodeValue);
@@ -3344,14 +3407,41 @@ const reportTitle =
     minute: "2-digit",
   });
 
-  const approvalData = {
-  prepared_by: activeUserName || "",
-  checked_by: form?.checked_by || workflow?.checked_by || "",
-  verified_by_it: form?.verified_by_it || workflow?.verified_by_it || "",
-  verified_by: form?.verified_by || workflow?.verified_by || "",
-  signed_by: form?.signed_by || workflow?.signed_by || "",
-  approved_by: form?.approved_by || workflow?.approved_by || "",
+const approvalData = {
+  prepared_by: {
+    label: approvals?.prepared_by?.label || "PREPARED BY",
+    name: activeUserName || approvals?.prepared_by?.name || "",
+  },
+  checked_by: {
+    label: approvals?.checked_by?.label || "CHECKED BY",
+    name:  approvals?.checked_by?.name || "",
+    hide: approvals?.checked_by?.hide ?? false,
+  },
+  verified_by_it: {
+    label: approvals?.verified_by_it?.label || "VERIFIED BY",
+    name:  approvals?.verified_by_it?.name || "",
+  },
+  verified_by: {
+    label: approvals?.verified_by?.label || "VERIFIED BY",
+    name:  approvals?.verified_by?.name || "",
+  },
+  signed_by: {
+    label: approvals?.signed_by?.label || "SIGNED BY",
+    name:  approvals?.signed_by?.name || "",
+  },
+  approved_by: {
+    label: approvals?.approved_by?.label || "APPROVED BY",
+    name:  approvals?.approved_by?.name || "",
+  },
 };
+const approvalColumns = [
+  approvalData.prepared_by,
+  approvalData.checked_by,
+  approvalData.verified_by_it,
+  approvalData.verified_by,
+  approvalData.signed_by,
+  approvalData.approved_by,
+].filter((item) => item && !item.hide);
 
   const toDisplayValue = (row, col) => {
     let value = "";
@@ -4023,64 +4113,46 @@ if (col.isProductDescription) {
 <div class="print-footer-area" style="padding-top: 10px !important;">
 
 
-  <div class="approval-section">
-    <table class="approval-table">
-      <thead>
-        <tr>
-          <th colspan="5" class="approval-title">
-            APPROVALS
-          </th>
-        </tr>
+ <div class="approval-section">
+  <table class="approval-table">
+    <thead>
+      <tr>
+        <th colspan="${approvalColumns.length}" class="approval-title">
+          APPROVALS
+        </th>
+      </tr>
 
-        <tr>
-          <th>PREPARED BY</th>
-        
-          <th>VERIFIED BY</th>
-          <th>VERIFIED BY</th>
-          <th>SIGNED BY</th>
-          <th>APPROVED BY</th>
-        </tr>
-      </thead>
+      <tr>
+        ${approvalColumns
+          .map(
+            (item) => `
+              <th>${item.label}</th>
+            `
+          )
+          .join("")}
+      </tr>
+    </thead>
 
-      <tbody class="approval-prepared">
-        <tr>
-          <td>
-            <div class="approval-content">
-             <div>${approvalData.prepared_by ? approvalData.prepared_by.toUpperCase() : "-"}</div>
-              <div class="approval-dept">IT DEPARTMENT</div>
-            </div>
-          </td>
-          <td>
-            <div class="approval-content">
-              <div>${approvalData.verified_by_it || "-"}</div>
-              <div class="approval-dept">IT DEPARTMENT</div>
-            </div>
-          </td>
-
-          <td>
-            <div class="approval-content">
-              <div>${approvalData.verified_by || "-"}</div>
-              <div class="approval-dept">ACCOUNTS</div>
-            </div>
-          </td>
-
-          <td>
-            <div class="approval-content">
-              <div>${approvalData.signed_by || "-"}</div>
-              <div class="approval-dept">FINANCE MANAGER</div>
-            </div>
-          </td>
-
-          <td>
-            <div class="approval-content">
-              <div>${approvalData.approved_by || "-"}</div>
-              <div class="approval-dept">FOUNDER & CEO</div>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+    <tbody>
+      <tr>
+        ${approvalColumns
+          .map(
+            (item) => `
+              <td>
+                <div class="approval-content">
+                  <div>${item.name || "-"}</div>
+                  <div class="approval-dept">
+                    ${item.label}
+                  </div>
+                </div>
+              </td>
+            `
+          )
+          .join("")}
+      </tr>
+    </tbody>
+  </table>
+</div>
 
 
 
