@@ -560,3 +560,24 @@ export const updateRequiresPrf = (
     }
   );
 };
+
+export const getDefaultWorkflow = (activeUserEmail) => {
+  return API.get("/default-workflow", {
+    params: { activeUserEmail },
+  });
+};
+
+export const saveDefaultWorkflow = (
+  values,
+  labels,
+  advertising,
+  activeUserEmail
+) => {
+  return API.post(
+    "/default-workflow",
+    { values, labels, advertising },
+    {
+      params: { activeUserEmail },
+    }
+  );
+};

@@ -1,6 +1,6 @@
 import React,{ useEffect, useState, useRef, useLayoutEffect, act, use, useMemo } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import {  getModuleData, getMasterValues, getReportData, fetchMasters, getDisplayName, reportPdf, getYearlyExpiryReport, upsertCustomizedColumns ,getReportCustomizedColumns  } from "../../api/api";
+import {  getModuleData, getMasterValues, getReportData, fetchMasters, getDisplayName, reportPdf, getYearlyExpiryReport, upsertCustomizedColumns ,getReportCustomizedColumns, getDefaultWorkflow   } from "../../api/api";
 import { openPrintWindow } from "../../utils/PrintHelper";
 import logo from "../../assets/headero.png";
 import TableFilters from "../filters/TableFilters";
@@ -23,6 +23,43 @@ import { Funnel, SearchX } from "lucide-react";
 import html2pdf from "html2pdf.js";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+
+export const getWorkflowForPrint = async (activeUserEmail) => {
+  const { data } = await getDefaultWorkflow(activeUserEmail);
+  const v = data.values || {};
+  const l = data.labels || {};
+  const activeUser = JSON.parse(localStorage.getItem("user"));
+  const activeUserName = activeUser?.name;
+  return {
+    prepared_by: {
+      label: l.prepared_by || "",
+      name: v.prepared_by || activeUserName,
+    },
+    checked_by: {
+      label: l.checked_by || "",
+      name: v.checked_by || "",
+      hide: !v.advertising,
+    },
+    verified_by_it: {
+      label: l.verified_by_it || "",
+      name: v.verified_by_it || "",
+    },
+    verified_by: {
+      label: l.verified_by || "",
+      name: v.verified_by || "",
+    },
+    signed_by: {
+      label: l.signed_by || "",
+      name: v.signed_by || "",
+    },
+    approved_by: {
+      label: l.approved_by || "",
+      name: v.approved_by || "",
+    },
+  };
+};
+
+
 export default function ReportTable() {
     const { id } = useParams();
     //console.log("ReportTable ID:", id);
@@ -102,6 +139,32 @@ const allowDetailed =
     
     const equivalentReportId = report?.eqnt_report;
 const showEquivalent = report?.is_equivalent === true && equivalentReportId;
+
+  const [approvals, setApprovals] = useState([]);
+
+    useEffect(() => {
+      let isMounted = true;
+
+      const fetchApprovals = async () => {
+        try {
+          const result = await getWorkflowForPrint(activeUserEmail);
+
+          if (isMounted) {
+            setApprovals(result);
+            console.log("Approvals:", result);
+          }
+        } catch (error) {
+          console.error("Failed to load approvals:", error);
+        }
+      };
+
+      if (activeUserEmail) {
+        fetchApprovals();
+      }
+   return () => {
+        isMounted = false;
+      };
+    }, [activeUserEmail]);
 
 useEffect(() => {
   if (!report?.report_id) return;
@@ -1789,7 +1852,8 @@ const handlePrint = () => {
       ? generateDetailedTable()
       : generateSummaryTable();
 
-  const approvalHtml = generateApprovalHtml();
+  const approvalHtml = generateApprovalHtml(approvals);
+  console.log("Approvals:", approvals);
   const filterHtml = generateFilterHtml();
 
   printWindow.document.open();
@@ -2160,68 +2224,79 @@ const generateFilterHtml = () => {
   `;
 };
 
-const generateApprovalHtml = () => `
-<div class="print-footer-area" style="padding-top:10px;">
-  <div class="approval-section">
-    <table class="approval-table">
-      <thead>
-        <tr>
-          <th colspan="5" class="approval-title">
-            APPROVALS
-          </th>
-        </tr>
+const generateApprovalHtml = (approvals = {}) => {
+  console.log("Received approvals:", approvals);
 
-        <tr>
-          <th>PREPARED BY</th>
-          <th>VERIFIED BY</th>
-          <th>VERIFIED BY</th>
-          <th>SIGNED BY</th>
-          <th>APPROVED BY</th>
-        </tr>
-      </thead>
+  const workflow = Array.isArray(approvals) ? {} : approvals;
 
-      <tbody>
-        <tr>
-          <td>
-            <div class="approval-content">
-              <div>${activeUserName ? activeUserName.toUpperCase() : "-"}</div>
-              <div class="approval-dept">IT DEPARTMENT</div>
-            </div>
-          </td>
+  const items = (
+    Array.isArray(approvals)
+      ? approvals
+      : [
+          workflow.prepared_by,
+          workflow.checked_by,
+          workflow.verified_by_it,
+          workflow.verified_by,
+          workflow.signed_by,
+          workflow.approved_by,
+        ]
+  ).filter((item) => item && !item.hide);
 
-          <td>
-            <div class="approval-content">
-              <div>SARAD N.V / AKBAR J.J</div>
-              <div class="approval-dept">IT DEPARTMENT</div>
-            </div>
-          </td>
+  const escapeHtml = (value) =>
+    String(value ?? "").replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    })[char]);
 
-          <td>
-            <div class="approval-content">
-              <div></div>
-              <div class="approval-dept">ACCOUNTS</div>
-            </div>
-          </td>
+  console.log("Approval items:", items);
 
-          <td>
-            <div class="approval-content">
-              <div>MR KUMAR</div>
-              <div class="approval-dept">FINANCE MANAGER</div>
-            </div>
-          </td>
+  return `
+    <div class="print-footer-area" style="padding-top:10px;">
+      <div class="approval-section">
+        <table class="approval-table">
+          <thead>
+            <tr>
+              <th colspan="${items.length}" class="approval-title">
+                APPROVALS
+              </th>
+            </tr>
+            <tr>
+              ${items
+                .map(
+                  (item) => `
+                    <th>${escapeHtml(item.label || "")}</th>
+                  `
+                )
+                .join("")}
+            </tr>
+          </thead>
 
-          <td>
-            <div class="approval-content">
-              <div>MR SHABIB</div>
-              <div class="approval-dept">FOUNDER & CEO</div>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-`;
+          <tbody>
+            <tr>
+              ${items
+                .map(
+                  (item) => `
+                    <td>
+                      <div class="approval-content">
+                        <div>${escapeHtml(item.name || "")}</div>
+                        <div class="approval-dept">
+                          ${escapeHtml(item.label || "")}
+                        </div>
+                      </div>
+                    </td>
+                  `
+                )
+                .join("")}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+};
 
 // const generateBlankSpaceHtml = () => `
 //   <div class="blank-space">
@@ -2560,7 +2635,7 @@ const handlePdf = async () => {
       ? generateDetailedTable()
       : generateSummaryTable();
 
-    const approvalHtml = generateApprovalHtml();
+    const approvalHtml = generateApprovalHtml(approvals);
     const filterHtml = generateFilterHtml();
     // const blankSpaceHtml = generateBlankSpaceHtml();
 
